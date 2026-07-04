@@ -1,0 +1,17 @@
+{
+  "description": "ADCP physical validation test systems (GROMACS-style descriptor)",
+  "systems": [
+    {
+      "name": "ala4_basic",
+      "dir": "systems/ala4",
+      "validations": ["exit_code", "output_pdb"],
+      "adcp_args": "-r 10000x3000 -t 2 AAAA -p Bias=NULL,external=5,con8,2,1.0,Opt=1,0.5,0.5,-0.5",
+      "grompp_args": "",
+      "mdrun_args": ""
+    }
+  ],
+  "defaults": {
+    "timeout_seconds": 3600,
+    "required_files": ["ramaprob.data", "con8"]
+  }
+}
