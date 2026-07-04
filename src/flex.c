@@ -621,7 +621,7 @@ int read_in_after_flex(Chain *chain,Biasmap *biasmap,Chain *input_chains,simulat
       fclose(fptr);
     }
     else{
-      fscanf(fptr2,"\n");
+      if (fscanf(fptr2,"\n")) {}
       input_chains[inchain].ll = -DBL_MAX;
 
       //fprintf(stdout,"NaN ");

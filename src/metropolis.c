@@ -23,6 +23,7 @@
 #include"vdw.h"
 #include"energy.h"
 #include"metropolis.h"
+#include"probe.h"
 
 
 #define Erg(I,J)     erg[(I) * chain->NAA + (J)]
@@ -266,7 +267,7 @@ void transmutate(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, d
         }
 
 	if (sim_params->protein_model.external_potential_type != 5) {
-		return 0;
+		return;
 	}
 
 	//no transPts identified. transPtsCount == 1 means only the center of box is found.

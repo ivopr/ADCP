@@ -27,7 +27,7 @@ char chain = '\0';
 char atom[] = "CA";
 char sym[] = "10";
 double cutoff = 6.0;
-vector ca[2730];
+static vector ca[2730];
 char aa[2730];
 
 int parse_input(void)
@@ -179,7 +179,7 @@ void read_options(int argc, char *argv[])
 
 	for (i = 1; i < argc; i++) {
 		if (argv[i][0] != '-') {
-			freopen(argv[i], "r", stdin);
+			if (freopen(argv[i], "r", stdin)) {}
 			continue;
 		}
 
@@ -199,10 +199,10 @@ void read_options(int argc, char *argv[])
 			cutoff = strtod(argv[i], (char **) NULL);
 			break;
 		case 'f':
-			freopen(argv[i], "r", stdin);
+			if (freopen(argv[i], "r", stdin)) {}
 			break;
 		case 'o':
-			freopen(argv[i], "w", stdout);
+			if (freopen(argv[i], "w", stdout)) {}
 			break;
 		case 's':
 			sym[0] = argv[i][0];

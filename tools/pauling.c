@@ -20,6 +20,7 @@
 #include"aadict.h"
 #include"vector.h"
 #include"rotation.h"
+#include<string.h>
 #include"peptide.h"
 
 unsigned int seed = 0, model = 1;
@@ -32,7 +33,7 @@ void read_options(int argc, char *argv[], int *use_gamma_atoms, int *use_rand_ta
 
 	for (i = 1; i < argc; i++) {
 		if (argv[i][0] != '-') {
-			freopen(argv[i], "r", stdin);
+			if (freopen(argv[i], "r", stdin)) {}
 			continue;
 		}
 
@@ -42,10 +43,10 @@ void read_options(int argc, char *argv[], int *use_gamma_atoms, int *use_rand_ta
 
 		switch (opt) {
 		case 'f':
-			freopen(argv[i], "r", stdin);
+			if (freopen(argv[i], "r", stdin)) {}
 			break;
 		case 'o':
-			freopen(argv[i], "w", stdout);
+			if (freopen(argv[i], "w", stdout)) {}
 			break;
 		case 'm':
 			sscanf(argv[i], "%u", &model);

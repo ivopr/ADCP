@@ -4,6 +4,7 @@
 ** Copyright (c) 2007 - 2013 Nikolas Burkoff, Csilla Varnai and David Wild
 */
 
+#include <stdio.h>
 
 #define DEFAULT_LONG_STRING_LENGTH 1024
 #define DEFAULT_SHORT_STRING_LENGTH 256

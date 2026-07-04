@@ -1113,6 +1113,6 @@ int main(int argc, char *argv[])
 	free(glyprob);
 
 	//print out the timing
-	fprintf(stderr,"The program has successfully finished in %d seconds. :)  Bye-bye!\n", time(NULL)- startTime);
+	fprintf(stderr,"The program has successfully finished in %ld seconds. :)  Bye-bye!\n", time(NULL)- startTime);
 	return EXIT_SUCCESS;
 }

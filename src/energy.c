@@ -22,6 +22,15 @@
 #include"vdw.h"
 #include"energy.h"
 
+double centerX, centerY, centerZ, spacing;
+int NX, NY, NZ;
+double targetBest, currTargetEnergy;
+double *gridmapvalues[9];
+int transPtsCount;
+double *Xpts;
+double *Ypts;
+double *Zpts;
+double *ramaprob, *alaprob, *glyprob;
 
 
 
@@ -211,7 +220,8 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 	int abort = 0;
 	if (fin == NULL) { // no file opened beforehand
 	    if (mod_params->contact_map_file==NULL) {
-		fprintf(stderr, "ERROR: Invalid Go-type bias: %s.", mod_params->contact_map_file);
+		fprintf(stderr, "ERROR: Invalid Go-type bias: %s.",
+			mod_params->contact_map_file ? mod_params->contact_map_file : "(null)");
 		fprintf(stderr, "  No contact map file specified.\n");
 		abort=1;
 	    } else if ((fin = fopen(mod_params->contact_map_file, "r")) == NULL && strcmp(mod_params->contact_map_file,"NULL")!=0) { // nonexisting file and not NULL given
@@ -430,9 +440,11 @@ void gridmap_initialise(char *filename, int atype) {
 void transpts_initialise() {
 	FILE *transpts_file = NULL;
 	transpts_file = fopen("transpoints", "r");
-	char line[256];
-	int i = 0, j = 0;	
-	fgets(line, sizeof(line), transpts_file);
+	char line[256] = {0};
+	int i = 0, j = 0;
+	if (transpts_file != NULL) {
+	if (fgets(line, sizeof(line), transpts_file)) {}
+	}
 	transPtsCount = atoi(line);
 	if (transPtsCount == 0 || transpts_file == NULL) {
 		printf("no transpoints found \n");

@@ -116,7 +116,7 @@ void read_options(int argc, char *argv[])
 
 	for (i = 1; i < argc; i++) {
 		if (argv[i][0] != '-') {
-			freopen(argv[i], "r", stdin);
+			if (freopen(argv[i], "r", stdin)) {}
 			continue;
 		}
 
@@ -132,10 +132,10 @@ void read_options(int argc, char *argv[])
 			req = strtol(argv[i], (char **) NULL, 16);
 			break;
 		case 'f':
-			freopen(argv[i], "r", stdin);
+			if (freopen(argv[i], "r", stdin)) {}
 			break;
 		case 'o':
-			freopen(argv[i], "w", stdout);
+			if (freopen(argv[i], "w", stdout)) {}
 			break;
 		default:
 			fprintf(stderr, VER USE, argv[0]);

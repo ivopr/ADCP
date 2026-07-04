@@ -26,22 +26,22 @@ void biasmap_initialise(Chain *,Biasmap *, model_params *mod_params);
 void biasmap_finalise(Biasmap *biasmap);
 
 
-double centerX, centerY, centerZ, spacing;
-//double *Nmapvalue, *Omapvalue, *CAmapvalue, *Hmapvalue, *Cmapvalue, *NAmapvalue, *Smapvalue, *emapvalue, *dmapvalue;
-int NX, NY, NZ;
-double targetBest, currTargetEnergy;
-//double totalEBest;
+extern double centerX, centerY, centerZ, spacing;
+//extern double *Nmapvalue, *Omapvalue, *CAmapvalue, *Hmapvalue, *Cmapvalue, *NAmapvalue, *Smapvalue, *emapvalue, *dmapvalue;
+extern int NX, NY, NZ;
+extern double targetBest, currTargetEnergy;
+//extern double totalEBest;
 double lower_gridenergy(double);
 void gridbox_initialise();
 void transpts_initialise();
 void ramaprob_initialise();
 
-double *gridmapvalues[9];
-int transPtsCount;
-double *Xpts;
-double *Ypts;
-double *Zpts;
-double *ramaprob, *alaprob, *glyprob;
+extern double *gridmapvalues[9];
+extern int transPtsCount;
+extern double *Xpts;
+extern double *Ypts;
+extern double *Zpts;
+extern double *ramaprob, *alaprob, *glyprob;
 
 void gridmap_initialise(char *, int);
 

@@ -1393,14 +1393,14 @@ int getaa(AA *a, FILE *infile)
 		if (line[0] == 'E' && line[3] == 'M' && line[4] == 'D') {
 			//advance the file pointer to the next line
 //			fprintf(stderr,"ENDMDL reached %d. return\n",(int)0x7FFF);
-			fgets(line, sizeof(line), infile);
-			//fprintf(stderr,"GETAA cheat: %s\n",line);
+			if (fgets(line, sizeof(line), infile)) {}
+			//fprintf(stderr,"ENDMDL reached %d. return\n",(int)0x7FFF);
 			pos = 0x7FFF;
 			return pos; //TODO check it is OK to return
 		}
 		if (line[0] == 'E' && line[1] == 'N' && line[2] == 'D') {
 //			fprintf(stderr,"END reached %d. return\n",0x7FFF);
-			fgets(line, sizeof(line), infile);
+			if (fgets(line, sizeof(line), infile)) {}
 			//fprintf(stderr,"GETAA cheat: %s\n",line);
 			pos = 0x7FFF;
 			return pos; //TODO check it is OK to return
