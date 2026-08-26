@@ -127,3 +127,57 @@ set_tests_properties(func_adcp_fold_short PROPERTIES
   WORKING_DIRECTORY ${TEST_WORK}
   PASS_REGULAR_EXPRESSION "successfully finished"
 )
+
+# ---------------------------------------------------------------------------
+# Docking — the AutoDock grid path (opt-in: needs the published 3Q47 target)
+# ---------------------------------------------------------------------------
+#
+# Everything above runs the folding path, where the receptor term is exactly
+# 'extE 0.000000'. These tests are the only ones that exercise docking, which
+# is how a stack overflow that crashed every production docking run survived.
+#
+# Enable with -DADCP_DOCKING_TESTS=ON. The target (~10 MB) is fetched once into
+# the build tree and cached; tests SKIP rather than fail when it is unavailable.
+
+option(ADCP_DOCKING_TESTS "Enable docking tests (downloads the 3Q47 target)" OFF)
+
+if(ADCP_DOCKING_TESTS)
+  set(TARGET_CACHE ${CMAKE_CURRENT_BINARY_DIR}/target)
+  set(STAGE ${TARGET_CACHE}/stage)
+
+  add_test(NAME dock_fetch_target
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/fetch_target.sh ${TARGET_CACHE}
+  )
+  set_tests_properties(dock_fetch_target PROPERTIES
+    LABELS "docking" TIMEOUT 900
+    SKIP_RETURN_CODE 77
+    FIXTURES_SETUP dock_target
+  )
+
+  # Regression guard for the swapChains overflow. Runs past swapMutateSteps
+  # (200000) on purpose: a shorter run passes against the broken binary.
+  add_test(NAME dock_3q47_smoke
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_dock_test.sh
+            ${SRC_BIN} ${STAGE} ${TEST_WORK}/dock
+  )
+  set_tests_properties(dock_3q47_smoke PROPERTIES
+    LABELS "docking" TIMEOUT 300
+    SKIP_RETURN_CODE 77
+    FIXTURES_REQUIRED dock_target
+    PASS_REGULAR_EXPRESSION "PASS: docking ran deterministically"
+  )
+
+  # Full redocking of the native 3Q47 peptide, ranked as runADCP.py ranks.
+  # Measured: 16 runs x 2.5M steps redocks to 0.66 A in ~96 s on 14 cores.
+  # Threshold is the conventional 2.5 A docking success criterion.
+  add_test(NAME val_3q47_redock
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_redock_validation.sh
+            ${SRC_BIN} ${STAGE} ${TEST_WORK}/redock 16 2500000 2.5
+  )
+  set_tests_properties(val_3q47_redock PROPERTIES
+    LABELS "validation" TIMEOUT 1800
+    SKIP_RETURN_CODE 77
+    FIXTURES_REQUIRED dock_target
+    PASS_REGULAR_EXPRESSION "PASS: redocked to"
+  )
+endif()

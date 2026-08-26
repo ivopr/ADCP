@@ -38,3 +38,19 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure -j4
+
+  docking:
+    # Exercises the AutoDock grid path against the published 3Q47 target.
+    # Allowed to skip (not fail) when the download is unavailable.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DADCP_DOCKING_TESTS=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Docking tests
+        run: ctest --test-dir build --output-on-failure -L docking
