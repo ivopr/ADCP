@@ -7,6 +7,9 @@
 ** Copyright (c) 2007 - 2013 Nikolas Burkoff, Csilla Varnai and David Wild
 */
 
+#ifndef METROPOLIS_H_
+#define METROPOLIS_H_
+
 /* MC move and metropolis criteria */
 void transmutate(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, double logLstar, double * currE, simulation_params *sim_params);
 int flipChain(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, double logLstar, double * currE, simulation_params *sim_params);
@@ -14,3 +17,5 @@ int rotate_cyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, 
 int transopt(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, double logLstar, double * currE, simulation_params *sim_params, int mod);
 int move(Chain *chain, Chaint *chaint, Biasmap *biasmap,double logLstar, double *currE,int changeamp, simulation_params *sim_params);
 void finalize(Chain *chain, Chaint *chaint, Biasmap *biasmap);
+
+#endif /* METROPOLIS_H_ */

@@ -1,4 +1,5 @@
 /*********************************************************************/
+
 /* AutoDock CrankPep, a peptide docking engine                       */
 /* Copyright (C) 2019 MICHEL SANNER                                  */
 /*                                                                   */ 
@@ -16,6 +17,9 @@
 /* License along with this library; if not, see                      */
 /* <https://www.gnu.org/licenses/>.                                  */
 /*********************************************************************/
+
+#ifndef CANONICALAA_H_
+#define CANONICALAA_H_
 
 struct _ARG {
   int nbRot;
@@ -161,3 +165,4 @@ struct _VAL {
   double coords[3][2][3];
 };
 
+#endif /* CANONICALAA_H_ */

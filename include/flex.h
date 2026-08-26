@@ -31,4 +31,4 @@ void output_hphobesin(Chain * chain, model_params *protein_model,char *filename,
 void output_hbondsin(Chain * chain, model_params *protein_model,int use_bias_only,char *filename,double nma_hstrength, FILE *logfile);
 
 
-#endif /* NMA_H_ */
+#endif /* FLEX_H_ */

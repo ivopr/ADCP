@@ -7,6 +7,9 @@
  * 
  */
 
+#ifndef NESTED_H_
+#define NESTED_H_
+
 typedef struct{
   int *instructions;
   int length;
@@ -45,3 +48,4 @@ typedef struct{
 
 void nestedsampling(int,int, simulation_params *);
 
+#endif /* NESTED_H_ */

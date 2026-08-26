@@ -6,6 +6,9 @@
 ** Copyright (c) 2007 - 2013 Nikolas Burkoff, Csilla Varnai and David Wild
 */
 
+#ifndef PEPTIDE_H_
+#define PEPTIDE_H_
+
 /* constants to store properties of the amino acid */
 #define COD 0x1F /* amino acid code */
 #define PSI 0x20 /* if the amino acid is in not helix conformation (psi dihedral angle is not in [-120deg,60deg]) */
@@ -135,3 +138,5 @@ int pdbrecord( AA *, int, model_params *mod_params, FILE *outfile);
 void pdbprint( AA *, int, model_params *mod_params, FILE *outfile, double *totenergy);
 int getaa( AA *, FILE *infile);
 int getpdb( AA **, int *NAA, int *Nchains, FILE *infile);
+
+#endif /* PEPTIDE_H_ */

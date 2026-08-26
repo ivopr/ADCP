@@ -4,6 +4,9 @@
 ** Copyright (c) 2007 - 2013 Nikolas Burkoff, Csilla Varnai and David Wild
 */
 
+#ifndef CHECKPOINT_IO_H_
+#define CHECKPOINT_IO_H_
+
 typedef struct _ChainHash{
   int processor;
   int index;
@@ -37,3 +40,5 @@ void mpi_rec_chain(Chain *nsconformation, int from, int to, double *logLstar, in
 void copyhash(ChainHash * to, ChainHash *from);
 void constructhashheap(ChainHash * chainhash, int N);
 int store_chain(ChainHash **chainhash, Chain *temporary, Biasmap *biasmap, Chaint *chaint, int P, int *current_stored, int counter, Chain **cpoints, simulation_params *sim_params, int rank, void*mpi_comm);
+
+#endif /* CHECKPOINT_IO_H_ */

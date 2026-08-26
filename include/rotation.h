@@ -5,6 +5,9 @@
 ** Copyright (c) 2004-2010 Alexei Podtelezhnikov
 */
 
+#ifndef ROTATION_H_
+#define ROTATION_H_
+
 /*
 ********** Data types
 */
@@ -51,3 +54,5 @@ struct phasor {
 struct phasor phasiply(struct phasor, struct phasor);
 int rephase(struct phasor *);
 double phase(struct phasor);
+
+#endif /* ROTATION_H_ */

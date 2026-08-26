@@ -5,6 +5,9 @@
 ** Copyright (c) 2003-2010 Alexei Podtelezhnikov
 */
 
+#ifndef VECTOR_H_
+#define VECTOR_H_
+
 #ifndef M_PI
 # define M_PI		3.14159265358979323846	/* pi */
 #endif
@@ -106,3 +109,5 @@ double sindihedral(vector, vector, vector);
 double phasindihedral(vector, vector, vector, double, double);
 double tandihedral(vector, vector, vector);
 double costridihedral(vector, vector, vector);
+
+#endif /* VECTOR_H_ */

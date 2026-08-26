@@ -6,9 +6,9 @@
 ** Copyright (c) 2007 - 2013 Nikolas Burkoff, Csilla Varnai and David Wild
 */
 
-extern const int skip_14_vdw;
-/* energy penalty for clashing atoms */
-extern const double clash_energy_at_hard_cutoff;
+#ifndef VDW_H_
+#define VDW_H_
+
 
 
 /* wrappers for energy contributions at the amino acid level: energy contributions summed up */
@@ -36,3 +36,5 @@ void update_sim_params_from_chain(Chain *chain,simulation_params *sim_params);
 #ifdef LJ_HBONDED_HARD
 double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond_proximity);
 #endif
+
+#endif /* VDW_H_ */

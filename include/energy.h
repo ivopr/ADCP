@@ -6,6 +6,9 @@
 ** Copyright (c) 2007 - 2013 Nikolas Burkoff, Csilla Varnai and David Wild
 */
 
+#ifndef ENERGY_H_
+#define ENERGY_H_
+
 /* CA-CA distance cutoff for vdW interactions */
 //extern const double vdw_cutoff2_without_use_gamma;
 //extern const double vdw_cutoff2_gg;
@@ -88,3 +91,5 @@ double secondary_radius_of_gyration(int start, int end, Chain *chain, Chaint *ch
 void energy_probe_1(Chain *chain,Biasmap *biasmap,simulation_params *sim_params);
 void energy_contributions_in_energy_c(Chain * chain,Biasmap *biasmap, double tote, model_params *mod_params, FILE *outfile);
 void exclude_energy_contributions_in_energy_c(Chain * chain,Biasmap *biasmap, double tote, model_params *mod_params, FILE *outfile);
+
+#endif /* ENERGY_H_ */

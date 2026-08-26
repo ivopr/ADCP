@@ -5,6 +5,9 @@
 ** Copyright (c) 2007 - 2013 Nikolas Burkoff, Csilla Varnai and David Wild
 */
 
+#ifndef PROBE_H_
+#define PROBE_H_
+
 #define BEFORE_INIT 0x1;
 #define AFTER_INIT 0x10;
 #define BEFORE_AND_AFTER_INIT 0x11;
@@ -52,3 +55,5 @@ void evidence(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void
 void information(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void cm_alpha_8(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void fasta(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
+
+#endif /* PROBE_H_ */
