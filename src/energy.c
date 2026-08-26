@@ -368,6 +368,8 @@ double lower_gridenergy(double E) {
 void gridbox_initialise() {
 	FILE *gridmap = NULL;
 	gridmap = fopen("rigidReceptor.C.map", "r");
+	if (gridmap == NULL)
+		stop("Missing rigidReceptor.C.map file.");
 	char line[256];
 	int i = 0, j = 0;
 	while (fgets(line, sizeof(line), gridmap)) {
@@ -456,7 +458,8 @@ void transpts_initialise() {
 		Ypts[0] = centerY;
 		Zpts[0] = centerZ;
 		transPtsCount = 1;
-		fclose(transpts_file);
+		if (transpts_file != NULL)
+			fclose(transpts_file);
 		return;
 	}
 	Xpts = malloc(transPtsCount * sizeof(double));

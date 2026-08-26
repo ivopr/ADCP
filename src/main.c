@@ -210,7 +210,8 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 		char swapname[12];
 		sprintf(swapname, "swap%d.pdb", swapLength);
 		double swapEnergy[swapLength + 1];
-		Chain* swapChains[swapLength];
+		/* swapLength+1 slots: the last one holds the best pose (see init loop below) */
+		Chain* swapChains[swapLength + 1];
 
 		/*optimizing parameters*/
 		int noImprovHeatSteps = 1000000;
