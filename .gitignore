@@ -12,19 +12,19 @@ statistics
 bfactor
 dssp2cm
 oops
-metropolis_old
 __pycache__/
 *.pyc
 
 # Test artifacts
-tests/results/
-tests/validation/run/
 Testing/
 CTestTestfile.cmake
-test-reports/
 output.pdb
 *.pdb.tmp
 ramaprob.data
+!data/ramaprob.data
 transpoints
 rigidReceptor.*.map
 con8
+
+# Local build trees
+build*/

@@ -35,12 +35,6 @@ target_link_libraries(dssp2cm PRIVATE m)
 add_executable(oops oops.c)
 target_link_libraries(oops PRIVATE m)
 
-if(ADCP_LEGACY)
-  add_executable(metropolis_old metropolis_old.c)
-  target_include_directories(metropolis_old PRIVATE ${CMAKE_SOURCE_DIR}/include)
-  target_link_libraries(metropolis_old PRIVATE adcp_core)
-endif()
-
 install(TARGETS cdlearn cm rama lipa bfactor mergie statistics dssp2cm oops
   RUNTIME DESTINATION bin
 )
