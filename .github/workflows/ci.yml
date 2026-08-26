@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang
+        if: matrix.compiler == 'clang'
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: No COMMON symbols
+        # -fno-common is the default; a tentative definition slipping back in
+        # would silently alias globals across translation units.
+        run: |
+          n=$(find build -name '*.o' -exec nm {} \; 2>/dev/null | grep -c ' C ' || true)
+          echo "COMMON symbols: $n"
+          test "$n" -eq 0
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j4
