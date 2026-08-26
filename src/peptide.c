@@ -1504,7 +1504,6 @@ int getaa(AA *a, FILE *infile)
 		a->etc |= mask;
 	} while (fgets(line, sizeof(line), infile) != NULL);
 
-	fprintf(stderr,"eof return\n");
 	return EOF;
 }
 

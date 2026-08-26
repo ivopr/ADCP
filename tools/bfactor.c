@@ -10,6 +10,7 @@
 #include<string.h>
 #include<math.h>
 
+#include"error.h"
 #include"params.h"
 #include"aadict.h"
 #include"vector.h"
@@ -82,7 +83,7 @@ void parse_input(void)
 {
 	int i;
 
-	while (getpdb(&aa, &NAA, &Nchains, stdin)) {
+	while (getpdb(&aa, &NAA, &Nchains, stdin) > 0) {
 		ii++;
 		for (i = 1; i < NAA; i++) {
 			update(ava[i].h, sqa[i].h, aa[i].h);
@@ -129,11 +130,14 @@ int main(int argc, char *argv[])
 
 	read_options(argc, argv);
 
-	getpdb(&aa, &NAA, &Nchains, stdin);
+	if (getpdb(&aa, &NAA, &Nchains, stdin) <= 0)
+		stop("bfactor: no amino acids read from input");
 	ii = 1;
 
 	ava = ( AA *) malloc(sizeof(AA) * NAA);
 	sqa = ( AA *) malloc(sizeof( AA) * NAA);
+	if (ava == NULL || sqa == NULL)
+		stop("bfactor: out of memory");
 
 	memcpy(ava, aa, sizeof( AA) * NAA);
 
