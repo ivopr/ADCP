@@ -1,297 +1,84 @@
-# Build System Migration: GNU Make → CMake
+# ADCP: C99 → Modern C++17 Migration Plan
 
-## Overview
+## Context
 
-Migração do sistema de build do ADCP de um `Makefile` GNU Make manual para **CMake** (com suporte ao gerador **Ninja**), reorganização completa da estrutura de diretórios e atualização do wrapper Python de 2 para 3.
+ADCP (AutoDock CrankPep) is a 23.7k-line C99 peptide-docking Monte Carlo engine, distributed as a CLI binary (invoked as a subprocess by `runADCP.py`/AGFR, not linked as a library by any known external consumer). The codebase does heavy manual memory management (100 malloc, 76 realloc, 159 free calls) and has a proven production bug in this exact area: commit `7e2192d` fixed a stack-buffer-overflow VLA (`Chain* swapChains[swapLength]` sized one element short) in `src/main.c` that crashed every production docking run for 200k+ step searches. Be precise about what would have caught it: `std::vector` accessed through `operator[]` would not have, and this plan mandates `operator[]` in hot paths. An ASan build would have, which is why the sanitizer CI leg below is the load-bearing mitigation for this bug class, not the container conversions. Commit `5e94b0b` then added the only tests that exercise the docking energy path at all (`dock_3q47_smoke`, `val_3q47_redock`); everything else runs the folding path where the receptor energy term is literally `0.000000`.
 
----
+Goal: migrate the whole tree to idiomatic modern C++17, incrementally, file-by-file, keeping every step compiling and green on the existing gcc+clang CI matrix, without ever breaking the docking path this codebase already got burned on once. No exceptions as the error-handling idiom (matches current `stop()`/`exit()` style, avoids MPI/OpenMP unwinding hazards) — RAII is fine, `throw`/`catch` is not (one unavoidable exception: `std::vector`/`std::string` throw `bad_alloc` on OOM, which is accepted as behaviorally equivalent to the current fatal-OOM behavior).
 
-## Estrutura Antiga
+## Standard & build setup (do once, first)
 
-```
-ADCP/
-├── Makefile                  # 47 linhas, compilação monolítica
-├── runADCP.py                # Python 2
-├── ramaprob.data             # dados soltos no raiz
-├── README / README_AD
-├── COPYING.LESSER
-├── *.c (26 arquivos)         # todos os fontes C no mesmo diretório
-└── *.h (17 arquivos)         # todos os headers no mesmo diretório
-```
+- Target **C++17**. Gives `if constexpr` (for zero-overhead numeric dispatch replacing function-pointer tables), `std::string_view`, structured bindings. C++20 buys nothing here (no generic-library surface needing concepts/ranges) — don't reach for it.
+- Root [CMakeLists.txt](CMakeLists.txt): change `project(ADCP VERSION 0.1 LANGUAGES C)` → `LANGUAGES C CXX`, add `CMAKE_CXX_STANDARD 17` / `CMAKE_CXX_STANDARD_REQUIRED ON` / `CMAKE_CXX_EXTENSIONS OFF` alongside the existing C99 settings. Keep both C and C++ language settings until the last `.c` file is gone, then drop the C ones in a final cleanup commit.
+- `-fno-common`/`ADCP_LEGACY_COMMON` was only ever applied to `CMAKE_C_FLAGS`, so it never reached a single C++ TU; once `src/` went all-C++ the option was a silent no-op. Phase 1 step 7 mirrors both branches into `CMAKE_CXX_FLAGS`. Note this is hygiene, not a behavior fix: g++ emits no COMMON symbols for C++ at all (verified with `nm`: zero `C`-type symbols either way), so the flag is inert for C++ TUs — it is set so the escape hatch stays honest, and it matters for `tools/*.c` until Phase 1 step 8 lands.
+- Per-file conversion mechanics (repeat for every file, every phase): `git mv src/foo.c src/foo.cpp` (preserves blame — files carry LGPL attribution headers), update the one line in [src/CMakeLists.txt](src/CMakeLists.txt) or `tools/CMakeLists.txt`, build with gcc+clang, run tests, commit. CMake mixes `.c`/`.cpp` sources in one target natively — no "big bang" moment is structurally required, and the existing CI matrix job keeps validating the whole tree at every commit without workflow changes.
+- Recommended addition during Phase 1: add `-DADCP_MPI=ON` and `-DADCP_OPENMP=ON` build-only legs to CI. Neither is exercised by the current CI matrix at all, so a C++-under-MPI/OpenMP compile break would otherwise go unnoticed for the whole migration. Also recommend an ASan+UBSan CMake build config — the sharpest available tool for catching the "wrong-size buffer" bug class this migration targets, complementary to the phased conversion.
 
-### Problemas do sistema antigo
+## Phase 1 — whole-tree rename to `.cpp`, compile clean, no behavior change
 
-| Problema | Descrição |
-|----------|-----------|
-| **Compilação monolítica** | Todos os 15 `.c` do binário principal compilados no mesmo comando `cc`, sem `.o` intermediários. Qualquer mudança em 1 arquivo recompila tudo. |
-| **Nome hardcoded** | Binário sempre chamado `adcp_Linux-x86_64`, mesmo em outras arquiteturas |
-| **Detecção manual de MPI** | `which mpicc` embutido no Makefile — frágil e não-portátil |
-| **Sem separação src/include** | 43 arquivos no mesmo diretório, difícil de navegar |
-| **OpenMP inutilizado** | Flag `-fopenmp` definida mas nunca usada nas receitas |
-| **Ferramentas auxiliares sem build** | `cm.c`, `rama.c`, `lipa.c` etc. sem targets no Makefile |
-| **Python 2** | `runADCP.py` usa sintaxe Python 2 (obsoleta desde 2020) |
-| **Sem suporte a múltiplos geradores** | Apenas GNU Make; sem Ninja, MSBuild, Xcode |
+Rename every `.c` in `src/` and `tools/` to `.cpp`, bottom-up by include-dependency order, fixing only what's needed to compile as standard C++ (mainly explicit casts on `malloc`/`void*`, which C++ requires and C doesn't):
 
-### Como o Makefile funcionava
+1. `error.c`, `vector.c` — no local deps, prove the toolchain
+2. `rotation.c`, `random16.c`
+3. `aadict.c`, `canonicalAA.c`
+4. `params.c` — heaviest allocator (57 calls), surfaces most cast issues early while changes are still "just compile," not "redesign"
+5. `peptide.c` — owns the core structs (`Chain`, `AA`, `Biasmap`, `FLEX_data`)
+6. `vdw.c`, `energy.c` (largest file, 3123 lines), `probe.c`, `metropolis.c`, `flex.c`, `checkpoint_io.c`, `nested.c`
+7. `main.c` — two changes beyond casts. `double swapEnergy[swapLength + 1]; Chain* swapChains[swapLength + 1];` at [src/main.cpp:214-216](src/main.cpp#L214-L216) are VLAs, not valid standard C++ (gcc/clang accept them only as a non-portable extension, and the build sets `CMAKE_CXX_EXTENSIONS OFF`). **Fix: mark `swapLength` `const`**, not `std::vector`. `swapLength` is `10` and never reassigned, so `const` makes `swapLength + 1` a constant expression and both arrays become plain fixed-size arrays — the VLA is gone with a one-word diff, no heap allocation, and none of the ~40 indexing sites change. `std::vector` was the original prescription here on the grounds that bounded containers would have caught `7e2192d`'s off-by-one; that reasoning does not hold, because this plan also (correctly) mandates `operator[]` over `.at()` in hot paths, and `operator[]` is unchecked. ASan is what catches that bug class — see the Phase 1 CI recommendation above. Run `dock_3q47_smoke` (the regression guard added in `5e94b0b`) immediately after this file.
+8. `tools/*.c`, simplest first (`pauling.c`, `bfactor.c`, `ramachandran.c`, `cm.c`, `dssp2cm.c`, `mergie.c`, `oops.c`, `statistics.c`), `cdlearn.c` last (only OpenMP consumer, none of `tools/` is on the docking test path per [tests/CMakeLists.txt](tests/CMakeLists.txt)).
 
-```makefile
-# Compilação monolítica — todos os .c em um único comando:
-adcp_Linux-x86_64 : nested.c aadict.c energy.c main.c metropolis.c \
-                    flex.c peptide.c probe.c rotation.c vector.c \
-                    params.c error.c checkpoint_io.c vdw.c canonicalAA.c
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@ -g
+## Phase 2 — idiomatic conversion, same order, one module (or tight group) at a time
 
-# MPI detectado manualmente com `which mpicc`:
-ifneq ($(shell which mpicc),)
-	MPICC = mpicc
-	ALL := $(ALL) peptmpi
-endif
-```
+Apply per category:
 
----
+- **malloc/free arrays → `std::vector`**: `Chain`'s array members in `peptide.h`/`peptide.c`, `params.c`'s option-list arrays, `flex.c`'s index lists, `checkpoint_io.c`'s buffers. Use `operator[]` not `.at()` in hot paths (matches existing unchecked-access behavior).
+- **Fixed C string buffers → `std::string`**: note that `main.cpp`'s `char swapname[12]` and `FILE *swapFile` ([src/main.cpp:209-213](src/main.cpp#L209-L213)) are **dead code** — every consumer is commented out, `swapname` is only ever written by one `sprintf` and `swapFile` never leaves `NULL`. Delete both rather than converting them.
+- **Function-pointer dispatch → templates, only in hot paths**: `vdw.c`'s `vdw_fn` sites (lines 124, 219, 448, 751) and `probe.c:155` fire every Monte Carlo step — replace with a C++17 non-type template parameter (`template<auto Fn> ...`) or a flattened `switch` calling each candidate directly, whichever is the smaller diff once you read the call sites; either gives zero-overhead dispatch. `energy.c`'s `sumf`/`sumf_diag`/`dfdx` (~line 2720+) are cold diagnostic/finite-derivative code, not the hot loop — leave as raw function pointers unless converting is free while touching surrounding code anyway.
+- **`FILE*` → RAII wrapper, not iostream**: don't rewrite the `scanf`/`fprintf`-based PDB-format parsing (high risk, no real benefit) — just wrap the handle lifetime (open/close pairing) in a small RAII class so early-return paths can't leak. Apply to `checkpoint_io.c` and `flex.c`. (`main.c`'s `swapFile` needs no wrapper — it is dead, see the `std::string` item above.)
+- **3 `goto` sites** — none are cleanup patterns (verified: no `free`/`fclose` at either label):
+  - `energy.c:291`, `energy.c:2876` — conditional-skip patterns, restructure as `if`/loop-flag.
+  - `tools/ramachandran.c:165` — forward jump to reuse an already-read record; extract the loop body into a local lambda called once before the loop and once inside it. `smoke_rama_pdb` guards a related historical bug in this exact file — diff its output before/after.
+- **MPI/OpenMP**: no `extern "C"` needed, both headers are C++-safe as-is. Verify empirically via the new CI legs, no code change expected.
 
-## Estrutura Nova
+Ordering within Phase 2, by risk × blast radius:
 
-```
-ADCP/
-├── CMakeLists.txt                 # build raiz — opções, detecção de MPI/OpenMP
-├── .gitignore
-├── README / README_AD
-├── COPYING.LESSER
-│
-├── include/                       # 17 headers
-│   ├── aadict.h
-│   ├── canonicalAA.h
-│   ├── cdlearn.h
-│   ├── checkpoint_io.h
-│   ├── energy.h
-│   ├── error.h
-│   ├── flex.h
-│   ├── metropolis.h
-│   ├── nested.h
-│   ├── nma.h
-│   ├── params.h              ← corrigido: adicionado #include <stdio.h>
-│   ├── peptide.h
-│   ├── probe.h
-│   ├── random16.h
-│   ├── rotation.h
-│   ├── vdw.h
-│   └── vector.h
-│
-├── src/                            # 16 fontes do core + CMakeLists.txt
-│   ├── CMakeLists.txt
-│   ├── aadict.c                    # dicionário de aminoácidos
-│   ├── canonicalAA.c               # coordenadas canônicas de sidechains
-│   ├── checkpoint_io.c             # I/O de checkpoint
-│   ├── energy.c                    # campo de força + grids AutoDock
-│   ├── error.c                     # tratamento de erro (stop())
-│   ├── flex.c                      # docking flexível + NMA
-│   ├── main.c                      # entry point (serial & MPI)
-│   ├── metropolis.c                # MC moves + Metropolis criterion
-│   ├── nested.c                    # Nested Sampling
-│   ├── params.c                    # parâmetros de simulação
-│   ├── peptide.c                   # estrutura do peptídeo, PDB I/O
-│   ├── probe.c                     # ~50 funções de análise
-│   ├── random16.c                  # PRNG 16-bit
-│   ├── rotation.c                  # matrizes de rotação 3x3
-│   ├── vdw.c                       # Van der Waals
-│   └── vector.c                    # álgebra vetorial 3D
-│
-├── tools/                          # 9 ferramentas auxiliares + CMakeLists.txt
-│   ├── CMakeLists.txt
-│   ├── cdlearn.c                   # Contrastive Divergence (OpenMP)
-│   ├── cm.c                        # Contact maps
-│   ├── ramachandran.c              # Ângulos de Ramachandran
-│   ├── pauling.c                   # Construtor de modelos PDB
-│   ├── bfactor.c                   # B-factor
-│   ├── dssp2cm.c                   # DSSP → CM
-│   ├── mergie.c                    # Merge MPI output
-│   ├── statistics.c                # Estatísticas
-│   ├── oops.c                      # PDB → PostScript
-│   └── metropolis_old.c            # Legado (target opcional)
-│
-├── data/
-│   └── ramaprob.data
-│
-└── scripts/
-    └── runADCP.py                  # Python 3
-```
+1. Leaves: `error.c`, `vector.c`, `rotation.c`, `random16.c`, `aadict.c`, `canonicalAA.c`
+2. `params.c` — do before anything downstream depends on its idiomatic shape
+3. `peptide.c` — owns the shared structs; converting `Chain`'s arrays touches every file that reads `chain->aa[i]`, so do it once, early, before those callers are themselves converted
+4. `main.c` idiomatic pass (string/RAII file wrapper — the VLA fix already landed in Phase 1)
+5. `vdw.c` (dispatch templating)
+6. `energy.c`
+7. `probe.c`, `metropolis.c`
+8. `flex.c`, `checkpoint_io.c`
+9. `nested.c`
+10. `tools/*`
+11. Cleanup: drop `LANGUAGES C` / `CMAKE_C_STANDARD*` once `find src tools -name '*.c'` is empty
 
----
+## Validation gates
 
-## Arquitetura de Build
+- **Every file conversion**: build gcc+clang, run default `ctest` (smoke + functional, ~13 tests, seconds).
+- **Any change touching `energy.c`, `vdw.c`, `metropolis.c`, `probe.c`, or `main.c`'s swap logic**: also configure `-DADCP_DOCKING_TESTS=ON` and run **both** `docking` and `validation` labels locally. Note from reading [.github/workflows/ci.yml](.github/workflows/ci.yml): CI's `docking` job only runs `-L docking`, never `-L validation` (the ~30 min `val_3q47_redock` RMSD check) — so this is a manual gate at these checkpoints, not something CI does for you.
+- **`func_adcp_fold_determinism`**: run after every `energy.c`/`vdw.c` change without exception. It's the only automated determinism signal, and template-vs-function-pointer codegen changes can alter floating-point accumulation order in Monte Carlo sums (IEEE 754 non-associativity) — a determinism regression here is a blocking failure to investigate, not acceptable drift.
 
-```
-                    ┌──────────────────────────────────────┐
-                    │       adcp_core (STATIC LIBRARY)      │
-                    │  14 módulos compilados separadamente   │
-                    │  link: -lm, include: include/         │
-                    └────┬──────┬──────┬──────┬────────────┘
-                         │      │      │      │
-                    ┌────▼──┐ ┌─▼──┐ ┌─▼──┐ ┌─▼──────────┐
-                    │ adcp  │ │mpi │ │cd  │ │ rama, lipa,  │
-                    │serial │ │adcp│ │learn│ │ cm, bfactor │
-                    └───────┘ └────┘ └─────┘ └─────────────┘
+## Risk register
 
-    Ferramentas standalone: mergie, statistics, dssp2cm, oops
-    Legado (opcional): metropolis_old
-```
+| Risk | Where | Mitigation |
+|---|---|---|
+| `std::vector` reallocation growth differs from `realloc`, could unmask a latent buffer over/under-read previously hidden in slack space | any `realloc`→`push_back` conversion (`params.c`, `flex.c`) | ASan/UBSan CI leg (Phase 1); full functional+docking+validation run after each |
+| Template/inlining changes float accumulation order | `vdw.c`, `energy.c` dispatch conversion | `func_adcp_fold_determinism` after every change, treat any diff as blocking |
+| `std::vector`/`std::string` throw `bad_alloc` on OOM vs. C's `NULL`-check-then-`stop()` | any container conversion | Accepted as-is: both are fatal-on-OOM in practice; document as the one sanctioned exception to "no exceptions," don't add `try`/`catch` anywhere else |
+| RAII MPI/file guards don't run on the `stop()`→`exit()` abnormal path (`exit()` skips stack unwinding) | `main.c`, `error.c` | Not a regression — current code has the same gap. Don't oversell RAII as fixing abnormal-exit cleanup in commit messages |
+| Installed static lib `adcp_core.a` ([src/CMakeLists.txt:33](src/CMakeLists.txt#L33)) — C++ name mangling breaks any out-of-repo consumer linking it directly | install target | No in-repo evidence of external linkage (ADCP is invoked as a subprocess per README); flag for the user to confirm with ADFRsuite maintainers in parallel, don't block on it |
 
-### Targets de build
+## Relative sizing
 
-| Target | Tipo | Fonte principal | Dependências |
-|--------|------|----------------|-------------|
-| `adcp_core` | static library | 14 `.c` em `src/` | `m` (libmath) |
-| `adcp` | executable | `src/main.c` | `adcp_core` |
-| `adcp_mpi` | executable | `src/main.c` + `PARALLEL` | `adcp_core`, `MPI::MPI_C` |
-| `cdlearn` | executable | `tools/cdlearn.c` | `adcp_core`, `OpenMP::OpenMP_C` |
-| `cm` | executable | `tools/cm.c` | `adcp_core` |
-| `rama` | executable | `tools/ramachandran.c` | `adcp_core` |
-| `lipa` | executable | `tools/pauling.c` | `adcp_core` |
-| `bfactor` | executable | `tools/bfactor.c` | `adcp_core` |
-| `mergie` | executable | `tools/mergie.c` | `m` |
-| `statistics` | executable | `tools/statistics.c` | `m` |
-| `dssp2cm` | executable | `tools/dssp2cm.c` | `m` |
-| `oops` | executable | `tools/oops.c` | `m` |
-| `metropolis_old` | executable | `tools/metropolis_old.c` | `adcp_core` (opcional) |
+Phase 1 (whole tree, 25 files) is the largest by file count, though most diffs are small casts — except `main.c`'s VLA fix, the one unavoidable real change. `params.c` and `peptide.c` idiomatic passes (Phase 2, steps 2-3) are the next largest by blast radius since `peptide.c` owns shared structs every other file reads. `energy.c` is large by line count but narrower in scope. `vdw.c` dispatch templating is small and isolated (4 call sites). `tools/` and the final CMake cleanup are trivial.
 
----
+## Verification
 
-## Build Instructions
+**Always configure with `-DCMAKE_BUILD_TYPE=Release`, and build into a directory that has no stale objects.** Two false failures burned time during Phase 1 and both are traps for the next person:
 
-### Pré-requisitos
+- With no `CMAKE_BUILD_TYPE` the build is `-O0`, where a single `func_adcp_fold_determinism` run exceeds 400s against its 180s timeout. The test cannot pass in an unoptimized build; it takes ~54s in Release.
+- Renaming `foo.c` → `foo.cpp` leaves the old `foo.c.o` behind in an existing build tree, and CMake keeps linking it. A `build/` tree carried across the renames ended up with 28 objects for a 17-source target — stale `-O0` C objects linked alongside the new C++ ones, producing garbage globals and a hang that looks exactly like a code regression. **`rm -rf` the build directory after every rename step.**
 
-- CMake >= 3.16
-- Compilador C99 (GCC, Clang, MSVC)
-- Opcional: MPI (OpenMPI/MPICH), OpenMP, Ninja
-
-### Build básico (Unix Makefiles)
-
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
-```
-
-### Build com Ninja (mais rápido)
-
-```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-```
-
-### Build com MPI + OpenMP
-
-```bash
-cmake -B build -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DADCP_MPI=ON \
-  -DADCP_OPENMP=ON
-cmake --build build
-```
-
-### Build com ferramentas legadas
-
-```bash
-cmake -B build -DADCP_LEGACY=ON
-cmake --build build
-```
-
-### Instalação
-
-```bash
-cmake --install build --prefix /usr/local
-```
-
-### Opções CMake
-
-| Opção | Default | Descrição |
-|-------|---------|-----------|
-| `ADCP_MPI` | OFF | Suporte a MPI (parallel tempering) |
-| `ADCP_OPENMP` | OFF | Suporte a OpenMP (cdlearn) |
-| `ADCP_TOOLS` | ON | Compila ferramentas auxiliares |
-| `ADCP_LEGACY` | OFF | Compila metropolis_old |
-
-### Uso do wrapper Python 3
-
-```bash
-python3 scripts/runADCP.py -s GaRyMiChEL -t rec.trg -o output -N 50 -n 2500000
-```
-
----
-
-## Benefícios da Migração
-
-### Performance de build
-
-| Aspecto | Antes | Depois |
-|---------|-------|--------|
-| Compilação | 1 unidade de tradução | 15+ objetos separados |
-| Recompilação parcial | Impossível (sempre recompila tudo) | Apenas arquivos alterados |
-| Paralelismo | `make -j` limitado (monolítico) | `ninja -j$(nproc)` completo |
-| Tempo de rebuild (1 arquivo) | ~3-5s | ~0.2-0.5s |
-| Geradores disponíveis | Apenas GNU Make | Make, Ninja, MSBuild, Xcode |
-
-### Portabilidade
-
-| Plataforma | Antes | Depois |
-|------------|-------|--------|
-| Linux | OK (hardcoded) | OK (detecção automática) |
-| macOS | Parcial | OK |
-| Windows | Não suportado | Suportado (MSVC/MinGW) |
-| HPC clusters | MPI manual | `find_package(MPI)` automático |
-| Outros Unix | SunOS apenas | Qualquer OS com CMake |
-
-### Manutenibilidade
-
-- **Separação clara**: `src/` (core), `include/` (API), `tools/` (utilitários)
-- **Build configurável**: Opções CMake substituem edição manual do Makefile
-- **Navegação**: IDEs e LSPs reconhecem a estrutura `include/` automaticamente
-- **CI/CD**: Integração nativa com GitHub Actions, GitLab CI, Jenkins
-- **Python 3**: Script wrapper compatível com Python moderno (EOL do Python 2 foi em 2020)
-
-### Correções aplicadas
-
-- `params.h`: adicionado `#include <stdio.h>` (usava `FILE *` sem incluir o header)
-- `-fcommon`: flag adicionada para compatibilidade com GCC 10+ (o código original usava definições múltiplas de variáveis globais, compatível apenas com compilação de unidade única)
-- `.gitignore`: evita commit acidental de binários e artefatos de build
-
----
-
-## Mudanças no runADCP.py
-
-| Item | Python 2 | Python 3 |
-|------|----------|----------|
-| Print | `print "string"` | `print("string")` |
-| argparse | `version="%prog 0.1"` | `--version` via `action='version'` |
-| kwargs | `**kw` com `.pop()` mutável | `.get()` não-destrutivo |
-| numpy | `numpy.load(...)` | `numpy.load(..., allow_pickle=True)` |
-| Shebang | ausente | `#!/usr/bin/env python3` |
-| Caminho binário | `./adcp_Linux-x86_64` | `./adcp` |
-| Dados | `ramaprob.data` no cwd | Procura em `data/` relativo ao script |
-| Imports | `from glob import glob` (não usado) | Removido |
-| Imports | `import tarfile, pickle` (não usados) | Removidos |
-
----
-
-## Verificação
-
-Build testado e aprovado em Linux (Ubuntu 24.04, GCC 13.3.0, CMake 3.28.3):
-
-```
-[100%] Built target adcp
-[100%] Built target cdlearn
-[100%] Built target mergie
-[100%] Built target statistics
-[100%] Built target oops
-[100%] Built target dssp2cm
-[100%] Built target cm
-[100%] Built target rama
-[100%] Built target lipa
-[100%] Built target bfactor
-```
-
-Binário principal (`adcp`) executa corretamente, exibindo uso esperado:
-```
-WARNING! No command line parameter line was given.
-ERROR! Missing ramaprob.data file.
-```
+Run `cmake -B build -DADCP_TOOLS=ON -DCMAKE_BUILD_TYPE=Release && cmake --build build && ctest --test-dir build --output-on-failure` after every commit. For checkpoints listed above, additionally: `cmake -B build-dock -DADCP_DOCKING_TESTS=ON && cmake --build build-dock && ctest --test-dir build-dock -L "docking|validation" --output-on-failure` (first run fetches the ~10MB 3Q47 target once, cached thereafter).

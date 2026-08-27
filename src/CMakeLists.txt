@@ -20,11 +20,11 @@ target_include_directories(adcp_core PUBLIC
 )
 target_link_libraries(adcp_core PUBLIC m)
 
-add_executable(adcp main.c)
+add_executable(adcp main.cpp)
 target_link_libraries(adcp PRIVATE adcp_core)
 
 if(ADCP_MPI)
-  add_executable(adcp_mpi main.c)
+  add_executable(adcp_mpi main.cpp)
   target_compile_definitions(adcp_mpi PRIVATE PARALLEL)
   target_include_directories(adcp_mpi PRIVATE ${MPI_C_INCLUDE_DIRS})
   target_link_libraries(adcp_mpi PRIVATE adcp_core ${MPI_C_LIBRARIES})

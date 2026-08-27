@@ -10,9 +10,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(ADCP_LEGACY_COMMON "Allow tentative global merging (-fcommon); legacy escape hatch" OFF)
 
 if(ADCP_LEGACY_COMMON)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fcommon")
+  set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -fcommon")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcommon")
 else()
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-common")
+  set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -fno-common")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-common")
 endif()
 
 option(ADCP_MPI    "Build with MPI parallel tempering support" OFF)

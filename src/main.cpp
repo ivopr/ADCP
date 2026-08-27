@@ -201,7 +201,9 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 		int stopSignal = 0;
 		int swapInd = 0;
 		int swapInd2 = 0;
-		int swapLength = 10; //size of swapping pool
+		/* const: makes swapLength+1 a constant expression, so the two arrays
+		   below are fixed-size rather than VLAs (not valid standard C++). */
+		const int swapLength = 10; //size of swapping pool
 		int inCache = 0;
 		int ind = 0;
 		int currIndex = 0;
@@ -721,7 +723,7 @@ char *read_options(int argc, char *argv[], simulation_params *sim_params)
 			sscanf(argv[i], "%d,%256s",&num_NS_per_checkpoint,checkpoint_filename);
 			checkpoint = 1;
 			sim_params->num_NS_per_checkpoint = num_NS_per_checkpoint;
-			sim_params->checkpoint_filename = realloc(sim_params->checkpoint_filename,DEFAULT_SHORT_STRING_LENGTH);
+			sim_params->checkpoint_filename = (char *)realloc(sim_params->checkpoint_filename,DEFAULT_SHORT_STRING_LENGTH);
 			strcpy(sim_params->checkpoint_filename,checkpoint_filename);
 			sim_params->checkpoint = checkpoint;
 			break;
