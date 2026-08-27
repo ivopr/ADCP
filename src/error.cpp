@@ -14,7 +14,7 @@
 /* Aborting the program with an error message   */
 /* Different failure codes could be passed here */
 //void stop(char *error_string, int failure_code) {
-void stop(char *error_string) {
+void stop(const char *error_string) {
 
    int failure_code = EXIT_FAILURE;
 

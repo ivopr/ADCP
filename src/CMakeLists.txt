@@ -7,7 +7,7 @@ add_library(adcp_core STATIC
   flex.c
   metropolis.c
   nested.c
-  params.c
+  params.cpp
   peptide.c
   probe.c
   random16.cpp

@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-void stop(char *error_string);
+void stop(const char *error_string);
 
 
 #ifdef __cplusplus
