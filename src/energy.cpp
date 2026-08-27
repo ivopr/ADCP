@@ -11,7 +11,6 @@
 #include<string.h>
 #include<float.h>
 #include<math.h>
-#include<vector>
 
 #include"canonicalAA.h"
 #include"error.h"
@@ -1498,8 +1497,11 @@ float scoreSideChain(int nbRot, int nbAtoms, double *charges, int *atypes,  doub
 	float CA[3] = { (float)a->ca[0], (float)a->ca[1], (float)a->ca[2] }; /* coordiantes from 1crn.pdb:TYR29:CA */
 	float CB[3] = { (float)a->cb[0], (float)a->cb[1], (float)a->cb[2] }; /* coordiantes from 1crn.pdb:TYR29:CB */
 	float v1[3], v2[3], v3[3], mat[3][4]; /* used to compute xform matrix to align canonical rotamer to amino acid */
-	std::vector<float> tc_storage((size_t)nbRot * nbAtoms * 3);
-	View3<float> tc{ tc_storage.data(), nbAtoms, 3 }; /* list of transformed coordinates */
+	/* Stack-allocated at the largest rotamer set declared in canonicalAA.h
+	   (81 x 11 x 3). A heap std::vector here caused an intermittent hang
+	   (~1 run in 3); see the open-regression section in MIGRATION.md. */
+	float tc_storage[81 * 11 * 3];
+	View3<float> tc{ tc_storage, nbAtoms, 3 }; /* list of transformed coordinates */
 					   /*
 					   printf("VAL, %d atoms %d rotamers\n", VAL.nbAtoms, VAL.nbRot);
 					   for (i=0; i<VAL.nbRot; i++) {
@@ -1659,8 +1661,11 @@ double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atype
 	float CA[3] = { (float)a->ca[0], (float)a->ca[1], (float)a->ca[2] }; /* coordinates from 1crn.pdb:TYR29:CA */
 	float CB[3] = { (float)a->cb[0], (float)a->cb[1], (float)a->cb[2] }; /* coordinates from 1crn.pdb:TYR29:CB */
 	float v1[3], v2[3], v3[3], mat[3][4]; /* used to compute xform matrix to align canonical rotamer to amino acid */
-	std::vector<float> tc_storage((size_t)nbRot * nbAtoms * 3);
-	View3<float> tc{ tc_storage.data(), nbAtoms, 3 }; /* list of transformed coordinates */
+	/* Stack-allocated at the largest rotamer set declared in canonicalAA.h
+	   (81 x 11 x 3). A heap std::vector here caused an intermittent hang
+	   (~1 run in 3); see the open-regression section in MIGRATION.md. */
+	float tc_storage[81 * 11 * 3];
+	View3<float> tc{ tc_storage, nbAtoms, 3 }; /* list of transformed coordinates */
 					   /*
 					   printf("VAL, %d atoms %d rotamers\n", VAL.nbAtoms, VAL.nbRot);
 					   for (i=0; i<VAL.nbRot; i++) {

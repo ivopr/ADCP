@@ -60,10 +60,90 @@ Ordering within Phase 2, by risk × blast radius:
 - **Any change touching `energy.c`, `vdw.c`, `metropolis.c`, `probe.c`, or `main.c`'s swap logic**: also configure `-DADCP_DOCKING_TESTS=ON` and run **both** `docking` and `validation` labels locally. Note from reading [.github/workflows/ci.yml](.github/workflows/ci.yml): CI's `docking` job only runs `-L docking`, never `-L validation` (the ~30 min `val_3q47_redock` RMSD check) — so this is a manual gate at these checkpoints, not something CI does for you.
 - **`func_adcp_fold_determinism`**: run after every `energy.c`/`vdw.c` change without exception. It's the only automated determinism signal, and template-vs-function-pointer codegen changes can alter floating-point accumulation order in Monte Carlo sums (IEEE 754 non-associativity) — a determinism regression here is a blocking failure to investigate, not acceptable drift.
 
+## FIXED REGRESSION — `energy.cpp`, introduced by `5660a33` (Phase 1 step 6)
+
+**Status: fixed (trigger removed). Mechanism still unexplained — read this before touching
+`scoreSideChain` / `scoreSideChainNoClash` again.**
+
+The fix: `tc` is a fixed-size stack array sized at the largest rotamer set declared in
+`canonicalAA.h` (81 × 11 × 3 floats, ~10 KB), indexed through the same `View3` wrapper.
+That is standard C++ — no VLA, so no `gnu++17` needed — and keeps the buffer on the stack.
+Measured 0/15 hangs.
+
+`func_adcp_fold_determinism` hangs intermittently — roughly 1 run in 3, same seed, same
+command. Bisected by running the identical fold 12 times per build:
+
+| Build | Hangs |
+|---|---|
+| Pre-migration C (`5e94b0b`) | 0/12 |
+| Before step 6 (`adf422e`) | 0/12 |
+| Step 6 (`5660a33`) | 3/12 |
+| `90c63a8` (current) | 4/12 |
+| Current, with only `energy` reverted to the C file | 0/12 |
+| Current, with only `tc` reverted from `std::vector` to a VLA | 0/12 |
+
+So the trigger is precisely one change: in `scoreSideChain` and `scoreSideChainNoClash`,
+`float tc[nbRot][nbAtoms][3]` became `std::vector<float> tc_storage` + a `View3` wrapper.
+Symptom: `currTargetEnergy` picks up a denormal (~1e-308, a different value each time),
+which makes the retry loop at [src/main.cpp:306](src/main.cpp#L306) spin forever, since
+every `swapEnergy[i]` compares `>=` against it.
+
+Mechanism: **not established.** Seven hypotheses were tested and every one was ruled out
+by measurement:
+
+| Hypothesis | Result |
+|---|---|
+| `a->SCRot` indexes `tc` out of bounds (only assigned inside `if (score < bestScore)`, and ADCP transmutates residues, so a stale index from an 81-rotamer set could address a 9-rotamer one) | Refuted — an instrumented build logging every `SCRot` outside `[0, nbRot)` recorded **zero** violations on runs that hung |
+| A memory error ASan/UBSan would catch | No report in 6 runs, and the hang never reproduced under ASan at all |
+| Stack frame size changed by removing the VLA | Refuted — re-adding a `volatile` pad of identical size still hung 4/12 |
+| `chain->erg` is `realloc`'d without zeroing, so `totenergy` sums heap residue | Refuted — `memset`ing it still hung 3/12 |
+| `View3`'s indexing differs from the C99 VLA parameter | Refuted by review — `p[i*nbAtoms*3 + j*3 + k]` in both, and a C99 VLA parameter also uses the *runtime* `nbAtoms` |
+| Strict-aliasing violation exploited at `-O3` | Refuted — `-fno-strict-aliasing` still hung 2/12 |
+| Optimization level | Refuted — plain `-O2` still hung 3/12 (so ASan's clean runs came from the sanitizer, not from `-O2`) |
+
+Note the `tc` change made memory *more* initialized, not less — `std::vector<float>`
+zero-initializes where the VLA did not — so a naive "the vector reads uninitialized data"
+story does not hold. What is established is narrow and empirical: **heap `tc` hangs, stack
+`tc` does not**, across every other variable tested. Pinning the mechanism needs MSan or
+valgrind; neither is installed on this machine.
+
+**Consequence for the rest of the migration: validate by hammering, not by reasoning.** Run
+`func_adcp_fold_determinism`'s command 12–15 times, not once. A single green run proves
+nothing here — this regression passed 13/13 plus docking and validation when it was
+committed.
+
+Two lessons worth keeping:
+
+- **The container conversion did not catch a latent bug — it converted a silent one into a
+  hang.** This is the opposite of the premise in the Context section above, and it is the
+  strongest argument yet for building the ASan/UBSan leg *before* converting anything else.
+- `5660a33`'s commit message claims "compile-only changes: explicit casts" and "No behavior
+  change". That is false: it also rewrote two VLA signatures behind a hand-written `View3`
+  template and restructured a `goto` that this plan had scheduled for Phase 2. It passed
+  13/13 plus docking and validation at the time, because the failure is intermittent. **A
+  green test run is not evidence that a diff is cast-only — read the diff.**
+
+## Pre-existing bug found by ASan (NOT a migration regression)
+
+`sscanf(prm, "Bias=%256[^,]...", contact_map_file)` at
+[src/params.cpp:1121](src/params.cpp#L1121) writes into `char contact_map_file[256]`.
+`%256[` reads up to 256 characters **and then appends a NUL** — 257 bytes into a
+256-byte buffer. ASan reports it as a stack-buffer-overflow on the first run.
+
+Verified present, at the same line, in the pre-migration C build (`5e94b0b`), so it is not
+caused by the migration. The same off-by-one appears at **12 sites** across `params.cpp`
+and `main.cpp` (`%256[^,]` and `%256s` into 256-byte buffers). Fix is `%255[^,]` / `%255s`
+at every site. It needs a ≥256-character path to trigger, so it is latent — and it is
+almost certainly *not* the cause of the hang above.
+
+**Fixed** in its own commit, separate from the migration steps: all 12 sites now use
+`%255[^,]` / `%255s`. ASan, which previously aborted on the first run, now completes clean.
+
 ## Risk register
 
 | Risk | Where | Mitigation |
 |---|---|---|
+| Converting a stack VLA to a heap container relocates any out-of-bounds access, turning a benign latent read into garbage data | `energy.cpp`'s `tc` (already bit us, see above); any remaining VLA→container change | Build the ASan/UBSan leg first; hammer `func_adcp_fold_determinism` 12× rather than once, since these failures are intermittent |
 | `std::vector` reallocation growth differs from `realloc`, could unmask a latent buffer over/under-read previously hidden in slack space | any `realloc`→`push_back` conversion (`params.c`, `flex.c`) | ASan/UBSan CI leg (Phase 1); full functional+docking+validation run after each |
 | Template/inlining changes float accumulation order | `vdw.c`, `energy.c` dispatch conversion | `func_adcp_fold_determinism` after every change, treat any diff as blocking |
 | `std::vector`/`std::string` throw `bad_alloc` on OOM vs. C's `NULL`-check-then-`stop()` | any container conversion | Accepted as-is: both are fatal-on-OOM in practice; document as the one sanctioned exception to "no exceptions," don't add `try`/`catch` anywhere else |
