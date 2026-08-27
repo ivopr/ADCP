@@ -4,7 +4,7 @@
 
 ADCP (AutoDock CrankPep) is a 23.7k-line C99 peptide-docking Monte Carlo engine, distributed as a CLI binary (invoked as a subprocess by `runADCP.py`/AGFR, not linked as a library by any known external consumer). The codebase does heavy manual memory management (100 malloc, 76 realloc, 159 free calls) and has a proven production bug in this exact area: commit `7e2192d` fixed a stack-buffer-overflow VLA (`Chain* swapChains[swapLength]` sized one element short) in `src/main.c` that crashed every production docking run for 200k+ step searches. Be precise about what would have caught it: `std::vector` accessed through `operator[]` would not have, and this plan mandates `operator[]` in hot paths. An ASan build would have, which is why the sanitizer CI leg below is the load-bearing mitigation for this bug class, not the container conversions. Commit `5e94b0b` then added the only tests that exercise the docking energy path at all (`dock_3q47_smoke`, `val_3q47_redock`); everything else runs the folding path where the receptor energy term is literally `0.000000`.
 
-Goal: migrate the whole tree to idiomatic modern C++17, incrementally, file-by-file, keeping every step compiling and green on the existing gcc+clang CI matrix, without ever breaking the docking path this codebase already got burned on once. No exceptions as the error-handling idiom (matches current `stop()`/`exit()` style, avoids MPI/OpenMP unwinding hazards) — RAII is fine, `throw`/`catch` is not (one unavoidable exception: `std::vector`/`std::string` throw `bad_alloc` on OOM, which is accepted as behaviorally equivalent to the current fatal-OOM behavior).
+Goal: migrate the whole tree to idiomatic modern C++17, incrementally, file-by-file, keeping every step compiling and green on the gcc+clang CI matrix, without ever breaking the docking path this codebase already got burned on once. (**Read the CI hardening section before trusting that phrase.** Throughout Phase 1 the "gcc+clang matrix" compiled zero C++ with clang — the workflow set `CC` and never `CXX`. Every "validated on gcc+clang" claim in this document and in the Phase 1 commit messages was false until the fix described below.) No exceptions as the error-handling idiom (matches current `stop()`/`exit()` style, avoids MPI/OpenMP unwinding hazards) — RAII is fine, `throw`/`catch` is not (one unavoidable exception: `std::vector`/`std::string` throw `bad_alloc` on OOM, which is accepted as behaviorally equivalent to the current fatal-OOM behavior).
 
 ## Standard & build setup (do once, first)
 
@@ -12,7 +12,7 @@ Goal: migrate the whole tree to idiomatic modern C++17, incrementally, file-by-f
 - Root [CMakeLists.txt](CMakeLists.txt): change `project(ADCP VERSION 0.1 LANGUAGES C)` → `LANGUAGES C CXX`, add `CMAKE_CXX_STANDARD 17` / `CMAKE_CXX_STANDARD_REQUIRED ON` / `CMAKE_CXX_EXTENSIONS OFF` alongside the existing C99 settings. Keep both C and C++ language settings until the last `.c` file is gone, then drop the C ones in a final cleanup commit.
 - `-fno-common`/`ADCP_LEGACY_COMMON` was only ever applied to `CMAKE_C_FLAGS`, so it never reached a single C++ TU; once `src/` went all-C++ the option was a silent no-op. Phase 1 step 7 mirrors both branches into `CMAKE_CXX_FLAGS`. Note this is hygiene, not a behavior fix: g++ emits no COMMON symbols for C++ at all (verified with `nm`: zero `C`-type symbols either way), so the flag is inert for C++ TUs — it is set so the escape hatch stays honest, and it matters for `tools/*.c` until Phase 1 step 8 lands.
 - Per-file conversion mechanics (repeat for every file, every phase): `git mv src/foo.c src/foo.cpp` (preserves blame — files carry LGPL attribution headers), update the one line in [src/CMakeLists.txt](src/CMakeLists.txt) or `tools/CMakeLists.txt`, build with gcc+clang, run tests, commit. CMake mixes `.c`/`.cpp` sources in one target natively — no "big bang" moment is structurally required, and the existing CI matrix job keeps validating the whole tree at every commit without workflow changes.
-- Recommended addition during Phase 1: add `-DADCP_MPI=ON` and `-DADCP_OPENMP=ON` build-only legs to CI. Neither is exercised by the current CI matrix at all, so a C++-under-MPI/OpenMP compile break would otherwise go unnoticed for the whole migration. Also recommend an ASan+UBSan CMake build config — the sharpest available tool for catching the "wrong-size buffer" bug class this migration targets, complementary to the phased conversion.
+- ~~Recommended addition during Phase 1: MPI/OpenMP legs and an ASan+UBSan config.~~ **Done, but only after Phase 1 had already finished** — see "CI hardening" below. Recommending it and not building it is what let the `energy.cpp` regression through; the sanitizer leg found two real bugs within minutes of first existing.
 
 ## Phase 1 — whole-tree rename to `.cpp`, compile clean, no behavior change
 
@@ -57,7 +57,7 @@ Ordering within Phase 2, by risk × blast radius:
 ## Validation gates
 
 - **Every file conversion**: build gcc+clang, run default `ctest` (smoke + functional, ~13 tests, seconds).
-- **Any change touching `energy.c`, `vdw.c`, `metropolis.c`, `probe.c`, or `main.c`'s swap logic**: also configure `-DADCP_DOCKING_TESTS=ON` and run **both** `docking` and `validation` labels locally. Note from reading [.github/workflows/ci.yml](.github/workflows/ci.yml): CI's `docking` job only runs `-L docking`, never `-L validation` (the ~30 min `val_3q47_redock` RMSD check) — so this is a manual gate at these checkpoints, not something CI does for you.
+- **Any change touching `energy.cpp`, `vdw.cpp`, `metropolis.cpp`, `probe.cpp`, or `main.cpp`'s swap logic**: also configure `-DADCP_DOCKING_TESTS=ON` and run both `docking` and `validation` labels locally. CI now runs both (see below), so this is a fast local pre-check rather than the only gate. `val_3q47_redock` takes **~2 minutes** — measured at 117s, 120s and 140s. An earlier draft of this document claimed ~30 min and used that to justify leaving it out of CI; that number was wrong.
 - **`func_adcp_fold_determinism`**: run after every `energy.c`/`vdw.c` change without exception. It's the only automated determinism signal, and template-vs-function-pointer codegen changes can alter floating-point accumulation order in Monte Carlo sums (IEEE 754 non-associativity) — a determinism regression here is a blocking failure to investigate, not acceptable drift.
 
 ## FIXED REGRESSION — `energy.cpp`, introduced by `5660a33` (Phase 1 step 6)
@@ -123,7 +123,31 @@ Two lessons worth keeping:
   13/13 plus docking and validation at the time, because the failure is intermittent. **A
   green test run is not evidence that a diff is cast-only — read the diff.**
 
-## Pre-existing bug found by ASan (NOT a migration regression)
+## CI hardening (done after Phase 1, before starting Phase 2)
+
+Phase 2 is made entirely of `malloc`→`std::vector` conversions — the same class of change
+that produced the unexplained `energy.cpp` regression. The CI as it stood would not have
+caught that, so it was rebuilt first. [.github/workflows/ci.yml](.github/workflows/ci.yml)
+now has five jobs:
+
+| Job | What it adds |
+|---|---|
+| `build-and-test` (gcc, clang) | **Sets `CXX`, not `CC`.** The project is `LANGUAGES CXX`, so `CC` selected nothing; both legs had been building with the default g++, and clang coverage had decayed to zero as the tree converted. Also runs the determinism test with `--repeat until-fail:12`. |
+| `sanitizers` | ASan+UBSan with `-fno-sanitize-recover=all` (without it UBSan prints and continues, and the job goes green with real findings). |
+| `openmp` | `-DADCP_OPENMP=ON`; `cdlearn` is the only consumer and nothing else exercises it. |
+| `mpi` | `-DADCP_MPI=ON`, build only — no test covers the `PARALLEL` path. `adcp_mpi` was never compiled once during the entire migration. |
+| `docking` | Now `-L "docking|validation"`, not just `-L docking`. |
+
+The `No COMMON symbols` step is kept but is now **vacuous**: g++ emits no COMMON symbols for
+C++ regardless of `-fno-common` (confirmed with `nm`, zero either way). It guarded C
+tentative definitions and there is no C left. Delete it if you would rather not carry a
+check that cannot fail.
+
+Why the repeat matters: **one green run proves nothing when the failure is intermittent.**
+The `energy.cpp` regression hung ~1 run in 3 and still passed 13/13 plus docking and
+validation the day it was committed.
+
+## Pre-existing bugs found by ASan (NOT migration regressions)
 
 `sscanf(prm, "Bias=%256[^,]...", contact_map_file)` at
 [src/params.cpp:1121](src/params.cpp#L1121) writes into `char contact_map_file[256]`.
@@ -137,7 +161,17 @@ at every site. It needs a ≥256-character path to trigger, so it is latent — 
 almost certainly *not* the cause of the hang above.
 
 **Fixed** in its own commit, separate from the migration steps: all 12 sites now use
-`%255[^,]` / `%255s`. ASan, which previously aborted on the first run, now completes clean.
+`%255[^,]` / `%255s`.
+
+A second one, found the first time the sanitizer CI leg ran: `dssp2cm`'s `parse_dssp_body`
+wrote its string terminator out of bounds. `seq`/`ss` were `calloc`'d with `n_res` bytes but
+are indexed by the DSSP residue number, which reaches `n_res-1`, with the terminator written
+one past that — so the overflow happens on valid input, not only on the empty smoke fixture.
+`k` was also uninitialized, so on empty input the terminator index was indeterminate. Both
+present in the pre-migration C. Fixed in `8392e34`; output byte-identical.
+
+Two real bugs within minutes of the sanitizer leg first existing is the argument for having
+built it in Phase 1, as this document originally recommended.
 
 ## Risk register
 

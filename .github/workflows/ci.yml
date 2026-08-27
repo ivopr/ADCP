@@ -11,7 +11,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            cxx: g++
+          - compiler: clang
+            cxx: clang++
 
     steps:
       - uses: actions/checkout@v4
@@ -21,16 +25,23 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang
 
       - name: Configure
+        # The project is LANGUAGES CXX, so CMake picks the compiler from CXX.
+        # Setting CC here would select nothing at all -- which is what this
+        # workflow did until the whole tree had been converted to C++, leaving
+        # both matrix legs silently building with the default g++.
         env:
-          CC: ${{ matrix.compiler }}
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+          CXX: ${{ matrix.cxx }}
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DADCP_TOOLS=ON
 
       - name: Build
         run: cmake --build build -j$(nproc)
 
       - name: No COMMON symbols
-        # -fno-common is the default; a tentative definition slipping back in
-        # would silently alias globals across translation units.
+        # NOTE: this check is now vacuous. It guarded C tentative definitions;
+        # g++ emits no COMMON symbols for C++ at all (confirmed with nm, zero
+        # either way, with or without -fno-common). Kept because it is cheap
+        # and harmless, but it no longer proves anything -- delete it if you
+        # would rather not carry a check that cannot fail.
         run: |
           n=$(find build -name '*.o' -exec nm {} \; 2>/dev/null | grep -c ' C ' || true)
           echo "COMMON symbols: $n"
@@ -38,6 +49,74 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure -j4
+
+      - name: Determinism, repeated
+        # A single green run proves nothing here. The energy.cpp regression
+        # fixed in 68dd3ae hung about 1 run in 3 and still passed 13/13 plus
+        # docking and validation on the day it was committed.
+        run: |
+          ctest --test-dir build -R func_adcp_fold_determinism \
+                --repeat until-fail:12 --output-on-failure
+
+  sanitizers:
+    # ASan + UBSan. This is the leg that found the 12-site sscanf overflow
+    # fixed in 1e82869, on its first run.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        # -fno-sanitize-recover=all matters: without it UBSan prints its
+        # findings and carries on, and the job goes green with real bugs in
+        # the log.
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DADCP_TOOLS=ON \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        # detect_leaks=0: the code exits via stop()->exit() by design and does
+        # not free on the way out. Leaks are out of scope for this leg.
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest --test-dir build --output-on-failure
+
+  openmp:
+    # cdlearn is the only OpenMP consumer. Nothing in the default matrix
+    # exercises this option.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DADCP_TOOLS=ON -DADCP_OPENMP=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j4
+
+  mpi:
+    # Build only: no test exercises the PARALLEL path. adcp_mpi was never
+    # compiled once during the C++ migration, so this leg is the first thing
+    # that will actually check it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MPI
+        run: sudo apt-get update && sudo apt-get install -y libopenmpi-dev
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DADCP_MPI=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
 
   docking:
     # Exercises the AutoDock grid path against the published 3Q47 target.
@@ -52,5 +131,7 @@ jobs:
       - name: Build
         run: cmake --build build -j$(nproc)
 
-      - name: Docking tests
-        run: ctest --test-dir build --output-on-failure -L docking
+      - name: Docking and validation tests
+        # validation is included: val_3q47_redock measured 117-140s, not the
+        # ~30 min MIGRATION.md used to claim as the reason for leaving it out.
+        run: ctest --test-dir build --output-on-failure -L "docking|validation"
