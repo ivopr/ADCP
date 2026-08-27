@@ -720,7 +720,7 @@ char *read_options(int argc, char *argv[], simulation_params *sim_params)
 			sim_params->lowtemp = lowtemp;
 			break;
 		case 'C':
-			sscanf(argv[i], "%d,%256s",&num_NS_per_checkpoint,checkpoint_filename);
+			sscanf(argv[i], "%d,%255s",&num_NS_per_checkpoint,checkpoint_filename);
 			checkpoint = 1;
 			sim_params->num_NS_per_checkpoint = num_NS_per_checkpoint;
 			sim_params->checkpoint_filename = (char *)realloc(sim_params->checkpoint_filename,DEFAULT_SHORT_STRING_LENGTH);

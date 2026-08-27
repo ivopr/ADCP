@@ -905,7 +905,7 @@ void flex_setup_command(FLEX_params *self){
 int flex_param_read(char *prm, FLEX_params *self){
   char outdir_string[256]="";
   char flex_dir[256]="";
-  int k = sscanf(prm,"FLEX=%d,%d,%d,%d,%256[^,],%256[^,],%lf,%lf,%lf",&(self->number_of_processors),&(self->totalconf),&(self->fromnode),&(self->tonode),outdir_string,flex_dir,&(self->acceptance_rate_aim),&(self->hstrength_cutoff),&(self->step));
+  int k = sscanf(prm,"FLEX=%d,%d,%d,%d,%255[^,],%255[^,],%lf,%lf,%lf",&(self->number_of_processors),&(self->totalconf),&(self->fromnode),&(self->tonode),outdir_string,flex_dir,&(self->acceptance_rate_aim),&(self->hstrength_cutoff),&(self->step));
 
   int returnval = 5;
 
@@ -1016,7 +1016,7 @@ void model_param_read(char *prm, /* input line */
 
 	char gamma_string[256];
 	/* gamma atoms of the model */
-	k=sscanf(prm, "Gamma=%256[^,],%d,%d,%d,%d",
+	k=sscanf(prm, "Gamma=%255[^,],%d,%d,%d,%d",
 		gamma_string,
 		&(self->use_original_gamma_atoms),
 		&(self->use_3_states),
@@ -1048,7 +1048,7 @@ void model_param_read(char *prm, /* input line */
 
 	/* vdW radii */
 	char potential_string[256];
-	k=sscanf(prm, "VDW=%256[^,],%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%d,%d,%lf,%lf",
+	k=sscanf(prm, "VDW=%255[^,],%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%d,%d,%lf,%lf",
 		   potential_string,
 		   &(self->rca),
 		   &(self->rcb),
@@ -1118,7 +1118,7 @@ void model_param_read(char *prm, /* input line */
 
 	/* bias potential */
 	char contact_map_file[256];
-	if ((k=sscanf(prm, "Bias=%256[^,],%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf",
+	if ((k=sscanf(prm, "Bias=%255[^,],%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf",
 		   contact_map_file,
 		   &(self->bias_eta_beta),
 		   &(self->bias_eta_alpha),
@@ -1220,7 +1220,7 @@ void model_param_read(char *prm, /* input line */
 
 	/* fixed amino acids */
 	char fixed_file[256];
-	if ((k=sscanf(prm, "fixed=%256[^,]",fixed_file)) == 1) {
+	if ((k=sscanf(prm, "fixed=%255[^,]",fixed_file)) == 1) {
 		fprintf(stderr,"setting fixed amino acid list file %s\n",fixed_file);
 		self->fixed_aalist_file = (char*)realloc(self->fixed_aalist_file,DEFAULT_SHORT_STRING_LENGTH);
 		strcpy(self->fixed_aalist_file,fixed_file);
@@ -1239,7 +1239,7 @@ void model_param_read(char *prm, /* input line */
 		fprintf(stderr,"found external potential parameters %d \n", k);
 		int l;
 		if (self->external_potential_type == 1) {
-			l=sscanf(prm+9,"%d,%256[^,],%lf,%lf",
+			l=sscanf(prm+9,"%d,%255[^,],%lf,%lf",
 				&(self->external_potential_type), constraint_file, &(self->external_k[0]), &(self->external_r0[0])); //save r0, k into 1st vector element
 			fprintf(stderr, "found external potential parameters %d \n", l);
 			//stop("unimplemented");
@@ -1277,7 +1277,7 @@ void model_param_read(char *prm, /* input line */
 
 			}
 		} else if (self->external_potential_type == 3) { /* conical potential */
-			l=sscanf(prm+9,"%d,%256[^,],%lf,%lf,%lf",
+			l=sscanf(prm+9,"%d,%255[^,],%lf,%lf,%lf",
 				&(self->external_potential_type), constraint_file, &(self->external_k[0]), &(self->external_r0[0]),&(self->external_ztip)); //save r0, k into 1st vector element
 			if (l==5) {
 				fprintf(stderr,"setting constrained list file %s\n",constraint_file);
@@ -1288,7 +1288,7 @@ void model_param_read(char *prm, /* input line */
 			}
 		}
 		else if (self->external_potential_type == 5) {
-			l = sscanf(prm + 9, "%d,%256[^,],%lf,%lf",
+			l = sscanf(prm + 9, "%d,%255[^,],%lf,%lf",
 				&(self->external_potential_type), constraint_file, &(self->external_k[0]), &(self->external_r0[0])); //save r0, k into 1st vector element
 			fprintf(stderr, "found external potential parameters %d \n", l);
 			//stop("unimplemented");
@@ -1311,7 +1311,7 @@ void model_param_read(char *prm, /* input line */
 		fprintf(stderr,"found external2 potential parameters %d\n", self->external_potential_type2);
 		int l;
 		if (self->external_potential_type2 == 1) {
-			l=sscanf(prm+10,"%d,%256[^,],%lf,%lf",
+			l=sscanf(prm+10,"%d,%255[^,],%lf,%lf",
 				&(self->external_potential_type2), constraint_file2, &(self->external_k2[0]), &(self->external_r02[0])); //save r0, k into 1st vector element
 			if (l>1) {
 				fprintf(stderr,"setting constrained list file %s\n",constraint_file2);
@@ -1319,7 +1319,7 @@ void model_param_read(char *prm, /* input line */
 				strcpy(self->external_constrained_aalist_file2,constraint_file2);
 			}
 		} else if (self->external_potential_type2 == 3) { /* conical potential */
-			l=sscanf(prm+9,"%d,%256[^,],%lf,%lf,%lf",
+			l=sscanf(prm+9,"%d,%255[^,],%lf,%lf,%lf",
 				&(self->external_potential_type2), constraint_file2, &(self->external_k2[0]), &(self->external_r02[0]),&(self->external_ztip2)); //save r0, k into 1st vector element
 			if (l==5) {
 				fprintf(stderr,"setting constrained list file %s\n",constraint_file2);
@@ -1329,7 +1329,7 @@ void model_param_read(char *prm, /* input line */
 				stop("conical potential needs 4 parameters (constraint list file,k,r0,ztip)");
 			}
 		} else if (self->external_potential_type2 == 4) {
-			l = sscanf(prm + 10, "%d,%256[^,],%lf,%lf", &(self->external_potential_type2), constraint_file2, &(self->external_k2[0]), &(self->external_r02[0]));
+			l = sscanf(prm + 10, "%d,%255[^,],%lf,%lf", &(self->external_potential_type2), constraint_file2, &(self->external_k2[0]), &(self->external_r02[0]));
 			fprintf(stderr, "setting cyclic peptide %s \n", constraint_file2);
 		} else {
 			stop("unknown external2 potential type, has to be 1.");
