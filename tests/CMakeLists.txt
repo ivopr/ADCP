@@ -30,7 +30,8 @@ file(COPY ${RAMAPROB} DESTINATION ${TEST_WORK})
 # ---------------------------------------------------------------------------
 
 # lipa: emits a PDB model built from Pauling geometry
-add_test(NAME smoke_lipa COMMAND ${TOOLS_BIN}/lipa)
+add_test(NAME smoke_lipa
+  COMMAND sh -c "${TOOLS_BIN}/lipa < /dev/null")
 set_tests_properties(smoke_lipa PROPERTIES
   LABELS "smoke" TIMEOUT 10
   PASS_REGULAR_EXPRESSION "MODEL.*ENDMDL"
@@ -44,7 +45,8 @@ set_tests_properties(smoke_cdlearn PROPERTIES
 )
 
 # statistics: reports an empty sample rather than dividing by zero
-add_test(NAME smoke_statistics COMMAND ${TOOLS_BIN}/statistics)
+add_test(NAME smoke_statistics
+  COMMAND sh -c "${TOOLS_BIN}/statistics < /dev/null")
 set_tests_properties(smoke_statistics PROPERTIES
   LABELS "smoke" TIMEOUT 10
   PASS_REGULAR_EXPRESSION "Count = 0"
@@ -73,10 +75,20 @@ set_tests_properties(smoke_oops PROPERTIES
 )
 
 # rama: with no input, must say so instead of printing a bogus table
-add_test(NAME smoke_rama COMMAND ${TOOLS_BIN}/rama)
+add_test(NAME smoke_rama
+  COMMAND sh -c "${TOOLS_BIN}/rama < /dev/null")
 set_tests_properties(smoke_rama PROPERTIES
   LABELS "smoke" TIMEOUT 10
   PASS_REGULAR_EXPRESSION "No amino acids recognized"
+)
+
+# rama: must terminate on a real PDB. The fixture ends in ENDMDL, which used to
+# leave getaa() returning its end-of-model sentinel forever instead of EOF.
+add_test(NAME smoke_rama_pdb
+  COMMAND sh -c "${TOOLS_BIN}/rama < ${FIXTURE}")
+set_tests_properties(smoke_rama_pdb PROPERTIES
+  LABELS "smoke" TIMEOUT 10
+  PASS_REGULAR_EXPRESSION "Id +phi"
 )
 
 # dssp2cm: echoes the (empty) sequence and secondary-structure tracks
