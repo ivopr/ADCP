@@ -26,8 +26,7 @@ target_link_libraries(adcp PRIVATE adcp_core)
 if(ADCP_MPI)
   add_executable(adcp_mpi main.cpp)
   target_compile_definitions(adcp_mpi PRIVATE PARALLEL)
-  target_include_directories(adcp_mpi PRIVATE ${MPI_C_INCLUDE_DIRS})
-  target_link_libraries(adcp_mpi PRIVATE adcp_core ${MPI_C_LIBRARIES})
+  target_link_libraries(adcp_mpi PRIVATE adcp_core MPI::MPI_CXX)
 endif()
 
 install(TARGETS adcp adcp_core
