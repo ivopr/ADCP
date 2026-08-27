@@ -24,8 +24,10 @@ int parse_dssp_header(char **seq, char **ss, int **map)
 
 	n_res++;			/* extra space make it easier down the road */
 	*map = (int *)calloc(n_res * n_res, sizeof(int));
-	*ss = (char *)calloc(n_res, sizeof(char));
-	*seq = (char *)calloc(n_res, sizeof(char));
+	/* n_res+1: parse_dssp_body indexes seq/ss by the DSSP residue number,
+	   which reaches n_res-1, and then writes a terminator one past that. */
+	*ss = (char *)calloc(n_res + 1, sizeof(char));
+	*seq = (char *)calloc(n_res + 1, sizeof(char));
 
 	while (fgets(buf, sizeof(buf), stdin) != NULL) {
 		if (strncmp(buf + 5, "RESIDUE AA STRUCTURE BP1", 24) == 0)
@@ -38,7 +40,9 @@ int parse_dssp_header(char **seq, char **ss, int **map)
 void parse_dssp_body(int n_res, char *seq, char *ss, int *map)
 {
 	char buf[140], aa, t, tt = '@', p1, p2, pp1 = ' ', pp2 = ' ';
-	int i, j, k, cont = -1, c;
+	/* k = 0: on empty input the loop below never runs and never assigns k,
+	   leaving the seq[++k] terminator writing at an indeterminate index. */
+	int i, j, k = 0, cont = -1, c;
 	char ibuf[5] = "    ";
 	char jbuf[5] = "    ";
 
