@@ -160,7 +160,7 @@ char *read_options(int argc, char *argv[], simulation_params *sim_params, cdlear
 			break;
 		case 'R':
 			copy_string(&restart_filename,argv[i]);
-			cd_params->restart_filename = realloc(cd_params->restart_filename,DEFAULT_LONG_STRING_LENGTH);
+			cd_params->restart_filename = (char *)realloc(cd_params->restart_filename,DEFAULT_LONG_STRING_LENGTH);
 			strcpy(cd_params->restart_filename,restart_filename);
 			fprintf(stderr,"The restart filename is %s",cd_params->restart_filename);
 			free(restart_filename);
@@ -175,14 +175,14 @@ char *read_options(int argc, char *argv[], simulation_params *sim_params, cdlear
 			break;
 		case 'l':
 			copy_string(&learn_string,argv[i]);
-			cd_params->learn_string = realloc(cd_params->learn_string,DEFAULT_LONG_STRING_LENGTH);
+			cd_params->learn_string = (char *)realloc(cd_params->learn_string,DEFAULT_LONG_STRING_LENGTH);
 			strcpy(cd_params->learn_string,learn_string);
 			free(learn_string);
 			fprintf(stderr,"The learn string is %s",cd_params->learn_string);
 			break;
 		case 'L':
 			copy_string(&list_name,argv[i]);
-			cd_params->pdb_list_filename = realloc(cd_params->pdb_list_filename,DEFAULT_LONG_STRING_LENGTH);
+			cd_params->pdb_list_filename = (char *)realloc(cd_params->pdb_list_filename,DEFAULT_LONG_STRING_LENGTH);
 			strcpy(cd_params->pdb_list_filename,list_name);
 			free(list_name);
 			break;
@@ -214,9 +214,9 @@ char *read_options(int argc, char *argv[], simulation_params *sim_params, cdlear
 	  sim_params->sequence=NULL;
 	  sim_params->seq=NULL;
 	} else {
-	  sim_params->sequence = realloc(sim_params->sequence,strlen(retval+1));
+	  sim_params->sequence = (char *)realloc(sim_params->sequence,strlen(retval+1));
 	  strcpy(sim_params->sequence,retval);
-	  sim_params->seq = realloc(sim_params->seq,strlen(retval+1));
+	  sim_params->seq = (char *)realloc(sim_params->seq,strlen(retval+1));
 	  strcpy(sim_params->seq,retval);
 	}
 	return retval;
@@ -472,31 +472,31 @@ void cd_param_finalise(cdlearn_params *cd_params){
 }
 
 /* Write restart file with CD learning parameters */
-void cd_learn_write_restart_file(cdlearn_params *this, char *restart_filename){
+void cd_learn_write_restart_file(cdlearn_params *self, char *restart_filename){
 
   FILE *restart_file;
 
   restart_file = fopen(restart_filename,"w");
 
   fprintf(restart_file,"%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g\n",
-		this->aa[0], this->aa[1], this->aa[2], this->aa[3], this->aa[4],
-		this->aa[5], this->aa[6], this->aa[7], this->aa[8], this->aa[9],
-		this->aa[10], this->aa[11], this->aa[12], this->aa[13], this->aa[14],
-		this->aa[15], this->aa[16], this->aa[17], this->aa[18], this->aa[19],
-		this->aa[20], this->aa[21], this->aa[22], this->aa[23], this->aa[24],
-		this->aa[25], this->aa[26], this->aa[27], this->aa[28], this->aa[29],
-		this->aa[30], this->aa[31], this->aa[32], this->aa[33], this->aa[34],
-		this->aa[35]);
+		self->aa[0], self->aa[1], self->aa[2], self->aa[3], self->aa[4],
+		self->aa[5], self->aa[6], self->aa[7], self->aa[8], self->aa[9],
+		self->aa[10], self->aa[11], self->aa[12], self->aa[13], self->aa[14],
+		self->aa[15], self->aa[16], self->aa[17], self->aa[18], self->aa[19],
+		self->aa[20], self->aa[21], self->aa[22], self->aa[23], self->aa[24],
+		self->aa[25], self->aa[26], self->aa[27], self->aa[28], self->aa[29],
+		self->aa[30], self->aa[31], self->aa[32], self->aa[33], self->aa[34],
+		self->aa[35]);
 
   fprintf(restart_file,"%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g\n",
-		this->raa[0], this->raa[1], this->raa[2], this->raa[3], this->raa[4],
-		this->raa[5], this->raa[6], this->raa[7], this->raa[8], this->raa[9],
-		this->raa[10], this->raa[11], this->raa[12], this->raa[13], this->raa[14],
-		this->raa[15], this->raa[16], this->raa[17], this->raa[18], this->raa[19],
-		this->raa[20], this->raa[21], this->raa[22], this->raa[23], this->raa[24],
-		this->raa[25], this->raa[26], this->raa[27], this->raa[28], this->raa[29],
-		this->raa[30], this->raa[31], this->raa[32], this->raa[33], this->raa[34],
-		this->raa[35]);
+		self->raa[0], self->raa[1], self->raa[2], self->raa[3], self->raa[4],
+		self->raa[5], self->raa[6], self->raa[7], self->raa[8], self->raa[9],
+		self->raa[10], self->raa[11], self->raa[12], self->raa[13], self->raa[14],
+		self->raa[15], self->raa[16], self->raa[17], self->raa[18], self->raa[19],
+		self->raa[20], self->raa[21], self->raa[22], self->raa[23], self->raa[24],
+		self->raa[25], self->raa[26], self->raa[27], self->raa[28], self->raa[29],
+		self->raa[30], self->raa[31], self->raa[32], self->raa[33], self->raa[34],
+		self->raa[35]);
 
   fclose(restart_file);
   restart_file = NULL;
@@ -685,7 +685,7 @@ int main(int argc, char *argv[])
 		/* contact map library */
 		all_biasmaps = (Biasmap*)realloc(all_biasmaps,n_proteins*sizeof(Biasmap));
 		all_biasmaps[n_proteins-1].distb = NULL;
-		sim_params.protein_model.contact_map_file = realloc(sim_params.protein_model.contact_map_file,DEFAULT_LONG_STRING_LENGTH*sizeof(char));
+		sim_params.protein_model.contact_map_file = (char *)realloc(sim_params.protein_model.contact_map_file,DEFAULT_LONG_STRING_LENGTH*sizeof(char));
 		strcpy(sim_params.protein_model.contact_map_file,next_pdb_filename);
 		strcat(sim_params.protein_model.contact_map_file,".icm");
 		fprintf(stderr,"Reading in contact map from file %s\n",sim_params.protein_model.contact_map_file);
@@ -742,7 +742,7 @@ int main(int argc, char *argv[])
 	/* INITIALISE OUTPUT FILE */
 	FILE *output;
 	if (cd_params.output_filename == NULL) {
-		cd_params.output_filename = realloc(cd_params.output_filename,DEFAULT_LONG_STRING_LENGTH*sizeof(char));
+		cd_params.output_filename = (char *)realloc(cd_params.output_filename,DEFAULT_LONG_STRING_LENGTH*sizeof(char));
 		strcpy(cd_params.output_filename,"out.");
 		strcat(cd_params.output_filename,cd_params.pdb_list_filename);
 	}

@@ -1,10 +1,10 @@
 target_include_directories(adcp_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
-add_executable(cdlearn cdlearn.c)
+add_executable(cdlearn cdlearn.cpp)
 target_include_directories(cdlearn PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(cdlearn PRIVATE adcp_core)
 if(ADCP_OPENMP)
-  target_link_libraries(cdlearn PRIVATE OpenMP::OpenMP_C)
+  target_link_libraries(cdlearn PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 add_executable(cm cm.cpp)
