@@ -11,6 +11,7 @@
 #include<string.h>
 #include<float.h>
 #include<math.h>
+#include<vector>
 
 #include"canonicalAA.h"
 #include"error.h"
@@ -240,7 +241,7 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 			fclose(fin);
 			//fprintf(stderr,"Closing contact map file %s\n",mod_params->contact_map_file);
 		}
-		return; //when nested sampling - this is only to be done once
+		return; //when nested sampling - probe1 is only to be done once
 	}
 
 	// allocate memory
@@ -321,7 +322,7 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 			}
 
 	/* check if the biasing matrix is symmetric */
-	/* possible reasons for this are:
+	/* possible reasons for probe1 are:
 		the contact map is lopsided
 		the contact contains spaces, which are skipped by fscanf
 		the one-letter amino acid codes are used in the diagonal, and there was a problem parsing N or I (on francesca) */
@@ -424,7 +425,7 @@ void gridmap_initialise(char *filename, int atype) {
 	}
 	char line[256];
 	int i = 0;
-	double *curr_gridmap_values = malloc(NX*NY*NZ * sizeof(double));
+	double *curr_gridmap_values = (double*)malloc(NX*NY*NZ * sizeof(double));
 	while (fgets(line, sizeof(line), gridmap_file)) {
 		if (i < 6) {
 			i++;
@@ -451,9 +452,9 @@ void transpts_initialise() {
 	if (transPtsCount == 0 || transpts_file == NULL) {
 		printf("no transpoints found \n");
 
-		Xpts = malloc(1 * sizeof(double));
-		Ypts = malloc(1 * sizeof(double));
-		Zpts = malloc(1 * sizeof(double));
+		Xpts = (double*)malloc(1 * sizeof(double));
+		Ypts = (double*)malloc(1 * sizeof(double));
+		Zpts = (double*)malloc(1 * sizeof(double));
 		Xpts[0] = centerX;
 		Ypts[0] = centerY;
 		Zpts[0] = centerZ;
@@ -462,9 +463,9 @@ void transpts_initialise() {
 			fclose(transpts_file);
 		return;
 	}
-	Xpts = malloc(transPtsCount * sizeof(double));
-	Ypts = malloc(transPtsCount * sizeof(double));
-	Zpts = malloc(transPtsCount * sizeof(double));
+	Xpts = (double*)malloc(transPtsCount * sizeof(double));
+	Ypts = (double*)malloc(transPtsCount * sizeof(double));
+	Zpts = (double*)malloc(transPtsCount * sizeof(double));
 
 
 	while (fgets(line, sizeof(line), transpts_file)) {
@@ -502,9 +503,9 @@ void ramaprob_initialise() {
 	}
 	char line[256];
 	int i = 0, j = 0;
-	ramaprob = malloc(32400 * sizeof(double));
-	alaprob = malloc(32400 * sizeof(double));	
-	glyprob = malloc(32400 * sizeof(double));
+	ramaprob = (double*)malloc(32400 * sizeof(double));
+	alaprob = (double*)malloc(32400 * sizeof(double));	
+	glyprob = (double*)malloc(32400 * sizeof(double));
 
 	while (fgets(line, sizeof(line), ramaprob_file)) {
 		char * pch;
@@ -1352,8 +1353,8 @@ double secondary_radius_of_gyration(int start, int end, Chain *chain, Chaint *ch
   vector d = { 0.0, 0.0, 0.0 };
   
   
-  vector* s_com = malloc(sizeof(vector)*chain->NAA);
-  int* weights = malloc(sizeof(int)*chain->NAA); int totalweight = 0;
+  vector* s_com = (vector*)malloc(sizeof(vector)*chain->NAA);
+  int* weights = (int*)malloc(sizeof(int)*chain->NAA); int totalweight = 0;
   int state = 0;
   int count = -1;
   int state_count = 0;
@@ -1475,16 +1476,30 @@ void normalizedVector(float *a, float *b, float *v) {
 
 
 //score side chain and also set gamma position
-float scoreSideChain(int nbRot, int nbAtoms, double *charges, int *atypes,  double coords[nbRot][nbAtoms][3], AA *a,  int numRand)
+/* C99 allows a parameter's array bounds to reference an earlier parameter
+   (nbRot, nbAtoms) and allows genuine stack VLAs sized by them; C++ has no
+   variably-modified types at all, for parameters or locals. View3 is a thin
+   index-computing wrapper so every existing coords[i][j][k] / tc[i][j][k]
+   expression below keeps working unchanged against a flat buffer. */
+template<typename T>
+struct View3 {
+	T *p; int d2, d3;
+	struct Row { T *p; int d3; T* operator[](int j) const { return p + j * d3; } };
+	Row operator[](int i) const { return Row{ p + i * d2 * d3, d3 }; }
+};
+
+float scoreSideChain(int nbRot, int nbAtoms, double *charges, int *atypes,  double *coords_flat, AA *a,  int numRand)
 {
+	View3<double> coords{ coords_flat, nbAtoms, 3 };
 	int i, j;
 	float n; /* used to normalized vectors */
 	float sideChainCenter[3], bestSideChainCenter[3];
-	float N[3] = { a->n[0], a->n[1], a->n[2] }; /* coordiantes from 1crn.pdb:TYR29:N */
-	float CA[3] = { a->ca[0], a->ca[1], a->ca[2] }; /* coordiantes from 1crn.pdb:TYR29:CA */
-	float CB[3] = { a->cb[0], a->cb[1], a->cb[2] }; /* coordiantes from 1crn.pdb:TYR29:CB */
+	float N[3] = { (float)a->n[0], (float)a->n[1], (float)a->n[2] }; /* coordiantes from 1crn.pdb:TYR29:N */
+	float CA[3] = { (float)a->ca[0], (float)a->ca[1], (float)a->ca[2] }; /* coordiantes from 1crn.pdb:TYR29:CA */
+	float CB[3] = { (float)a->cb[0], (float)a->cb[1], (float)a->cb[2] }; /* coordiantes from 1crn.pdb:TYR29:CB */
 	float v1[3], v2[3], v3[3], mat[3][4]; /* used to compute xform matrix to align canonical rotamer to amino acid */
-	float tc[nbRot][nbAtoms][3]; /* list of transformed coordinates */
+	std::vector<float> tc_storage((size_t)nbRot * nbAtoms * 3);
+	View3<float> tc{ tc_storage.data(), nbAtoms, 3 }; /* list of transformed coordinates */
 					   /*
 					   printf("VAL, %d atoms %d rotamers\n", VAL.nbAtoms, VAL.nbRot);
 					   for (i=0; i<VAL.nbRot; i++) {
@@ -1634,16 +1649,18 @@ int checkClash(double x, double y, double z, double *setCoords, int ind){
 }
 
 
-double scoreSideChainNoClash(int nbRot, int nbAtoms, double charges[nbAtoms], int atypes[nbAtoms],  double coords[nbRot][nbAtoms][3], AA *a, double* setCoords, int ind, int numRand)
+double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atypes,  double *coords_flat, AA *a, double* setCoords, int ind, int numRand)
 {
+	View3<double> coords{ coords_flat, nbAtoms, 3 };
 	int i, j;
 	double n; /* used to normalized vectors */
 	double sideChainCenter[3], bestSideChainCenter[3];
-	float N[3] = { a->n[0], a->n[1], a->n[2] }; /* coordinates from 1crn.pdb:TYR29:N */
-	float CA[3] = { a->ca[0], a->ca[1], a->ca[2] }; /* coordinates from 1crn.pdb:TYR29:CA */
-	float CB[3] = { a->cb[0], a->cb[1], a->cb[2] }; /* coordinates from 1crn.pdb:TYR29:CB */
+	float N[3] = { (float)a->n[0], (float)a->n[1], (float)a->n[2] }; /* coordinates from 1crn.pdb:TYR29:N */
+	float CA[3] = { (float)a->ca[0], (float)a->ca[1], (float)a->ca[2] }; /* coordinates from 1crn.pdb:TYR29:CA */
+	float CB[3] = { (float)a->cb[0], (float)a->cb[1], (float)a->cb[2] }; /* coordinates from 1crn.pdb:TYR29:CB */
 	float v1[3], v2[3], v3[3], mat[3][4]; /* used to compute xform matrix to align canonical rotamer to amino acid */
-	float tc[nbRot][nbAtoms][3]; /* list of transformed coordinates */
+	std::vector<float> tc_storage((size_t)nbRot * nbAtoms * 3);
+	View3<float> tc{ tc_storage.data(), nbAtoms, 3 }; /* list of transformed coordinates */
 					   /*
 					   printf("VAL, %d atoms %d rotamers\n", VAL.nbAtoms, VAL.nbRot);
 					   for (i=0; i<VAL.nbRot; i++) {
@@ -2123,62 +2140,62 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 				{
 				case 'I':
 					//sideChainEnergy = gridenergy(a->g2[0], a->g2[1], a->g2[2], 0, 0.012) + gridenergy(a->g[0], a->g[1], a->g[2], 0, 0.012);
-					sideChainEnergy = scoreSideChainNoClash(ILE.nbRot, ILE.nbAtoms, ILE.charges, ILE.atypes, ILE.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(ILE.nbRot, ILE.nbAtoms, ILE.charges, ILE.atypes, (double*)ILE.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'L':
-					sideChainEnergy = scoreSideChainNoClash(LEU.nbRot, LEU.nbAtoms, LEU.charges, LEU.atypes, LEU.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(LEU.nbRot, LEU.nbAtoms, LEU.charges, LEU.atypes, (double*)LEU.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'P':
-					sideChainEnergy = scoreSideChain(PRO.nbRot, PRO.nbAtoms, PRO.charges, PRO.atypes, PRO.coords, a, 1);
+					sideChainEnergy = scoreSideChain(PRO.nbRot, PRO.nbAtoms, PRO.charges, PRO.atypes, (double*)PRO.coords, a, 1);
 					break;
 				case 'V':
-					sideChainEnergy = scoreSideChainNoClash(VAL.nbRot, VAL.nbAtoms, VAL.charges, VAL.atypes, VAL.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(VAL.nbRot, VAL.nbAtoms, VAL.charges, VAL.atypes, (double*)VAL.coords, a, coordsSet, ind, numRand);
 					//sideChainEnergy = gridenergy(a->g2[0], a->g2[1], a->g2[2], 0, 0.012) + gridenergy(a->g[0], a->g[1], a->g[2], 0, 0.012);
 					break;
 				case 'F':
-					sideChainEnergy = scoreSideChainNoClash(PHE.nbRot, PHE.nbAtoms, PHE.charges, PHE.atypes, PHE.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(PHE.nbRot, PHE.nbAtoms, PHE.charges, PHE.atypes, (double*)PHE.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'W':
-					sideChainEnergy = scoreSideChainNoClash(TRP.nbRot, TRP.nbAtoms, TRP.charges, TRP.atypes, TRP.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(TRP.nbRot, TRP.nbAtoms, TRP.charges, TRP.atypes, (double*)TRP.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'Y':
-					sideChainEnergy = scoreSideChainNoClash(TYR.nbRot, TYR.nbAtoms, TYR.charges, TYR.atypes, TYR.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(TYR.nbRot, TYR.nbAtoms, TYR.charges, TYR.atypes, (double*)TYR.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'D':
-					sideChainEnergy = scoreSideChainNoClash(ASP.nbRot, ASP.nbAtoms, ASP.charges, ASP.atypes, ASP.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(ASP.nbRot, ASP.nbAtoms, ASP.charges, ASP.atypes, (double*)ASP.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'E':
-					sideChainEnergy = scoreSideChainNoClash(GLU.nbRot, GLU.nbAtoms, GLU.charges, GLU.atypes, GLU.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(GLU.nbRot, GLU.nbAtoms, GLU.charges, GLU.atypes, (double*)GLU.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'R':
-					sideChainEnergy = scoreSideChainNoClash(ARG.nbRot, ARG.nbAtoms, ARG.charges, ARG.atypes, ARG.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(ARG.nbRot, ARG.nbAtoms, ARG.charges, ARG.atypes, (double*)ARG.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'H':
-					sideChainEnergy = scoreSideChainNoClash(HIS.nbRot, HIS.nbAtoms, HIS.charges, HIS.atypes, HIS.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(HIS.nbRot, HIS.nbAtoms, HIS.charges, HIS.atypes, (double*)HIS.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'K':
-					sideChainEnergy = scoreSideChainNoClash(LYS.nbRot, LYS.nbAtoms, LYS.charges, LYS.atypes, LYS.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(LYS.nbRot, LYS.nbAtoms, LYS.charges, LYS.atypes, (double*)LYS.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'S':
-					sideChainEnergy = scoreSideChainNoClash(SER.nbRot, SER.nbAtoms, SER.charges, SER.atypes, SER.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(SER.nbRot, SER.nbAtoms, SER.charges, SER.atypes, (double*)SER.coords, a, coordsSet, ind, numRand);
 					//sideChainEnergy = gridenergy(a->g[0], a->g[1], a->g[2], 2, -0.398);
 					break;
 				case 'T':
-					sideChainEnergy = scoreSideChainNoClash(THR.nbRot, THR.nbAtoms, THR.charges, THR.atypes, THR.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(THR.nbRot, THR.nbAtoms, THR.charges, THR.atypes, (double*)THR.coords, a, coordsSet, ind, numRand);
 					//sideChainEnergy = gridenergy(a->g2[0], a->g2[1], a->g2[2], 2, -0.393) +  gridenergy(a->g[0], a->g[1], a->g[2], 0, 0.042);
 					break;
 				case 'C':
-					//sideChainEnergy = scoreSideChainNoClash(CYS.nbRot, CYS.nbAtoms, CYS.charges, CYS.atypes, CYS.coords, a, coordsSet, ind, numRand);
+					//sideChainEnergy = scoreSideChainNoClash(CYS.nbRot, CYS.nbAtoms, CYS.charges, CYS.atypes, (double*)CYS.coords, a, coordsSet, ind, numRand);
 					sideChainEnergy = gridenergy(a->g[0], a->g[1], a->g[2], 4, -0.095);
 					break;
 				case 'M':
-					sideChainEnergy = scoreSideChainNoClash(MET.nbRot, MET.nbAtoms, MET.charges, MET.atypes, MET.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(MET.nbRot, MET.nbAtoms, MET.charges, MET.atypes, (double*)MET.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'N':
-					sideChainEnergy = scoreSideChainNoClash(ASN.nbRot, ASN.nbAtoms, ASN.charges, ASN.atypes, ASN.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(ASN.nbRot, ASN.nbAtoms, ASN.charges, ASN.atypes, (double*)ASN.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'Q':
-					sideChainEnergy = scoreSideChainNoClash(GLN.nbRot, GLN.nbAtoms, GLN.charges, GLN.atypes, GLN.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(GLN.nbRot, GLN.nbAtoms, GLN.charges, GLN.atypes, (double*)GLN.coords, a, coordsSet, ind, numRand);
 					break;
 				default:
 					break;
@@ -2838,11 +2855,11 @@ static double global_dfdx(Chain *chain, Biasmap *biasmap, double (*fx) (Biasmap 
 
 
 
-/* this is an energy-related probe used in contrastive divergence
+/* probe1 is an energy-related probe used in contrastive divergence
    avoid %g end %e here, bc hates exponential notation */
 void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_params)
 {
-	double this[36] = { 0., 0., 0., 0., 0.,
+	double probe1[36] = { 0., 0., 0., 0., 0.,
 				   0., 0., 0., 0., 0.,
 				   0., 0., 0., 0., 0.,
 				   0., 0., 0., 0., 0.,
@@ -2853,7 +2870,7 @@ void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_param
 
 
 	//do not change the original mod_params
-	model_params * mod_params = malloc(sizeof(model_params));
+	model_params * mod_params = (model_params*)malloc(sizeof(model_params));
 	model_params_copy(mod_params,&(sim_params->protein_model));
 
 	/* save the previous results into last */
@@ -2863,58 +2880,57 @@ void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_param
 
 	/* hydrogen bonds */
 	if (sim_params->energy_probe_1_calc[0])
-	    this[0] = dfdx(chain,biasmap,hbond, &(mod_params->hboh2), 0.07, mod_params);
+	    probe1[0] = dfdx(chain,biasmap,hbond, &(mod_params->hboh2), 0.07, mod_params);
 	if (sim_params->energy_probe_1_calc[1])
-	    this[1] = dfdx(chain,biasmap,hbond, &(mod_params->hbohn), 0.02, mod_params);
+	    probe1[1] = dfdx(chain,biasmap,hbond, &(mod_params->hbohn), 0.02, mod_params);
 	if (sim_params->energy_probe_1_calc[2])
-	    this[2] = dfdx(chain,biasmap,hbond, &(mod_params->hbcoh), 0.02, mod_params);
+	    probe1[2] = dfdx(chain,biasmap,hbond, &(mod_params->hbcoh), 0.02, mod_params);
 	if (sim_params->energy_probe_1_calc[3])
-	    this[3] = dfdx(chain,biasmap,hbond, &(mod_params->hbs), 0.01, mod_params);
+	    probe1[3] = dfdx(chain,biasmap,hbond, &(mod_params->hbs), 0.01, mod_params);
 
 	/* bias potential */
-	if (biasmap->distb == NULL)
-		goto out;
+	if (biasmap->distb != NULL) {
 	/* gradient of energy derivative (likelihood) */
 	if (sim_params->energy_probe_1_calc[4])
-	    this[4] = dfdx(chain,biasmap,bias, &(mod_params->bias_eta_beta), 0.01, mod_params);
+	    probe1[4] = dfdx(chain,biasmap,bias, &(mod_params->bias_eta_beta), 0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[5])
-	    this[5] = dfdx(chain,biasmap,bias, &(mod_params->bias_eta_alpha), 0.01, mod_params);
+	    probe1[5] = dfdx(chain,biasmap,bias, &(mod_params->bias_eta_alpha), 0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[6])
-	    this[6] = dfdx(chain,biasmap,bias, &(mod_params->bias_kappa_alpha_3), 0.01, mod_params);
+	    probe1[6] = dfdx(chain,biasmap,bias, &(mod_params->bias_kappa_alpha_3), 0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[7])
-	    this[7] = dfdx(chain,biasmap,bias, &(mod_params->bias_kappa_alpha_4), 0.01, mod_params);
+	    probe1[7] = dfdx(chain,biasmap,bias, &(mod_params->bias_kappa_alpha_4), 0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[8])
-	    this[8] = dfdx(chain,biasmap,bias, &(mod_params->bias_kappa_beta), 0.01, mod_params);
+	    probe1[8] = dfdx(chain,biasmap,bias, &(mod_params->bias_kappa_beta), 0.01, mod_params);
 
 	/* hydrophobicity */
 	if (sim_params->energy_probe_1_calc[9])
-	    this[9] = dfdx(chain,biasmap,hydrophobic, &(mod_params->kauzmann_param), 0.01, mod_params);
+	    probe1[9] = dfdx(chain,biasmap,hydrophobic, &(mod_params->kauzmann_param), 0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[10])
-	    this[10] = dfdx(chain,biasmap,hydrophobic, &(mod_params->hydrophobic_cutoff_range), 0.07, mod_params);
+	    probe1[10] = dfdx(chain,biasmap,hydrophobic, &(mod_params->hydrophobic_cutoff_range), 0.07, mod_params);
     
 	/* electrostatics */
 	if (sim_params->energy_probe_1_calc[11])
-	    this[11] = dfdx(chain,biasmap,electrostatic, &(mod_params->recip_dielectric_param), 0.01, mod_params);
+	    probe1[11] = dfdx(chain,biasmap,electrostatic, &(mod_params->recip_dielectric_param), 0.01, mod_params);
 
 	/* bias potential */
 	if (sim_params->energy_probe_1_calc[12])
-	    this[12] = dfdx(chain,biasmap,bias,&(mod_params->bias_r_alpha),0.01, mod_params);
+	    probe1[12] = dfdx(chain,biasmap,bias,&(mod_params->bias_r_alpha),0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[13])
-	    this[13] = dfdx(chain,biasmap,bias,&(mod_params->bias_r_beta),0.01, mod_params);
+	    probe1[13] = dfdx(chain,biasmap,bias,&(mod_params->bias_r_beta),0.01, mod_params);
 
 	/* electrostatics */
 	if (sim_params->energy_probe_1_calc[14])
-	    this[14] = dfdx(chain,biasmap,electrostatic, &(mod_params->debye_length_param), 0.01, mod_params);
+	    probe1[14] = dfdx(chain,biasmap,electrostatic, &(mod_params->debye_length_param), 0.01, mod_params);
 
 	/* side chain hydrogen bonds */
 	if (sim_params->energy_probe_1_calc[15])
-	    this[15] = dfdx(chain,biasmap,sidechain_hbond,&(mod_params->sidechain_hbond_strength_s2b),0.01, mod_params);
+	    probe1[15] = dfdx(chain,biasmap,sidechain_hbond,&(mod_params->sidechain_hbond_strength_s2b),0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[16])
-	    this[16] = dfdx(chain,biasmap,sidechain_hbond,&(mod_params->sidechain_hbond_strength_b2s),0.01, mod_params);
+	    probe1[16] = dfdx(chain,biasmap,sidechain_hbond,&(mod_params->sidechain_hbond_strength_b2s),0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[17])
-	    this[17] = dfdx(chain,biasmap,sidechain_hbond,&(mod_params->sidechain_hbond_strength_s2s),0.01, mod_params);
+	    probe1[17] = dfdx(chain,biasmap,sidechain_hbond,&(mod_params->sidechain_hbond_strength_s2s),0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[18])
-	    this[18] = dfdx(chain,biasmap,sidechain_hbond,&(mod_params->sidechain_hbond_angle_cutoff),0.05, mod_params);
+	    probe1[18] = dfdx(chain,biasmap,sidechain_hbond,&(mod_params->sidechain_hbond_angle_cutoff),0.05, mod_params);
 
 	/* global energy */
     double val = 0.;
@@ -2926,7 +2942,7 @@ void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_param
 	    val -= global_energy(0,0,chain,NULL,biasmap, mod_params);
 	    mod_params->srgy_param += dx;
 
-	    this[19] = 0.5 * val / dx;
+	    probe1[19] = 0.5 * val / dx;
 	}
 
 	if (sim_params->energy_probe_1_calc[20]) {
@@ -2936,43 +2952,43 @@ void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_param
 	    mod_params->srgy_offset -= 2. * dx;
 	    val -= global_energy(0,0,chain,NULL, biasmap,mod_params);
 	    mod_params->srgy_offset += dx;
-	    this[20] = 0.5 * val / dx;
+	    probe1[20] = 0.5 * val / dx;
 	}
 
 	/* atomic radii of LJ vdW potential */
 	if (sim_params->energy_probe_1_calc[21])
-	    this[21] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rca),0.01, mod_params);
+	    probe1[21] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rca),0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[22])
-	    this[22] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rcb),0.01, mod_params);
+	    probe1[22] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rcb),0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[23])
-	    this[23] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rc),0.01, mod_params);
+	    probe1[23] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rc),0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[24])
-	    this[24] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rn),0.01, mod_params);
+	    probe1[24] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rn),0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[25])
-	    this[25] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->ro),0.01, mod_params);
+	    probe1[25] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->ro),0.01, mod_params);
 	if (sim_params->energy_probe_1_calc[26])
-	    this[26] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rs),0.01, mod_params);
+	    probe1[26] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->rs),0.01, mod_params);
 
 	/* stress */
 	if (sim_params->energy_probe_1_calc[27])
-	    this[27] = intraresidual_dfdx(chain,biasmap,stress,&(mod_params->stress_k),1.0, mod_params);
+	    probe1[27] = intraresidual_dfdx(chain,biasmap,stress,&(mod_params->stress_k),1.0, mod_params);
 
 	/* depth of LJ vdW potential */
 	if (sim_params->energy_probe_1_calc[28])
-	    this[28] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_ca),0.001, mod_params);
+	    probe1[28] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_ca),0.001, mod_params);
 	if (mod_params->vdw_uniform_depth) {
-	    for (int i=29; i<=33; i++) this[i] = 0;
+	    for (int i=29; i<=33; i++) probe1[i] = 0;
 	} else {
 	    if (sim_params->energy_probe_1_calc[29])
-		this[29] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_cb),0.001, mod_params);
+		probe1[29] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_cb),0.001, mod_params);
 	    if (sim_params->energy_probe_1_calc[30])
-		this[30] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_c),0.001, mod_params);
+		probe1[30] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_c),0.001, mod_params);
 	    if (sim_params->energy_probe_1_calc[31])
-		this[31] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_n),0.001, mod_params);
+		probe1[31] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_n),0.001, mod_params);
 	    if (sim_params->energy_probe_1_calc[32])
-		this[32] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_o),0.001, mod_params);
+		probe1[32] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_o),0.001, mod_params);
 	    if (sim_params->energy_probe_1_calc[33])
-		this[33] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_s),0.001, mod_params);
+		probe1[33] = global_dfdx(chain,biasmap,all_vdw,&(mod_params->vdw_depth_s),0.001, mod_params);
 	}
 
 	/* secondary radius of gyration global energy */
@@ -2985,7 +3001,7 @@ void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_param
 	    val -= global_energy(0,0,chain,NULL,biasmap, mod_params);
 	    mod_params->hphobic_srgy_param += dx;
 
-	    this[34] = 0.5 * val / dx;
+	    probe1[34] = 0.5 * val / dx;
 	}
 
 	if (sim_params->energy_probe_1_calc[35]) {
@@ -2996,21 +3012,20 @@ void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_param
 	    mod_params->hphobic_srgy_offset -= 2. * dx;
 	    val -= global_energy(0,0,chain,NULL, biasmap,mod_params);
 	    mod_params->hphobic_srgy_offset += dx;
-	    this[35] = 0.5 * val / dx;
+	    probe1[35] = 0.5 * val / dx;
 	}
 
 	// If the hydrophobic potential form is 1/dist, more parameters need optimising)
 	//if (sim_params->energy_probe_1_calc[34])
-	//    this[34] = dfdx(chain,biasmap,hydrophobic, &(mod_params->hydrophobic_r), 0.01, mod_params);
+	//    probe1[34] = dfdx(chain,biasmap,hydrophobic, &(mod_params->hydrophobic_r), 0.01, mod_params);
 	//if (sim_params->energy_probe_1_calc[35])
-	//    this[35] = dfdx(chain,biasmap,hydrophobic, &(mod_params->hydrophobic_half_delta), 0.01, mod_params);
+	//    probe1[35] = dfdx(chain,biasmap,hydrophobic, &(mod_params->hydrophobic_half_delta), 0.01, mod_params);
 
+	}
 
-    out:
-
-	/* save these results into this and calculate the gradient */
+	/* save these results into probe1 and calculate the gradient */
 	for (int i=0; i<36; i++) {
-	    sim_params->energy_probe_1_this[i] = this[i];
+	    sim_params->energy_probe_1_this[i] = probe1[i];
 	    sim_params->energy_gradient[i] = sim_params->energy_probe_1_this[i] - sim_params->energy_probe_1_last[i];
 	//    fprintf(sim_params->outfile,"%f ", sim_params->energy_gradient[i]);
 	}

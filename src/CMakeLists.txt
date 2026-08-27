@@ -1,15 +1,15 @@
 add_library(adcp_core STATIC
   aadict.cpp
   canonicalAA.cpp
-  checkpoint_io.c
-  energy.c
+  checkpoint_io.cpp
+  energy.cpp
   error.cpp
-  flex.c
-  metropolis.c
-  nested.c
+  flex.cpp
+  metropolis.cpp
+  nested.cpp
   params.cpp
   peptide.cpp
-  probe.c
+  probe.cpp
   random16.cpp
   rotation.cpp
   vdw.cpp

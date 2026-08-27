@@ -192,7 +192,7 @@ void setup_communicators(MPI_Comm * FLEX_WORLD, MPI_Comm * NS_WORLD, int S, int 
   MPI_Comm_group( MPI_COMM_WORLD, &ALL_GROUP );
 
   if(S > 0){
-    int *FLEX_group_ranks = malloc(sizeof(int)*(S+1));
+    int *FLEX_group_ranks = (int*)malloc(sizeof(int)*(S+1));
 
     for(setup_groups = 0; setup_groups <= S; setup_groups++ ){
       FLEX_group_ranks[setup_groups] = setup_groups;
@@ -202,7 +202,7 @@ void setup_communicators(MPI_Comm * FLEX_WORLD, MPI_Comm * NS_WORLD, int S, int 
     free(FLEX_group_ranks);
   }
 
-  int *NS_group_ranks = malloc(sizeof(int)*(*P-S));
+  int *NS_group_ranks = (int*)malloc(sizeof(int)*(*P-S));
   NS_group_ranks[0] = 0;
   for(setup_groups = 1; setup_groups < *P-S; setup_groups++ ){
     NS_group_ranks[setup_groups] = setup_groups+S;
@@ -657,13 +657,13 @@ void send_and_receive_instructions( Instructions * instructions, int rank, int P
 void collect_chains(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simulation_params *sim_params,  int rank, int P, int N,MPI_Comm *NS_WORLD,Instructions *instructions){
   MPI_Bcast(&(sim_params->logLstar),1,MPI_DOUBLE,0,*NS_WORLD);
   if (rank == 0) {
-    int *procs = malloc(sizeof(int)*P);
+    int *procs = (int*)malloc(sizeof(int)*P);
     for(int k = 0; k < P; k++){
       procs[k] = -1;
       instructions[k].current_position = 0;
     }
 
-    int *leftovers = malloc(sizeof(int)*(P*2));
+    int *leftovers = (int*)malloc(sizeof(int)*(P*2));
     int number_leftovers = 0;
 
     int copies;

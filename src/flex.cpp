@@ -663,35 +663,35 @@ void setup_bias_hbonds(Chain *chain, Biasmap * biasmap){
       if(biasmap->distb[j*biasmap->NAA + j] == -1 && biasmap->distb[i*biasmap->NAA + j] == 1.0){
 
           chain->flex_data->number_hbond++;
-          chain->flex_data->Hbond_aaH = realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-          chain->flex_data->Hbond_aaO = realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
+          chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
+          chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
           chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i;
           chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j;
           if(j > 1){
             chain->flex_data->number_hbond++;
-            chain->flex_data->Hbond_aaH = realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaO = realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
+            chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
+            chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
             chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i;
             chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j-1;
           }
           if(j < biasmap->NAA - 1){
             chain->flex_data->number_hbond++;
-            chain->flex_data->Hbond_aaH = realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaO = realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
+            chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
+            chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
             chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i;
             chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j+1;
           }
           if(i>1 && chain->aa[i-1].id != 'P' && biasmap->distb[(i-1)*biasmap->NAA + (i-1) ] != -1.0){
             chain->flex_data->number_hbond++;
-            chain->flex_data->Hbond_aaH = realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaO = realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
+            chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
+            chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
             chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i-1;
             chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j;
           }
           if(i<biasmap->NAA -1 && chain->aa[i+1].id != 'P' && biasmap->distb[(i+1)*biasmap->NAA + (i+1) ] != -1.0){
             chain->flex_data->number_hbond++;
-            chain->flex_data->Hbond_aaH = realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaO = realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
+            chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
+            chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
             chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i+1;
             chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j;
           }
@@ -710,8 +710,8 @@ void setup_bias_hbonds(Chain *chain, Biasmap * biasmap){
       }
       if(ishelix==1 && chain->aa[i+4].id != 'P'){
         chain->flex_data->number_hbond++;
-        chain->flex_data->Hbond_aaH = realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-        chain->flex_data->Hbond_aaO = realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
+        chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
+        chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
         chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i+4;
         chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = i;
       }
@@ -731,7 +731,7 @@ void initialize_flex(Chain *chain, Chain **input_chains,Biasmap *biasmap, simula
   chain->flex_data = (FLEX_data*)malloc(sizeof(FLEX_data));
 
   chain->flex_data->oxy_index = NULL;
-  if(!(chain->flex_data->oxy_index = malloc(sizeof(int)*chain->NAA)) ){
+  if(!(chain->flex_data->oxy_index = (int*)malloc(sizeof(int)*chain->NAA)) ){
     stop("Error allocating memory in initialize_nma\n");
   }
 

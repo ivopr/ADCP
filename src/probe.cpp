@@ -31,7 +31,7 @@
 /* test registry */
 struct TEST {
 	void (*func) (Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
-	char *name;
+	const char *name;
 	int init_mask;
 };
 
@@ -267,8 +267,8 @@ void initialize_displacement(Chain *chain, Biasmap *biasmap, simulation_params *
 		}
 	}
 
-	int *G_to_delete = malloc(chain_init.NAA * sizeof(int));
-	int *G2_to_delete = malloc(chain_init.NAA * sizeof(int));
+	int *G_to_delete = (int*)malloc(chain_init.NAA * sizeof(int));
+	int *G2_to_delete = (int*)malloc(chain_init.NAA * sizeof(int));
 	for (int i=0; i<chain_init.NAA; i++) {
 	   G_to_delete[i] = 0;
 	   G2_to_delete[i] = 0;
@@ -1254,7 +1254,7 @@ void phipsi(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *
 	int i;
 	double phi, psi, tau, chi1, chi2, cb_ca_angle;
 	vector cac, can;
-	char *omega;
+	const char *omega;
 	vector x,y,z;
 	double dihedral_etaA_NAAC;
 	double dihedral_etaB_NAAC;
