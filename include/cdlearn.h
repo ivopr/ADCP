@@ -32,9 +32,9 @@ typedef struct {
 } cdlearn_params;
 
 void update_sim_params_from_cd_learn(simulation_params *sim_params, cdlearn_params *cd_params);
-void cd_learn_param_initialise(cdlearn_params *this);
-void cd_learn_write_restart_file(cdlearn_params *this, char *restart_filename);
-void cd_param_finalise(cdlearn_params *this);
+void cd_learn_param_initialise(cdlearn_params *self);
+void cd_learn_write_restart_file(cdlearn_params *self, char *restart_filename);
+void cd_param_finalise(cdlearn_params *self);
 void print_contact_map(double *distb, int NAA, FILE *outfile);
 
 

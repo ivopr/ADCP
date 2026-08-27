@@ -357,20 +357,20 @@ typedef struct {
 
 
 /* initialising and finalising */
-void param_initialise(simulation_params *this);
-void param_finalise(simulation_params *this);
-void model_param_initialise(model_params *this);
-void model_param_finalise(model_params *this);
+void param_initialise(simulation_params *self);
+void param_finalise(simulation_params *self);
+void model_param_initialise(model_params *self);
+void model_param_finalise(model_params *self);
 
-void flex_params_initialise(FLEX_params *this);
-void flex_params_finalise(FLEX_params *this);
-void flex_setup_command(FLEX_params *this);
+void flex_params_initialise(FLEX_params *self);
+void flex_params_finalise(FLEX_params *self);
+void flex_setup_command(FLEX_params *self);
 
-void vdw_param_zero(model_params *this);
+void vdw_param_zero(model_params *self);
 
 /* CD learnt default parameters */
-void set_lj_default_params(model_params *this);
-void set_hard_cutoff_default_params(model_params *this);
+void set_lj_default_params(model_params *self);
+void set_hard_cutoff_default_params(model_params *self);
 
 /* copying */
 void sim_params_copy(simulation_params *to, simulation_params *from);
@@ -379,15 +379,15 @@ void flex_params_copy(FLEX_params *to, FLEX_params *from);
 void copy_string(char** const to, const char* const from);
 
 /* reading in and processing input */
-void model_param_read(char *prm, model_params *this,FLEX_params *nma_params);
-int flex_param_read(char *prm, FLEX_params *this);
-void vdw_param_calculate(model_params *this);
+void model_param_read(char *prm, model_params *self,FLEX_params *nma_params);
+int flex_param_read(char *prm, FLEX_params *self);
+void vdw_param_calculate(model_params *self);
 
 /* printing */
 void print_vdw_cutoff_distances(model_params *mod_params, FILE *outfile);
-void model_param_print(model_params this, FILE *outfile);
-void param_print(simulation_params this, FILE *outfile);
-void flex_param_print(FLEX_params this, FILE *outfile);
+void model_param_print(model_params self, FILE *outfile);
+void param_print(simulation_params self, FILE *outfile);
+void flex_param_print(FLEX_params self, FILE *outfile);
 
 
 #ifdef __cplusplus

@@ -1,6 +1,6 @@
 add_library(adcp_core STATIC
-  aadict.c
-  canonicalAA.c
+  aadict.cpp
+  canonicalAA.cpp
   checkpoint_io.c
   energy.c
   error.cpp
