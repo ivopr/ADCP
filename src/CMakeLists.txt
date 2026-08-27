@@ -10,8 +10,8 @@ add_library(adcp_core STATIC
   params.c
   peptide.c
   probe.c
-  random16.c
-  rotation.c
+  random16.cpp
+  rotation.cpp
   vdw.c
   vector.cpp
 )

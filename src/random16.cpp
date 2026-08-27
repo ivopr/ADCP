@@ -5,10 +5,7 @@
 
 /* adopted from Glenn Rhoads, http://remus.rutgers.edu/~rhoads/ */
 
-#define RAND16_MAX 0xFFFF
-
-unsigned int rand16(void);	/* returns a random 16-bit integer */
-void srand16(unsigned int);	/* seed the generator */
+#include "random16.h"
 
 static unsigned int SEED = 521288629;
 
