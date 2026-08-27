@@ -12,7 +12,7 @@ add_library(adcp_core STATIC
   probe.c
   random16.cpp
   rotation.cpp
-  vdw.c
+  vdw.cpp
   vector.cpp
 )
 target_include_directories(adcp_core PUBLIC

@@ -1326,7 +1326,7 @@ void update_sim_params_from_chain(Chain *chain,simulation_params *sim_params) {
   //fprintf(stderr,"updating sim_param NAA to %d and then seq.\n",chain->NAA);
   sim_params->NAA = chain->NAA;
   sim_params->Nchains = chain->Nchains;
-  sim_params->seq = realloc(sim_params->seq,(sim_params->NAA+1) * sizeof(char));
+  sim_params->seq = (char*)realloc(sim_params->seq,(sim_params->NAA+1) * sizeof(char));
   // The first letter is A for some weird reason, it does not code any amino acid.
   sim_params->seq[0] = 'A';
   for (int i=1; i<sim_params->NAA; i++) {
@@ -1335,7 +1335,7 @@ void update_sim_params_from_chain(Chain *chain,simulation_params *sim_params) {
   sim_params->seq[sim_params->NAA] = '\0';
 
   /* sequence for multi-chain proteins */
-  sim_params->sequence = realloc(sim_params->sequence,(sim_params->NAA+sim_params->Nchains) * sizeof(char));
+  sim_params->sequence = (char*)realloc(sim_params->sequence,(sim_params->NAA+sim_params->Nchains) * sizeof(char));
   // The first letter is A for some weird reason, it does not code any amino acid.
 //  fprintf(stderr,"A%c",chain->aa[1].id);
   sim_params->sequence[0] = 'A';
