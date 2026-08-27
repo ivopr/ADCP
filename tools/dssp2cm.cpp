@@ -23,9 +23,9 @@ int parse_dssp_header(char **seq, char **ss, int **map)
 	}
 
 	n_res++;			/* extra space make it easier down the road */
-	*map = calloc(n_res * n_res, sizeof(int));
-	*ss = calloc(n_res, sizeof(char));
-	*seq = calloc(n_res, sizeof(char));
+	*map = (int *)calloc(n_res * n_res, sizeof(int));
+	*ss = (char *)calloc(n_res, sizeof(char));
+	*seq = (char *)calloc(n_res, sizeof(char));
 
 	while (fgets(buf, sizeof(buf), stdin) != NULL) {
 		if (strncmp(buf + 5, "RESIDUE AA STRUCTURE BP1", 24) == 0)

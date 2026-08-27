@@ -124,7 +124,8 @@ void pdbrecur(char type, double phi, double psi,
 	triplet x0, xn;
 	static int j = 0;
 	static triplet xc = { {1., 0., 0.}, {0., 1., 0.}, {0., 0., 1.} };
-	static AA a = {.ca = {0., 0., 0.},.num = 0,.etc = LEV };
+	/* designators must follow declaration order in C++: etc precedes num in AA */
+	static AA a = {.ca = {0., 0., 0.},.etc = LEV,.num = 0 };
 
 	if (isnan(omega))
 		omega = M_PI;
@@ -181,10 +182,10 @@ void pdbrecur(char type, double phi, double psi,
 	/* printout(xc); */
 }
 
-char uppercase(char this) {
-  if (isupper(this)) return this;
-  if (islower(this)) return toupper(this);
-  fprintf(stderr,"Got non-alpha character >%c<.",this);
+char uppercase(char c) {
+  if (isupper(c)) return c;
+  if (islower(c)) return toupper(c);
+  fprintf(stderr,"Got non-alpha character >%c<.",c);
   exit(EXIT_FAILURE);
 
 }
