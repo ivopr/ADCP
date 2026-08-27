@@ -21,6 +21,10 @@
 #ifndef CANONICALAA_H_
 #define CANONICALAA_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct _ARG {
   int nbRot;
   int nbAtoms;
@@ -164,5 +168,10 @@ struct _VAL {
   double charges[2];
   double coords[3][2][3];
 };
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* CANONICALAA_H_ */

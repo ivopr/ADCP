@@ -8,6 +8,10 @@
 #ifndef FLEX_H_
 #define FLEX_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef PARALLEL
 #include<mpi.h>
 void ns_for_flex_processor(MPI_Comm FLEX_WORLD,int rank,Biasmap *biasmap,simulation_params* sim_params);
@@ -30,5 +34,10 @@ void Hyd_pdbout(Chain *chain,model_params *protein_model,char *filename,char *ca
 void output_hphobesin(Chain * chain, model_params *protein_model,char *filename, FILE *logfile);
 void output_hbondsin(Chain * chain, model_params *protein_model,int use_bias_only,char *filename,double nma_hstrength, FILE *logfile);
 
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* FLEX_H_ */

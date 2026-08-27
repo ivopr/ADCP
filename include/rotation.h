@@ -8,6 +8,10 @@
 #ifndef ROTATION_H_
 #define ROTATION_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
 ********** Data types
 */
@@ -54,5 +58,10 @@ struct phasor {
 struct phasor phasiply(struct phasor, struct phasor);
 int rephase(struct phasor *);
 double phase(struct phasor);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ROTATION_H_ */

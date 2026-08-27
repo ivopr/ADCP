@@ -3,7 +3,7 @@ add_library(adcp_core STATIC
   canonicalAA.c
   checkpoint_io.c
   energy.c
-  error.c
+  error.cpp
   flex.c
   metropolis.c
   nested.c
@@ -13,7 +13,7 @@ add_library(adcp_core STATIC
   random16.c
   rotation.c
   vdw.c
-  vector.c
+  vector.cpp
 )
 target_include_directories(adcp_core PUBLIC
   ${CMAKE_SOURCE_DIR}/include

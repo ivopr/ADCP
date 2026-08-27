@@ -10,6 +10,10 @@
 #ifndef NESTED_H_
 #define NESTED_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct{
   int *instructions;
   int length;
@@ -47,5 +51,10 @@ typedef struct{
  */
 
 void nestedsampling(int,int, simulation_params *);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* NESTED_H_ */

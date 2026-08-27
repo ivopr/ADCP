@@ -8,6 +8,10 @@
 #ifndef VECTOR_H_
 #define VECTOR_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef M_PI
 # define M_PI		3.14159265358979323846	/* pi */
 #endif
@@ -109,5 +113,10 @@ double sindihedral(vector, vector, vector);
 double phasindihedral(vector, vector, vector, double, double);
 double tandihedral(vector, vector, vector);
 double costridihedral(vector, vector, vector);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* VECTOR_H_ */

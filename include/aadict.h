@@ -8,6 +8,10 @@
 #ifndef AADICT_H_
 #define AADICT_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* 3-letter amino acid codes */
 extern const char *aac[];
 extern const char aa_id[]; 
@@ -61,5 +65,10 @@ int hbond_donor(char id, int atom, sidechain_properties_ *sidechain_properties);
 int hbond_acceptor(char id, int atom, sidechain_properties_ *sidechain_properties);
 double sidechain_hbond_donor_radius(char id, sidechain_properties_ *sidechain_properties);
 double sidechain_hbond_acceptor_radius(char id, sidechain_properties_ *sidechain_properties);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* AADICT_H_ */

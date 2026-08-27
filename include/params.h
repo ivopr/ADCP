@@ -7,6 +7,10 @@
 #ifndef PARAMS_H_
 #define PARAMS_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 
 #define DEFAULT_LONG_STRING_LENGTH 1024
@@ -384,5 +388,10 @@ void print_vdw_cutoff_distances(model_params *mod_params, FILE *outfile);
 void model_param_print(model_params this, FILE *outfile);
 void param_print(simulation_params this, FILE *outfile);
 void flex_param_print(FLEX_params this, FILE *outfile);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PARAMS_H_ */

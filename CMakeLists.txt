@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
-project(ADCP VERSION 0.1 LANGUAGES C)
+project(ADCP VERSION 0.1 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(ADCP_LEGACY_COMMON "Allow tentative global merging (-fcommon); legacy escape hatch" OFF)
 

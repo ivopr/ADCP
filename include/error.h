@@ -6,6 +6,15 @@
 #ifndef ERROR_H_
 #define ERROR_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void stop(char *error_string);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ERROR_H_ */

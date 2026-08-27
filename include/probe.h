@@ -8,6 +8,10 @@
 #ifndef PROBE_H_
 #define PROBE_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define BEFORE_INIT 0x1;
 #define AFTER_INIT 0x10;
 #define BEFORE_AND_AFTER_INIT 0x11;
@@ -55,5 +59,10 @@ void evidence(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void
 void information(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void cm_alpha_8(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void fasta(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PROBE_H_ */

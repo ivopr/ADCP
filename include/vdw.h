@@ -9,6 +9,10 @@
 #ifndef VDW_H_
 #define VDW_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 
 /* wrappers for energy contributions at the amino acid level: energy contributions summed up */
@@ -35,6 +39,11 @@ void vdw_cutoff_distances_calculate(simulation_params *sim_params, FILE *outfile
 void update_sim_params_from_chain(Chain *chain,simulation_params *sim_params);
 #ifdef LJ_HBONDED_HARD
 double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond_proximity);
+#endif
+
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* VDW_H_ */

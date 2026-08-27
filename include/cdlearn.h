@@ -8,6 +8,10 @@
 #ifndef CDLEARN_H_
 #define CDLEARN_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
 
   int iter_max;
@@ -32,5 +36,10 @@ void cd_learn_param_initialise(cdlearn_params *this);
 void cd_learn_write_restart_file(cdlearn_params *this, char *restart_filename);
 void cd_param_finalise(cdlearn_params *this);
 void print_contact_map(double *distb, int NAA, FILE *outfile);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* CDLEARN_H_ */
