@@ -934,7 +934,7 @@ void build_peptide_from_sequence(Chain * chain, Chaint *chaint, char *str, simul
 
 	//sim_params->NAA = NAA;
 	chain->Nchains = next_chain_id;
-	chain->xaa_prev = malloc((next_chain_id+1)*sizeof(triplet));
+	chain->xaa_prev = (triplet*)malloc((next_chain_id+1)*sizeof(triplet));
       
 
 	/* parse the string */
@@ -1261,8 +1261,8 @@ int pdbrecord( AA *a, int j, model_params *mod_params, FILE *outfile)
 {
 	char fmt[] = "ATOM  %5d %4s XAA A9999    %8.3f%8.3f%8.3f\n";
 	//const char chain = 'A';
-	char *gatom = "testingtesting";
-	char *g2atom = "testingtesting";
+	const char *gatom = "testingtesting";
+	const char *g2atom = "testingtesting";
 
 	//fprintf(stderr,"%d ",a->chainid);
 	sprintf(fmt + 14, "%3s %c%4d", aa123(a->id), 'A' + a->chainid - 1, a->num & 0xFFF);
@@ -1393,14 +1393,22 @@ int getaa(AA *a, FILE *infile)
 		if (line[0] == 'E' && line[3] == 'M' && line[4] == 'D') {
 			//advance the file pointer to the next line
 //			fprintf(stderr,"ENDMDL reached %d. return\n",(int)0x7FFF);
-			if (fgets(line, sizeof(line), infile)) {}
+			/* fgets leaves line untouched at EOF; clear it so the
+			   next call falls through to the read below and
+			   returns EOF instead of this sentinel forever */
+			if (!fgets(line, sizeof(line), infile))
+				line[0] = '\0';
 			//fprintf(stderr,"ENDMDL reached %d. return\n",(int)0x7FFF);
 			pos = 0x7FFF;
 			return pos; //TODO check it is OK to return
 		}
 		if (line[0] == 'E' && line[1] == 'N' && line[2] == 'D') {
 //			fprintf(stderr,"END reached %d. return\n",0x7FFF);
-			if (fgets(line, sizeof(line), infile)) {}
+			/* fgets leaves line untouched at EOF; clear it so the
+			   next call falls through to the read below and
+			   returns EOF instead of this sentinel forever */
+			if (!fgets(line, sizeof(line), infile))
+				line[0] = '\0';
 			//fprintf(stderr,"GETAA cheat: %s\n",line);
 			pos = 0x7FFF;
 			return pos; //TODO check it is OK to return
@@ -2018,7 +2026,7 @@ int pdbin(Chain *chain, simulation_params *sim_params, FILE *infile)
 
 	/* scan the PDB-like input from infile, and allocate the memory */
 
-    Chain *tempchain = malloc(sizeof(Chain));
+    Chain *tempchain = (Chain*)malloc(sizeof(Chain));
 	tempchain->NAA = 0; tempchain->Nchains = 0; tempchain->aa = NULL; tempchain->erg = NULL; tempchain->xaa = NULL; tempchain->xaa_prev = NULL;
 	retv = getpdb(&(tempchain->aa), &(tempchain->NAA), &(tempchain->Nchains), infile);
 //	fprintf(stderr,"tempchain->NAA=%d\n",tempchain->NAA);

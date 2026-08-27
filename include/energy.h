@@ -58,8 +58,18 @@ void vectorProduct(float *a, float *b, float *c);
 void normalizedVector(float *a, float *b, float *v);
 
 int checkClash(double x, double y, double z, double *setCoords, int ind);
+#ifdef __cplusplus
+/* C++ has no variably-modified types, so these two can't use the C99
+   VLA-parameter syntax the energy.c definitions still use. Neither
+   function is called outside energy.c (still C99), so a plain-pointer
+   declaration is only ever needed to let C++ translation units parse
+   the prototype -- it never has to match a real call's array shape. */
+float scoreSideChain(int nbRot, int nbAtoms, double *acharges, int *aTypes, double *coords, AA *a, int numRand);
+double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atypes, double *coords, AA *a, double* setCoords, int ind, int numRand);
+#else
 float scoreSideChain(int nbRot, int nbAtoms, double *acharges, int *aTypes,  double coords[nbRot][nbAtoms][3], AA *a,  int numRand);
 double scoreSideChainNoClash(int nbRot, int nbAtoms, double charges[nbAtoms], int atypes[nbAtoms],  double coords[nbRot][nbAtoms][3], AA *a, double* setCoords, int ind, int numRand);
+#endif
 
 double ramabias(AA *, AA *, AA *);
 

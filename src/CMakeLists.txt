@@ -8,7 +8,7 @@ add_library(adcp_core STATIC
   metropolis.c
   nested.c
   params.cpp
-  peptide.c
+  peptide.cpp
   probe.c
   random16.cpp
   rotation.cpp
