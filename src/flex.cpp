@@ -12,6 +12,8 @@
 #include<math.h>
 #include<sys/stat.h>
 
+#include<string>
+
 #include"error.h"
 #include"params.h"
 #include"vector.h"
@@ -530,27 +532,20 @@ int output_and_run_flex(Chain *chain,Biasmap *biasmap, Chain *input_chains, simu
 
   //if(isnan(totenergy(chain))){fprintf(stderr,"ERROR READ IN OUTPUT_AND_RUN");}
 
-  char outpdb[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(outpdb,sim_params->flex_params.output_path.c_str());
-  strcat(outpdb,sim_params->flex_params.outputpdb_filename.c_str());
+  /* std::string, not char[256]: output_path can hold 255 chars (params.cpp's
+     "%255[^,]"), so every one of these prefix+suffix concatenations overflowed.
+     ASan reports a 260-byte write into create_directory below on a 250-char path. */
+  std::string outpdb = sim_params->flex_params.output_path + sim_params->flex_params.outputpdb_filename;
+  std::string outpdbmat = sim_params->flex_params.output_path + "pdbmat.structure";
 
-  char outpdbmat[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(outpdbmat,sim_params->flex_params.output_path.c_str());
-  strcat(outpdbmat,"pdbmat.structure");
-
-  Hyd_pdbout(chain,&(sim_params->protein_model),outpdb,outpdbmat);
+  Hyd_pdbout(chain,&(sim_params->protein_model),outpdb.data(),outpdbmat.data());
 
 
-  char hbondsin[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(hbondsin,sim_params->flex_params.output_path.c_str());
-  strcat(hbondsin,"hbonds.in");
-  output_hbondsin(chain,&(sim_params->protein_model),hbondsin,sim_params->flex_params.hstrength_cutoff,sim_params->outfile);
+  std::string hbondsin = sim_params->flex_params.output_path + "hbonds.in";
+  output_hbondsin(chain,&(sim_params->protein_model),hbondsin.data(),sim_params->flex_params.hstrength_cutoff,sim_params->outfile);
 
-  char hphobesin[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(hphobesin,sim_params->flex_params.output_path.c_str());
-  strcat(hphobesin,"hphobes.in");
-
-  output_hphobesin(chain,&(sim_params->protein_model),hphobesin,sim_params->outfile);
+  std::string hphobesin = sim_params->flex_params.output_path + "hphobes.in";
+  output_hphobesin(chain,&(sim_params->protein_model),hphobesin.data(),sim_params->outfile);
 
   int k = system(sim_params->flex_params.flex_cmd.c_str());
   if (k != 0) stop("system returned non-0 exit status.");
@@ -645,20 +640,15 @@ void initialize_flex(Chain *chain, Chain **input_chains,Biasmap *biasmap, simula
   chain->flex_data->accepted_flex = 0;
   chain->flex_data->read_in_flex = 0;
 
-  char create_directory[DEFAULT_SHORT_STRING_LENGTH] ;
-  sprintf(create_directory,"mkdir -p %s",sim_params->flex_params.output_path.c_str());
-  int k = system(create_directory);
+  std::string create_directory = "mkdir -p " + sim_params->flex_params.output_path;
+  int k = system(create_directory.c_str());
   if (k != 0) stop("system returned non-0 exit status.");
 
-  char covin[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(covin,sim_params->flex_params.output_path.c_str());
-  strcat(covin,"cov.in");
-  output_covin(chain,&(sim_params->protein_model),covin);
+  std::string covin = sim_params->flex_params.output_path + "cov.in";
+  output_covin(chain,&(sim_params->protein_model),covin.data());
 
-  char stackedin[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(stackedin,sim_params->flex_params.output_path.c_str());
-  strcat(stackedin,"stacked.in");
-  output_stackedin(stackedin);
+  std::string stackedin = sim_params->flex_params.output_path + "stacked.in";
+  output_stackedin(stackedin.data());
 
 
 

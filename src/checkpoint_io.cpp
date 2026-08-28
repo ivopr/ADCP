@@ -232,9 +232,21 @@ void read_checkpoint_header(simulation_params *sim_params){
 	stop("read_checkpoint_header: Could not read amino acid and chain numbers.\n");
   }
   // read in and set sequence
+  if (sim_params->NAA < 1) {
+	stop("read_checkpoint_header: non-positive amino acid count in header.\n");
+  }
+  /* The %s had no field width, so a sequence line longer than the NAA the header
+     declares overflowed this buffer. The width is NAA+1 so a too-long line is
+     truncated rather than fatal, and the length check below then rejects it. */
+  if (sim_params->seq) free(sim_params->seq);
   sim_params->seq = (char*)malloc(sizeof(char)*(sim_params->NAA+2));
-  if ((k = fscanf(sim_params->checkpoint_file,"%s\n",sim_params->seq)) != 1) {
+  char seq_fmt[32];
+  snprintf(seq_fmt, sizeof(seq_fmt), "%%%ds\n", sim_params->NAA + 1);
+  if ((k = fscanf(sim_params->checkpoint_file,seq_fmt,sim_params->seq)) != 1) {
 	stop("read_checkpoint_header: Could not read sequence.\n");
+  }
+  if ((int)strlen(sim_params->seq) > sim_params->NAA) {
+	stop("read_checkpoint_header: sequence is longer than the declared amino acid count.\n");
   }
 
   // read in global parameters and counters
