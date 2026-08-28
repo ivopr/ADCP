@@ -15,7 +15,6 @@ extern "C" {
 #ifdef PARALLEL
 #include<mpi.h>
 void ns_for_flex_processor(MPI_Comm FLEX_WORLD,int rank,Biasmap *biasmap,simulation_params* sim_params);
-void update_flex_amplitude(int flex_iteration,simulation_params * flex_params,FLEX_data * flex_data);
 int check_finished(simulation_params *sim_params);
 #endif
 
@@ -32,7 +31,7 @@ void output_covin(Chain *chain, model_params *protein_model,char *filename);
 void output_stackedin(char* filename);
 void Hyd_pdbout(Chain *chain,model_params *protein_model,char *filename,char *ca_filename);
 void output_hphobesin(Chain * chain, model_params *protein_model,char *filename, FILE *logfile);
-void output_hbondsin(Chain * chain, model_params *protein_model,int use_bias_only,char *filename,double nma_hstrength, FILE *logfile);
+void output_hbondsin(Chain * chain, model_params *protein_model,char *filename,double nma_hstrength, FILE *logfile);
 
 
 

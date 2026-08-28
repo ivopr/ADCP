@@ -471,7 +471,10 @@ void output_hphobesin(Chain * chain, model_params *protein_model,char *filename,
   fclose(fptr);
 }
 
-void output_hbondsin(Chain * chain, model_params *protein_model, int use_bias_only, char *filename,double nma_hstrength, FILE *logfile){
+/* the `use_bias_only` parameter is gone: flex_params.only_bias_hbonds was never
+   set to anything but 0, so the branch that read Hbond_aaH/Hbond_aaO was dead,
+   and setup_bias_hbonds (its only writer) is deleted with it. */
+void output_hbondsin(Chain * chain, model_params *protein_model, char *filename,double nma_hstrength, FILE *logfile){
   FILE *fptr;
   if((fptr = fopen(filename, "r"))){
     fclose(fptr);
@@ -484,7 +487,6 @@ void output_hbondsin(Chain * chain, model_params *protein_model, int use_bias_on
 
   int number_hbonds = 0;
 
-  if(use_bias_only ==0.0){
     if(nma_hstrength == 1.0){
 
       for(i = 1; i < chain->NAA; i++){
@@ -516,30 +518,7 @@ void output_hbondsin(Chain * chain, model_params *protein_model, int use_bias_on
 
 
     }
-  }
-  else{
-    if(nma_hstrength == 1.0){
 
-      for(i = 0; i < chain->flex_data->number_hbond; i++){
-        if(hdonor(&(chain->aa[chain->flex_data->Hbond_aaH[i]]),&(chain->aa[chain->flex_data->Hbond_aaO[i]]),protein_model)){
-          number_hbonds++;
-          fprintf(fptr,"%d %d %.3lf 5\n",chain->flex_data->oxy_index[chain->flex_data->Hbond_aaH[i]]+1,chain->flex_data->oxy_index[chain->flex_data->Hbond_aaO[i]],-4.0);
-        }
-      }
-    }
-    else{
-      for(i = 0; i < chain->flex_data->number_hbond; i++){
-
-        if(hstrength(chain->aa[chain->flex_data->Hbond_aaH[i]].n,  chain->aa[chain->flex_data->Hbond_aaH[i]].h,  chain->aa[chain->flex_data->Hbond_aaO[i]].o,  chain->aa[chain->flex_data->Hbond_aaO[i]].c, protein_model) > nma_hstrength ){
-          fprintf(fptr,"%d %d %.3lf 5\n",chain->flex_data->oxy_index[chain->flex_data->Hbond_aaH[i]]+1,chain->flex_data->oxy_index[chain->flex_data->Hbond_aaO[i]],-4.0);
-          number_hbonds++;
-        }
-
-
-      }
-
-    }
-  }
 
 
   fprintf(logfile,"H-bonds %d ",number_hbonds);
@@ -565,7 +544,7 @@ int output_and_run_flex(Chain *chain,Biasmap *biasmap, Chain *input_chains, simu
   char hbondsin[DEFAULT_SHORT_STRING_LENGTH];
   strcpy(hbondsin,sim_params->flex_params.output_path.c_str());
   strcat(hbondsin,"hbonds.in");
-  output_hbondsin(chain,&(sim_params->protein_model),sim_params->flex_params.only_bias_hbonds,  hbondsin,sim_params->flex_params.hstrength_cutoff,sim_params->outfile);
+  output_hbondsin(chain,&(sim_params->protein_model),hbondsin,sim_params->flex_params.hstrength_cutoff,sim_params->outfile);
 
   char hphobesin[DEFAULT_SHORT_STRING_LENGTH];
   strcpy(hphobesin,sim_params->flex_params.output_path.c_str());
@@ -651,77 +630,6 @@ int read_in_after_flex(Chain *chain,Biasmap *biasmap,Chain *input_chains,simulat
   return ans;
 }
 
-void setup_bias_hbonds(Chain *chain, Biasmap * biasmap){
-  int i,j;
-  /*First Beta sheets */
-  for(i = 1; i < biasmap->NAA; i++){
-    if(biasmap->distb[i*biasmap->NAA + i] != -1 || chain->aa[i].id == 'P') continue;
-    for(j = 1; j < biasmap->NAA; j++ ){
-      if(abs(j-i)<2) continue;
-      if(biasmap->distb[j*biasmap->NAA + j] == -1 && biasmap->distb[i*biasmap->NAA + j] == 1.0){
-
-          chain->flex_data->number_hbond++;
-          chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-          chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
-          chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i;
-          chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j;
-          if(j > 1){
-            chain->flex_data->number_hbond++;
-            chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i;
-            chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j-1;
-          }
-          if(j < biasmap->NAA - 1){
-            chain->flex_data->number_hbond++;
-            chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i;
-            chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j+1;
-          }
-          if(i>1 && chain->aa[i-1].id != 'P' && biasmap->distb[(i-1)*biasmap->NAA + (i-1) ] != -1.0){
-            chain->flex_data->number_hbond++;
-            chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i-1;
-            chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j;
-          }
-          if(i<biasmap->NAA -1 && chain->aa[i+1].id != 'P' && biasmap->distb[(i+1)*biasmap->NAA + (i+1) ] != -1.0){
-            chain->flex_data->number_hbond++;
-            chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
-            chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i+1;
-            chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = j;
-          }
-
-
-      }
-
-    }
-  }
-  /*Then alpha helix   (O)i->(H)i+4 */
-  for(i = 1; i < biasmap->NAA-4; i++){
-    if(biasmap->distb[i*biasmap->NAA + i]== 1.0){
-      int ishelix = 1;
-      for(j= i+1; j <= i+4; j++){
-        if(biasmap->distb[j*biasmap->NAA + j]!= 1.0) ishelix = 0;
-      }
-      if(ishelix==1 && chain->aa[i+4].id != 'P'){
-        chain->flex_data->number_hbond++;
-        chain->flex_data->Hbond_aaH = (int*)realloc(chain->flex_data->Hbond_aaH,sizeof(int)*chain->flex_data->number_hbond);
-        chain->flex_data->Hbond_aaO = (int*)realloc(chain->flex_data->Hbond_aaO,sizeof(int)*chain->flex_data->number_hbond);
-        chain->flex_data->Hbond_aaH[chain->flex_data->number_hbond-1] = i+4;
-        chain->flex_data->Hbond_aaO[chain->flex_data->number_hbond-1] = i;
-      }
-    }
-  }
-
-  //for(i = 0; i < chain->nma_data->number_hbond; i++){
-  //  fprintf(stderr,"%d %d\n",chain->nma_data->Hbond_aaO[i],chain->nma_data->Hbond_aaH[i]);
-  //}fflush(stderr);
-
-
-}
 
 
 void initialize_flex(Chain *chain, Chain **input_chains,Biasmap *biasmap, simulation_params* sim_params,double **rmsd){
@@ -752,13 +660,7 @@ void initialize_flex(Chain *chain, Chain **input_chains,Biasmap *biasmap, simula
   strcat(stackedin,"stacked.in");
   output_stackedin(stackedin);
 
-  chain->flex_data->Hbond_aaH = NULL;
-  chain->flex_data->Hbond_aaO = NULL;
-  chain->flex_data->number_hbond = 0;
 
-  if(sim_params->flex_params.only_bias_hbonds == 1){
-    setup_bias_hbonds(chain,biasmap);
-  }
 
 
   /* new[]{} value-initializes every element, so the per-element pointer
@@ -792,15 +694,6 @@ void finalize_flex(Chain *chain,Chain **input_chains, simulation_params *sim_par
   chain->flex_data->accepted_flex = 0;
   chain->flex_data->read_in_flex = 0;
   free(chain->flex_data->oxy_index);
-  if(chain->flex_data->number_hbond !=  0){
-    free(chain->flex_data->Hbond_aaH);
-    free(chain->flex_data->Hbond_aaO);
-    chain->flex_data->number_hbond = 0;
-  }
-
-  chain->flex_data->Hbond_aaH=NULL;
-  chain->flex_data->Hbond_aaO=NULL;
-
 
   free(chain->flex_data);
   chain->flex_data = NULL;

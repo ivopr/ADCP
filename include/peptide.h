@@ -68,8 +68,6 @@ typedef struct _AA {
 
 typedef struct _FLEX_data{
   int* oxy_index;
-  int *Hbond_aaH, *Hbond_aaO;
-  int number_hbond;
   int total_flex;
   int accepted_flex;
   int read_in_flex;

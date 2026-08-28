@@ -463,8 +463,7 @@ void MC_first(ChainHash *ChainHash,Chain *cpoints, Chaint* chaint, int current_s
 
 }
 
-#ifndef FAST
-void collect_chains(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simulation_params *sim_params,  int rank, int P, int N,MPI_Comm *NS_WORLD,Instructions *instructions){
+void collect_chains(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simulation_params *sim_params,  int rank, int P, int N,MPI_Comm *NS_WORLD){
   //first collect the P chains which will be the start of the MMC
 
 
@@ -523,7 +522,7 @@ void collect_chains(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simu
   }
 }
 
-void return_and_reheap_chains(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simulation_params *sim_params,  int rank, int P, int *heaplength, MPI_Comm *NS_WORLD, Instructions *instructions){
+void return_and_reheap_chains(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simulation_params *sim_params,  int rank, int P, int *heaplength, MPI_Comm *NS_WORLD){
   //recieve the P chains on the master processor
   int minus1 = -1;
   int got_all;
@@ -572,249 +571,6 @@ void return_and_reheap_chains(ChainHash *chainhash,Chain *cpoints, Chain*chainco
 }
 
 
-#else
-
-void initialize_instruction_set(Instructions * instruction, int P){
-  instruction->length = 6*P+1;
-  instruction->current_position = -1;
-  instruction->instructions = (int*)malloc(sizeof(int)*instruction->length);
-}
-
-void finalize_instruction_set(Instructions * instruction){
-  free(instruction->instructions);
-}
-
-void carry_out_first_instructions(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simulation_params *sim_params,  int rank, int P, int N,MPI_Comm *NS_WORLD,Instructions *instructions){
-  instructions[0].current_position = -3;
-  int instruct; int proc;
-  int index;
-  do{
-    instructions[0].current_position+=3;
-    instruct = instructions[0].instructions[instructions[0].current_position];
-    proc = instructions[0].instructions[instructions[0].current_position+1];
-    index = instructions[0].instructions[instructions[0].current_position+2];
-    if(instruct == 1 ){ //send
-      mpi_send_chain(&(cpoints[index]), rank, proc,&sim_params->logLstar,sim_params->iter,*NS_WORLD);
-    }
-    else if(instruct == -1){ //receive
-      mpi_rec_chain(&(chaincopies[0]), proc,rank,&sim_params->logLstar , sim_params->iter,*NS_WORLD);
-    }
-  }while(instruct != 0);
-  if(index != -1){
-    copybetween(&(chaincopies[0]),&(cpoints[index]));
-  }
-  instructions[0].current_position+=3;
-}
-
-void carry_out_last_instructions(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simulation_params *sim_params,  int rank, int P, int N,MPI_Comm *NS_WORLD,Instructions *instructions){
-  instructions[0].current_position-=3;
-  int instruct; int proc;
-  int index;
-  do{
-    instructions[0].current_position+=3;
-    instruct = instructions[0].instructions[instructions[0].current_position];
-    proc = instructions[0].instructions[instructions[0].current_position+1];
-    index = instructions[0].instructions[instructions[0].current_position+2];
-    if(instruct == 1 ){ //send
-      mpi_send_chain(&(chaincopies[0]), rank, proc,&sim_params->logLstar,sim_params->iter,*NS_WORLD);
-    }
-    else if(instruct == -1){ //receive
-      mpi_rec_chain(&(cpoints[index]), proc,rank,&sim_params->logLstar , sim_params->iter,*NS_WORLD);
-    }
-  }while(instruct != 0);
-  if(index != -1){
-    copybetween(&(cpoints[index]),&(chaincopies[0]));
-  }
-}
-
-void output_instructions(Instructions *instructions, int rank){
-  fprintf(stderr, "Rank %d Number Instructions %d:\n",rank,instructions->current_position/3);
-  for(int i = 0; i < instructions->current_position/3; i++){
-    fprintf(stderr, "%d %d %d\n",instructions->instructions[3*i],instructions->instructions[3*i+1],instructions->instructions[3*i+2]);
-  }
-}
-
-
-void send_and_receive_instructions( Instructions * instructions, int rank, int P, MPI_Comm *NS_WORLD){
-
-  if(rank == 0){
-    //output_instructions(&(instructions[0]),0);
-    for(int k = 1; k < P; k++){
-      //output_instructions(&(instructions[k]),k);
-      MPI_Send(&(instructions[k].current_position),1,MPI_INT,k,25,*NS_WORLD);
-      MPI_Send(instructions[k].instructions,instructions[k].current_position,MPI_INT,k,50,*NS_WORLD);
-    }
-  }
-  else{
-    MPI_Status status;
-    MPI_Recv(&(instructions[0].current_position),1,MPI_INT,0,25,*NS_WORLD,&status);
-    MPI_Recv(instructions[0].instructions,instructions[0].current_position,MPI_INT,0,50,*NS_WORLD,&status);
-
-  }
-
-
-}
-
-
-
-
-void collect_chains(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simulation_params *sim_params,  int rank, int P, int N,MPI_Comm *NS_WORLD,Instructions *instructions){
-  MPI_Bcast(&(sim_params->logLstar),1,MPI_DOUBLE,0,*NS_WORLD);
-  if (rank == 0) {
-    int *procs = (int*)malloc(sizeof(int)*P);
-    for(int k = 0; k < P; k++){
-      procs[k] = -1;
-      instructions[k].current_position = 0;
-    }
-
-    int *leftovers = (int*)malloc(sizeof(int)*(P*2));
-    int number_leftovers = 0;
-
-    int copies;
-    for(int k = 0; k < P; k++){
-      copies = 1 + ((int)(rand()/(double)RAND_MAX * (N-P))) % (N-P);
-
-      int which_proc = chainhash[copies].processor;
-      int which_index = chainhash[copies].index;
-
-      if(procs[which_proc] == -1){
-        procs[which_proc] = which_index;
-      }
-      else{
-        leftovers[number_leftovers*2] = which_proc;
-        leftovers[number_leftovers*2+1] = which_index;
-        number_leftovers++;
-      }
-    }
-
-//    static int number_chain = 0;
-//    number_chain += number_leftovers;
-
-    for(int k = 0; k < P; k++){
-      if(procs[k] == -1){
-        instructions[k].instructions[instructions[k].current_position] = -1;
-        instructions[k].instructions[instructions[k].current_position+1] = leftovers[(number_leftovers-1)*2];
-        instructions[k].instructions[instructions[k].current_position+2] = leftovers[(number_leftovers-1)*2+1];
-        instructions[k].current_position+=3;
-        instructions[leftovers[(number_leftovers-1)*2]].instructions[instructions[leftovers[(number_leftovers-1)*2]].current_position] = +1;
-        instructions[leftovers[(number_leftovers-1)*2]].instructions[instructions[leftovers[(number_leftovers-1)*2]].current_position+1] = k;
-        instructions[leftovers[(number_leftovers-1)*2]].instructions[instructions[leftovers[(number_leftovers-1)*2]].current_position+2] = leftovers[(number_leftovers-1)*2+1];
-        instructions[leftovers[(number_leftovers-1)*2]].current_position+=3;
-        number_leftovers--;
-      }
-    }
-
-
-    for(int k = 0; k < P; k++){
-      instructions[k].instructions[instructions[k].current_position] = 0;
-      instructions[k].instructions[instructions[k].current_position+1] = 0;
-      instructions[k].instructions[instructions[k].current_position+2] = procs[k];
-      instructions[k].current_position+=3;
-
-    }
-
-    //now sort out after MC move instructions
-    for(int k = 0; k < P; k++)procs[k] = -1;
-    number_leftovers = 0;
-
-
-
-
-    for(int k = 0; k < P; k++){
-      copies = N-k;
-
-      int which_proc = chainhash[copies].processor;
-      int which_index = chainhash[copies].index;
-
-      if(procs[which_proc] == -1){
-        procs[which_proc] = which_index;
-      }
-      else{
-        leftovers[number_leftovers*2] = which_proc;
-        leftovers[number_leftovers*2+1] = which_index;
-        number_leftovers++;
-      }
-    }
-
-//    number_chain += number_leftovers;
-    //fprintf(stderr,"NUMBER CHAINS %d\n",number_chain);
-
-    for(int k = 0; k < P; k++){
-      if(procs[k] == -1){
-        instructions[k].instructions[instructions[k].current_position] = 1;
-        instructions[k].instructions[instructions[k].current_position+1] = leftovers[(number_leftovers-1)*2];
-        instructions[k].instructions[instructions[k].current_position+2] = leftovers[(number_leftovers-1)*2+1];
-        instructions[k].current_position+=3;
-        instructions[leftovers[(number_leftovers-1)*2]].instructions[instructions[leftovers[(number_leftovers-1)*2]].current_position] = -1;
-        instructions[leftovers[(number_leftovers-1)*2]].instructions[instructions[leftovers[(number_leftovers-1)*2]].current_position+1] = k;
-        instructions[leftovers[(number_leftovers-1)*2]].instructions[instructions[leftovers[(number_leftovers-1)*2]].current_position+2] = leftovers[(number_leftovers-1)*2+1];
-        instructions[leftovers[(number_leftovers-1)*2]].current_position+=3;
-        number_leftovers--;
-      }
-    }
-
-
-    for(int k = 0; k < P; k++){
-      instructions[k].instructions[instructions[k].current_position] = 0;
-      instructions[k].instructions[instructions[k].current_position+1] = 0;
-      instructions[k].instructions[instructions[k].current_position+2] = procs[k];
-      instructions[k].current_position+=3;
-
-    }
-
-    free(procs);
-    free(leftovers);
-
-
-
-  }
-
-
-  send_and_receive_instructions(instructions,rank,P,NS_WORLD);
-  carry_out_first_instructions(chainhash,cpoints, chaincopies, sim_params, rank,  P,  N,NS_WORLD,instructions);
-}
-
-void return_and_reheap_chains(ChainHash *chainhash,Chain *cpoints, Chain*chaincopies, simulation_params *sim_params,  int rank, int P, int *heaplength, MPI_Comm *NS_WORLD, Instructions *instructions){
-  carry_out_last_instructions(chainhash,cpoints, chaincopies, sim_params, rank,  P, *heaplength,NS_WORLD,instructions);
-  if (rank == 0) {
-    MPI_Status status;
-    for(int k = 0; k < P; k++){
-      (*heaplength)++;
-      if(k == 0){
-        chainhash[*heaplength].ll = chaincopies[0].ll;
-        instructions[k].current_position+=2;
-      }
-      else{
-        instructions[k].current_position--;
-        MPI_Recv(&(chainhash[*heaplength].ll),1,MPI_DOUBLE,k,75,*NS_WORLD,&status);
-      }
-
-      //fprintf(stderr,"KK %d %d %d\n",k,instructions[k].current_position,instructions[k].instructions[instructions[k].current_position]); fflush(stderr);
-
-      if(instructions[k].instructions[instructions[k].current_position] == -1){
-        instructions[k].current_position -=3;
-        chainhash[*heaplength].processor = instructions[k].instructions[instructions[k].current_position-1];
-      }
-      else{
-        chainhash[*heaplength].processor = k;
-      }
-
-      chainhash[*heaplength].index = instructions[k].instructions[instructions[k].current_position];
-
-      heapifyhashin(chainhash,*heaplength);
-    }
-
-
-  }
-
-  else{
-    MPI_Send(&(chaincopies[0].ll),1,MPI_DOUBLE,0,75,*NS_WORLD);
-  }
-}
-
-
-
-#endif
 
 
 #endif
@@ -954,7 +710,6 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
   if(thinning == 0) thinning = 1;
 
 #endif
-  Instructions *instructions=NULL;
   int copies = 0;
   //in case restarting from checkpoint
   int only_output_checkpoint = 0; 
@@ -1098,13 +853,9 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
   //setup chaincopies for the chains that will be collected every NS iteration to generate the new sample points, P for parallel, 1(=P) for serial
   //the slave processors will have 1 chaincopy, with the one they do MCMC on
   int size_of_chaincopies = 1;
-  int size_of_instruction_set = 0;
-  instructions = NULL;
-#ifndef FAST
   if (rank == 0) {
     size_of_chaincopies = P;
   }
-#endif
   /* value-initialized elements, so the per-element pointer nulling the
      malloc needed is gone; size is known here and never grows. */
   chaincopies.resize(size_of_chaincopies);
@@ -1118,16 +869,6 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
     }
   }
 
-#ifdef FAST
-  size_of_instruction_set = 1;
-  if(rank == 0){
-    size_of_instruction_set = P;
-  }
-  instructions = (Instructions*)malloc(sizeof(Instructions)*size_of_instruction_set);
-  for(int k = 0; k < size_of_instruction_set; k++ ){
-    initialize_instruction_set(&(instructions[k]),P);
-  }
-#endif
 
   //End of reading and storing chains
   //Set up nested sampling
@@ -1215,7 +956,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
     }
 
 #ifdef PARALLEL
-    collect_chains(chainhash,cpoints.data(),chaincopies.data(),sim_params,rank,P,N,&NS_WORLD, instructions);
+    collect_chains(chainhash,cpoints.data(),chaincopies.data(),sim_params,rank,P,N,&NS_WORLD);
 #else
     do
       copies = 1 + ((int)(rand()/(double)RAND_MAX * N)) % N;
@@ -1241,7 +982,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
 
     //collect new points on the main processor in the heap
 #ifdef PARALLEL
-    return_and_reheap_chains(chainhash,cpoints.data(),chaincopies.data(),sim_params,rank,P,&heaplength,&NS_WORLD, instructions);
+    return_and_reheap_chains(chainhash,cpoints.data(),chaincopies.data(),sim_params,rank,P,&heaplength,&NS_WORLD);
 #else
     //put the new one back in heap and send them to overwrite the worst ones
     for(int k = 0; k < P; k++){
@@ -1296,12 +1037,6 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
   }
 
     //clean up
-#ifdef FAST
-    for(int k = 0; k < size_of_instruction_set; k++){
-      finalize_instruction_set(&(instructions[k]));
-    }
-    free(instructions);
-#endif
     if (rank == 0) {
       //clean up rank 0 only memory, see later for rest of cleanup
       free(chainhash);

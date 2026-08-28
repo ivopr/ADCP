@@ -14,11 +14,6 @@
 extern "C" {
 #endif
 
-typedef struct{
-  int *instructions;
-  int length;
-  int current_position;
-} Instructions;
 
 
 /*Instruction Help
