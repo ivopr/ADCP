@@ -10,6 +10,7 @@
 #include<string.h>
 #include<time.h>
 #include<signal.h>
+#include<string>
 #include<math.h>
 
 #ifdef PARALLEL
@@ -207,9 +208,6 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 		int ind = 0;
 		int currIndex = 0;
 		int stuckcount = 0;
-		FILE *swapFile = NULL;
-		char swapname[12];
-		sprintf(swapname, "swap%d.pdb", swapLength);
 		double swapEnergy[swapLength + 1];
 		/* swapLength+1 slots: the last one holds the best pose (see init loop below) */
 		Chain* swapChains[swapLength + 1];
@@ -614,18 +612,16 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 			//uncomment this part if you want the energies of each replica
 			static FILE* fptr;
 			if (fptr == NULL) {
-				char filename[1024];
-				sprintf(filename, "%d.temp", rank);
-				fptr = fopen(filename, "w");
+				std::string filename = std::to_string(rank) + ".temp";
+				fptr = fopen(filename.c_str(), "w");
 				fprintf(fptr, "#T: %f\n", 1000.0 / (1.9858775*sim_params->thermobeta) - 273.15);
 			}
 			fprintf(fptr, "%f %f\n", sim_params->thermobeta, totenergy(chain));
 
 			static FILE* fptr_pdb;
 			if (fptr_pdb == NULL) {
-				char filename_pdb[1024];
-				sprintf(filename_pdb, "%d.pdb", rank);
-				fptr_pdb = fopen(filename_pdb, "w");
+				std::string filename_pdb = std::to_string(rank) + ".pdb";
+				fptr_pdb = fopen(filename_pdb.c_str(), "w");
 				fprintf(fptr_pdb, "#T: %f\n", 1000.0 / (1.9858775*sim_params->thermobeta) - 273.15);
 				double tttt = totenergy(chain);
 				pdbprint(chain->aa, chain->NAA, &(sim_params->protein_model), fptr_pdb, &tttt);
@@ -654,7 +650,7 @@ char *read_options(int argc, char *argv[], simulation_params *sim_params)
 	int NS = 0; //1 = yes
 	int iter_max = 1000;
 	int num_NS_per_checkpoint = 0;
-	char checkpoint_filename[256];
+	char checkpoint_filename[256]; /* stays a char buffer: it is an sscanf target */
 	int checkpoint_counter = 0;
 	int checkpoint = 0;
 	int restart_from_checkpoint = 0;
@@ -1077,9 +1073,8 @@ int main(int argc, char *argv[])
 	/* print last snapshots for restart */
 #ifdef PARALLEL
 	FILE* fptr1;
-	char filename1[1024];
-	sprintf(filename1, "%d_last.pdb", rank);
-	fptr1 = fopen(filename1, "w");
+	std::string filename1 = std::to_string(rank) + "_last.pdb";
+	fptr1 = fopen(filename1.c_str(), "w");
 	pdbprint(chain->aa, chain->NAA, &(sim_params.protein_model), fptr1, NULL);
 	fclose(fptr1);
 #endif
