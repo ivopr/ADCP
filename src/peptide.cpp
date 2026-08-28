@@ -11,6 +11,8 @@
 #include<string.h>
 #include<math.h>
 #include<float.h>
+#include<string>
+#include<vector>
 
 #include"error.h"
 #include"params.h"
@@ -934,8 +936,6 @@ void build_peptide_from_sequence(Chain * chain, Chaint *chaint, char *str, simul
 
 	//sim_params->NAA = NAA;
 	chain->Nchains = next_chain_id;
-	chain->xaa_prev = (triplet*)malloc((next_chain_id+1)*sizeof(triplet));
-      
 
 	/* parse the string */
 	for (i = 0; str_without_separator[i] != '\0'; i++) {
@@ -1788,8 +1788,11 @@ static double repair_segment( Chain *chain1, Chain *chain2, int aa_start, int aa
 // TODO: multi-chain proteins
 static double repair_multichain( Chain *chain1, Chain *chain2) {
 
-	int chain_starts[chain1->Nchains]; //numbering from 0
-	int chain_ends[chain1->Nchains]; //numbering from 0
+	/* sized Nchains+1, not Nchains: the loop below writes chain_starts[next_chain]
+	   before the consistency check further down verifies next_chain+1 == Nchains,
+	   so a PDB with more chainid transitions than Nchains would overrun. */
+	std::vector<int> chain_starts(chain1->Nchains + 1); //numbering from 0
+	std::vector<int> chain_ends(chain1->Nchains + 1); //numbering from 0
 
 	//fprintf(stderr,"REPAIR MULTICHAIN\n");
 	int next_chain = 0;
