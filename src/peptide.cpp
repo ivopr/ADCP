@@ -11,6 +11,7 @@
 #include<string.h>
 #include<math.h>
 #include<float.h>
+#include<memory>
 #include<string>
 #include<vector>
 
@@ -1992,6 +1993,37 @@ void initialize(Chain *chain, Chaint * chaint, simulation_params *sim_params)
     
 }
 
+/* RAII handle: the stop() calls inside the reader below skip fclose, and stop()
+   aborts today, but this keeps the open/close pairing honest regardless. */
+namespace {
+struct FileCloser { void operator()(FILE *f) const { if (f) fclose(f); } };
+using FilePtr = std::unique_ptr<FILE, FileCloser>;
+}
+
+/* Mark every amino acid listed in `path` with `flag`.  Shared by the fixed- and
+   constrained-list readers, which differ only in their messages and their flag. */
+static void mark_aa_from_file(Chain *chain, const std::string &path, int flag,
+                              const char *open_err, const char *banner,
+                              const char *range_err, bool print_id)
+{
+  FilePtr fptr(fopen(path.c_str(), "r"));
+  if (!fptr) stop(open_err);
+
+  fprintf(stderr, "%s", banner);
+  int next;
+  while (fscanf(fptr.get(), "%d", &next) > 0) {
+    /* the `next < 0` half is new: the list is user-supplied, and a negative
+       index was an out-of-bounds write into chain->aa before. */
+    if (next < 0 || next >= chain->NAA) stop(range_err);
+    if (print_id)
+      fprintf(stderr, " %d%c", next, chain->aa[next].id);
+    else
+      fprintf(stderr, " %d", next);
+    chain->aa[next].etc |= flag;
+  }
+  fprintf(stderr, "\n");
+}
+
 /* Fixed amino acids in list file will be marked with FIXED flag in aa.etc.
    These amino acids will not be moved in the MC simulation. */
 void mark_fixed_aa_from_file(Chain *chain, simulation_params *sim_params) {
@@ -1999,74 +2031,33 @@ void mark_fixed_aa_from_file(Chain *chain, simulation_params *sim_params) {
   //set all amino acids as not fixed (by default, the 0th amino acid is set as fixed.  TODO: check where it is set).
   for (int i=0; i<chain->NAA; i++) chain->aa[i].etc &= ~FIXED;
 
-  if((sim_params->protein_model).fixed_aalist_file.empty()) return;
+  const model_params &m = sim_params->protein_model;
+  if (m.fixed_aalist_file.empty()) return;
 
-  fprintf(stderr,"marking fixed amino acids from file %s\n",(sim_params->protein_model).fixed_aalist_file.c_str());
-
-  FILE *fptr = fopen((sim_params->protein_model).fixed_aalist_file.c_str(), "r");
-  if (!fptr) stop("mark_fixed_aa_from_file: problems while opening constraint file");
-
-  fprintf(stderr, "Fixing amino acids:");
-  int next;
-  while (fscanf(fptr,"%d",&next) > 0) {
-    if (next >= chain->NAA) stop("fixed amino acid beyond chain length");
-    //fprintf(stderr,"constraining amino acid %d:",next);
-    fprintf(stderr," %d%c",next,chain->aa[next].id);
-    //fprintf(stderr,"  aa.etc before: %x",chain->aa[next].etc);
-    chain->aa[next].etc |= FIXED;
-    //fprintf(stderr,"  and after: %x\n",chain->aa[next].etc);
-  }
-  fprintf(stderr,"\n");
-  fclose(fptr);
-
+  fprintf(stderr,"marking fixed amino acids from file %s\n",m.fixed_aalist_file.c_str());
+  mark_aa_from_file(chain, m.fixed_aalist_file, FIXED,
+                    "mark_fixed_aa_from_file: problems while opening constraint file",
+                    "Fixing amino acids:", "fixed amino acid beyond chain length", true);
 }
 
 
 /* constrained amino acids in list file will be marked with CONSTRAINED flag in aa.etc */
 void mark_constrained_aa_from_file(Chain *chain, simulation_params *sim_params) {
 
-  if((sim_params->protein_model).external_constrained_aalist_file.empty() && (sim_params->protein_model).external_constrained_aalist_file2.empty()) return;
+  const model_params &m = sim_params->protein_model;
 
-  if (!(sim_params->protein_model).external_constrained_aalist_file.empty()) {
-    fprintf(stderr,"1marking constrained amino acids from file %s\n",(sim_params->protein_model).external_constrained_aalist_file.c_str());
-
-    FILE *fptr = fopen((sim_params->protein_model).external_constrained_aalist_file.c_str(), "r");
-    if (!fptr) stop("problems while opening constraint file");
-  
-    fprintf(stderr, "Constraining amino acids:");
-    int next;
-    while (fscanf(fptr,"%d",&next) > 0) {
-      if (next >= chain->NAA) stop("constrained amino acid beyond chain length");
-      //fprintf(stderr,"constraining amino acid %d:",next);
-      fprintf(stderr," %d",next);
-      //fprintf(stderr,"  aa.etc before: %x",chain->aa[next].etc);
-      chain->aa[next].etc |= CONSTRAINED;
-      //fprintf(stderr,"  and after: %x\n",chain->aa[next].etc);
-    }
-    fprintf(stderr,"\n");
-    fclose(fptr);
+  if (!m.external_constrained_aalist_file.empty()) {
+    fprintf(stderr,"1marking constrained amino acids from file %s\n",m.external_constrained_aalist_file.c_str());
+    mark_aa_from_file(chain, m.external_constrained_aalist_file, CONSTRAINED,
+                      "problems while opening constraint file",
+                      "Constraining amino acids:", "constrained amino acid beyond chain length", false);
   }
-  if (!(sim_params->protein_model).external_constrained_aalist_file2.empty()) {
-    fprintf(stderr,"2marking constrained amino acids from file %s\n",(sim_params->protein_model).external_constrained_aalist_file2.c_str());
-
-    FILE *fptr = fopen((sim_params->protein_model).external_constrained_aalist_file2.c_str(), "r");
-    if (!fptr) stop("problems while opening constraint file");
-  
-    fprintf(stderr, "Constraining amino acids:");
-    int next;
-    while (fscanf(fptr,"%d",&next) > 0) {
-      if (next >= chain->NAA) stop("constrained amino acid beyond chain length");
-      //fprintf(stderr,"constraining amino acid %d:",next);
-      fprintf(stderr," %d",next);
-      //fprintf(stderr,"  aa.etc before: %x",chain->aa[next].etc);
-      chain->aa[next].etc |= CONSTRAINED2;
-      //fprintf(stderr,"  and after: %x\n",chain->aa[next].etc);
-    }
-    fprintf(stderr,"\n");
-    fclose(fptr);
+  if (!m.external_constrained_aalist_file2.empty()) {
+    fprintf(stderr,"2marking constrained amino acids from file %s\n",m.external_constrained_aalist_file2.c_str());
+    mark_aa_from_file(chain, m.external_constrained_aalist_file2, CONSTRAINED2,
+                      "problems while opening constraint file",
+                      "Constraining amino acids:", "constrained amino acid beyond chain length", false);
   }
-
-
 }
 
 
