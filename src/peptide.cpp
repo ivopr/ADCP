@@ -399,7 +399,7 @@ void gammalate(AA *a, double chi, int which_gamma, model_params *mod_params)
 	if (chi == DBL_MAX) return;
 
 	/* set the CB-G distance and CA-CB-G angle from the dictionary */
-	if (beta_gamma_dist(a->id,which_gamma,&r,&theta,mod_params->sidechain_properties) != 0) {
+	if (beta_gamma_dist(a->id,which_gamma,&r,&theta,mod_params->sidechain_properties.data()) != 0) {
 	   sprintf(error_string,"%s: could not calculate r and theta.",routine_name);
 	   stop(error_string);
 	}
@@ -687,9 +687,9 @@ void initialise_sidechain_dihedral_angles(AA *a, model_params *mod_params ) {
 			chi1 = dihedral_4(a->n,a->ca,a->cb,a->g);
 		} 
 		else { /* otherwise, use default most common value */
-	//chi1 = sidechain_dihedral(a->id,1, mod_params->sidechain_properties);
+	//chi1 = sidechain_dihedral(a->id,1, mod_params->sidechain_properties.data());
     /*Pick random starting side chain dihedral */
-      chi1 = sidechain_dihedral(a->id, mod_params->sidechain_properties);
+      chi1 = sidechain_dihedral(a->id, mod_params->sidechain_properties.data());
 		}
 		if (mod_params->use_3_states) adjust_to_closest_state(&chi1,a->id);
 		a->chi1 = chi1;
@@ -700,9 +700,9 @@ void initialise_sidechain_dihedral_angles(AA *a, model_params *mod_params ) {
 				chi2 = dihedral_4(a->n,a->ca,a->cb,a->g2);
 			} 
 			else { /* otherwise, use default most common value */
-				//chi2 = sidechain_dihedral(a->id,2, mod_params->sidechain_properties);
+				//chi2 = sidechain_dihedral(a->id,2, mod_params->sidechain_properties.data());
 				/* set chi2 based on chi1 */
-				chi2 = sidechain_dihedral2(a->id,chi1, mod_params->sidechain_properties);
+				chi2 = sidechain_dihedral2(a->id,chi1, mod_params->sidechain_properties.data());
 			}
 			if (mod_params->use_3_states) { /* avoid accidental clash */
 				if (a->id == 'V') {

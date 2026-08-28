@@ -731,10 +731,10 @@ static int crankshaft(Chain * chain, Chaint *chaint, Biasmap *biasmap, double am
 		    //fprintf(stderr," %g",chain->aa[i].chi1); //would fail for G,A
 		    //fprintf(stderr," %g\n",chain->aa[i].chi2); //would fail for all but V,I,T
 		    if(chain->aa[i].id != 'G' && chain->aa[i].id != 'A' && chain->aa[i].chi1 != DBL_MAX) {
-			chaint->aat[i].chi1 = sidechain_dihedral(chain->aa[i].id, sim_params->protein_model.sidechain_properties);//aa[i].chi1;
+			chaint->aat[i].chi1 = sidechain_dihedral(chain->aa[i].id, sim_params->protein_model.sidechain_properties.data());//aa[i].chi1;
 		    }
 		    if((chain->aa[i].id == 'V' || chain->aa[i].id == 'I' || chain->aa[i].id == 'T') && chain->aa[i].chi2 != DBL_MAX) {
-			chaint->aat[i].chi2 = sidechain_dihedral2(chain->aa[i].id,chaint->aat[i].chi1, sim_params->protein_model.sidechain_properties);//aa[i].chi2;
+			chaint->aat[i].chi2 = sidechain_dihedral2(chain->aa[i].id,chaint->aat[i].chi1, sim_params->protein_model.sidechain_properties.data());//aa[i].chi2;
 		    }
 		}
 	    } else {
@@ -1278,10 +1278,10 @@ static int crankshaftcyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, dou
 		    //fprintf(stderr," %g",chain->aa[i].chi1); //would fail for G,A
 		    //fprintf(stderr," %g\n",chain->aa[i].chi2); //would fail for all but V,I,T
 		    if(chain->aa[i].id != 'G' && chain->aa[i].id != 'A' && chain->aa[i].chi1 != DBL_MAX) {
-			chaint->aat[i].chi1 = sidechain_dihedral(chain->aa[i].id, sim_params->protein_model.sidechain_properties);//aa[i].chi1;
+			chaint->aat[i].chi1 = sidechain_dihedral(chain->aa[i].id, sim_params->protein_model.sidechain_properties.data());//aa[i].chi1;
 		    }
 		    if((chain->aa[i].id == 'V' || chain->aa[i].id == 'I' || chain->aa[i].id == 'T') && chain->aa[i].chi2 != DBL_MAX) {
-			chaint->aat[i].chi2 = sidechain_dihedral2(chain->aa[i].id,chaint->aat[i].chi1, sim_params->protein_model.sidechain_properties);//aa[i].chi2;
+			chaint->aat[i].chi2 = sidechain_dihedral2(chain->aa[i].id,chaint->aat[i].chi1, sim_params->protein_model.sidechain_properties.data());//aa[i].chi2;
 		    }
 		}
 	    } else {
@@ -1545,10 +1545,10 @@ static int crankshaft_adk(Chain * chain, Chaint *chaint, Biasmap *biasmap, doubl
 		    //fprintf(stderr," %g",chain->aa[i].chi1); //would fail for G,A
 		    //fprintf(stderr," %g\n",chain->aa[i].chi2); //would fail for all but V,I,T
 		    if(chain->aa[i].id != 'G' && chain->aa[i].id != 'A' && chain->aa[i].chi1 != DBL_MAX) {
-			chaint->aat[i].chi1 = sidechain_dihedral(chain->aa[i].id, sim_params->protein_model.sidechain_properties);//aa[i].chi1;
+			chaint->aat[i].chi1 = sidechain_dihedral(chain->aa[i].id, sim_params->protein_model.sidechain_properties.data());//aa[i].chi1;
 		    }
 		    if((chain->aa[i].id == 'V' || chain->aa[i].id == 'I' || chain->aa[i].id == 'T') && chain->aa[i].chi2 != DBL_MAX) {
-			chaint->aat[i].chi2 = sidechain_dihedral2(chain->aa[i].id,chaint->aat[i].chi1, sim_params->protein_model.sidechain_properties);//aa[i].chi2;
+			chaint->aat[i].chi2 = sidechain_dihedral2(chain->aa[i].id,chaint->aat[i].chi1, sim_params->protein_model.sidechain_properties.data());//aa[i].chi2;
 		    }
 		}
 	    } else {

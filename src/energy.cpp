@@ -889,12 +889,12 @@ double hydrophobic(Biasmap *biasmap, AA *a, AA *b, model_params *mod_params) {
 	/* calc hydrophobic contact radii */
 	double r_cb_a=0, r_g_a=0, r_g2_a=0;
 	double r_cb_b=0, r_g_b=0, r_g2_b=0;
-	if (a->etc & CB_) r_cb_a = hydrophobic_contact_radius(a->id, CB_, mod_params->sidechain_properties);
-	if (a->etc & G__) r_g_a  = hydrophobic_contact_radius(a->id, G__, mod_params->sidechain_properties);
-	if (a->etc & G2_) r_g2_a = hydrophobic_contact_radius(a->id, G2_, mod_params->sidechain_properties);
-	if (b->etc & CB_) r_cb_b = hydrophobic_contact_radius(b->id, CB_, mod_params->sidechain_properties);
-	if (b->etc & G__) r_g_b  = hydrophobic_contact_radius(b->id, G__, mod_params->sidechain_properties);
-	if (b->etc & G2_) r_g2_b = hydrophobic_contact_radius(b->id, G2_, mod_params->sidechain_properties);
+	if (a->etc & CB_) r_cb_a = hydrophobic_contact_radius(a->id, CB_, mod_params->sidechain_properties.data());
+	if (a->etc & G__) r_g_a  = hydrophobic_contact_radius(a->id, G__, mod_params->sidechain_properties.data());
+	if (a->etc & G2_) r_g2_a = hydrophobic_contact_radius(a->id, G2_, mod_params->sidechain_properties.data());
+	if (b->etc & CB_) r_cb_b = hydrophobic_contact_radius(b->id, CB_, mod_params->sidechain_properties.data());
+	if (b->etc & G__) r_g_b  = hydrophobic_contact_radius(b->id, G__, mod_params->sidechain_properties.data());
+	if (b->etc & G2_) r_g2_b = hydrophobic_contact_radius(b->id, G2_, mod_params->sidechain_properties.data());
 
 	double energy = 0;
 	if (mod_params->use_gamma_atoms != NO_GAMMA) {
@@ -955,32 +955,32 @@ double sidechain_hbond(Biasmap *biasmap, AA *a, AA *b, model_params *mod_params)
 	if ( ( abs(a->num - b->num) < mod_params->sidechain_hbond_min_separation ) && ( a->chainid == b->chainid ) ) return 0.0; 
 
 	/* side chain donor - backbone acceptor */
-	if (a->etc &G__ && b->etc &C__ && hbond_donor(a->id,G__, mod_params->sidechain_properties)) {
+	if (a->etc &G__ && b->etc &C__ && hbond_donor(a->id,G__, mod_params->sidechain_properties.data())) {
 	   // check G--C distance
 	   hbond_distance = sqrt(distance(a->g,b->c));
-	   if (hbond_distance < sidechain_hbond_donor_radius(a->id,mod_params->sidechain_properties) + BACKBONE_ACCEPTOR_RADIUS + mod_params->sidechain_hbond_decay_width) {
+	   if (hbond_distance < sidechain_hbond_donor_radius(a->id,mod_params->sidechain_properties.data()) + BACKBONE_ACCEPTOR_RADIUS + mod_params->sidechain_hbond_decay_width) {
 //fprintf(stderr,"%c%d %c%d G-C distance %g ,",a->id,a->num,b->id,b->num,hbond_distance);
 	      // check C--O--G angle
 	      cos_goc_angle = cosangle(a->g,b->o,b->c);
 //fprintf(stderr,"cos_goc_angle %g\n",cos_goc_angle);
 	      if (cos_goc_angle < mod_params->sidechain_hbond_angle_cutoff) {
-		 if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_donor_radius(a->id,mod_params->sidechain_properties) + BACKBONE_ACCEPTOR_RADIUS, mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
+		 if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_donor_radius(a->id,mod_params->sidechain_properties.data()) + BACKBONE_ACCEPTOR_RADIUS, mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
 //		      fprintf(stderr,"found hbond %c %d G__ >> %c %d C__ %g\n",a->id,a->num,b->id,b->num,distance(a->g,b->c));
 		    erg += -mod_params->sidechain_hbond_strength_s2b * intensity;
 		 }
 	      }
 	   }
 	}
-	if (b->etc &G__ && a->etc &C__ && hbond_donor(b->id,G__, mod_params->sidechain_properties)) {
+	if (b->etc &G__ && a->etc &C__ && hbond_donor(b->id,G__, mod_params->sidechain_properties.data())) {
 	   // check G--C distance
 	   hbond_distance = sqrt(distance(b->g,a->c));
-	   if (hbond_distance < sidechain_hbond_donor_radius(b->id,mod_params->sidechain_properties) + BACKBONE_ACCEPTOR_RADIUS + mod_params->sidechain_hbond_decay_width) {
+	   if (hbond_distance < sidechain_hbond_donor_radius(b->id,mod_params->sidechain_properties.data()) + BACKBONE_ACCEPTOR_RADIUS + mod_params->sidechain_hbond_decay_width) {
 //fprintf(stderr,"%c%d %c%d G-C distance %g ,",a->id,a->num,b->id,b->num,hbond_distance);
 	      // check C--O--G angle
 	      cos_goc_angle = cosangle(b->g,a->o,a->c);
 //fprintf(stderr,"cos_goc_angle %g\n",cos_goc_angle);
 	      if (cos_goc_angle < mod_params->sidechain_hbond_angle_cutoff) {
-		 if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_donor_radius(b->id,mod_params->sidechain_properties) + BACKBONE_ACCEPTOR_RADIUS, mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
+		 if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_donor_radius(b->id,mod_params->sidechain_properties.data()) + BACKBONE_ACCEPTOR_RADIUS, mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
 //		      fprintf(stderr,"found hbond %c %d G__ >> %c %d C__ %g\n",a->id,a->num,b->id,b->num,distance(a->g,b->c));
 		    erg += -mod_params->sidechain_hbond_strength_s2b * intensity;
 		 }
@@ -989,34 +989,34 @@ double sidechain_hbond(Biasmap *biasmap, AA *a, AA *b, model_params *mod_params)
 	}
 
 	/* side chain acceptor - backbone donor */
-	if (a->etc &G__ && b->etc &N__ && b->etc &H__ && hbond_acceptor(a->id,G__, mod_params->sidechain_properties)) {
+	if (a->etc &G__ && b->etc &N__ && b->etc &H__ && hbond_acceptor(a->id,G__, mod_params->sidechain_properties.data())) {
 	   // check G--N distance
 	   hbond_distance = sqrt(distance(a->g,b->n));
-//fprintf(stderr,"check %c %d %c %d G-N distance %g (%g) %g \n",a->id,a->num,b->id,b->num,hbond_distance,sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties) + BACKBONE_DONOR_RADIUS + sidechain_hbond_decay_width,sqrt(distance(a->g,b->h)));
-	   if (hbond_distance < sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties) + BACKBONE_DONOR_RADIUS + mod_params->sidechain_hbond_decay_width) {
-//fprintf(stderr,"found %c %d %c %d G-N distance %g (%g) %g \n",a->id,a->num,b->id,b->num,hbond_distance,sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties) + BACKBONE_DONOR_RADIUS + sidechain_hbond_decay_width,sqrt(distance(a->g,b->h)));
+//fprintf(stderr,"check %c %d %c %d G-N distance %g (%g) %g \n",a->id,a->num,b->id,b->num,hbond_distance,sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties.data()) + BACKBONE_DONOR_RADIUS + sidechain_hbond_decay_width,sqrt(distance(a->g,b->h)));
+	   if (hbond_distance < sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties.data()) + BACKBONE_DONOR_RADIUS + mod_params->sidechain_hbond_decay_width) {
+//fprintf(stderr,"found %c %d %c %d G-N distance %g (%g) %g \n",a->id,a->num,b->id,b->num,hbond_distance,sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties.data()) + BACKBONE_DONOR_RADIUS + sidechain_hbond_decay_width,sqrt(distance(a->g,b->h)));
 	      // check C--H--N angle
 	      cos_goc_angle = cosangle(a->g,b->h,b->n);
 //fprintf(stderr,"cos_ghn_angle %g\n",cos_goc_angle);
 	      if (cos_goc_angle < mod_params->sidechain_hbond_angle_cutoff) {
-		 if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties) + BACKBONE_DONOR_RADIUS, mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
+		 if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties.data()) + BACKBONE_DONOR_RADIUS, mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
 //		      fprintf(stderr,"found hbond %c %d G__ >> %c %d N__ %g\n",a->id,a->num,b->id,b->num,distance(a->g,b->n));
 		    erg += -mod_params->sidechain_hbond_strength_b2s * intensity;
 		 }
 	      }
 	   }
 	}
-	if (b->etc &G__ && a->etc &N__ && a->etc &H__ && hbond_acceptor(b->id,G__, mod_params->sidechain_properties)) {
+	if (b->etc &G__ && a->etc &N__ && a->etc &H__ && hbond_acceptor(b->id,G__, mod_params->sidechain_properties.data())) {
 	   // check G--N distance
 	   hbond_distance = sqrt(distance(b->g,a->n));
-//fprintf(stderr,"check %c %d %c %d G-N distance %g (%g) %g\n",b->id,b->num,a->id,a->num,hbond_distance,sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties) + BACKBONE_DONOR_RADIUS + sidechain_hbond_decay_width,sqrt(distance(b->g,a->h)));
-	   if (hbond_distance < sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties) + BACKBONE_DONOR_RADIUS + mod_params->sidechain_hbond_decay_width) {
-//fprintf(stderr,"found %c %d %c %d G-N distance %g (%g) %g\n",b->id,b->num,a->id,a->num,hbond_distance,sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties) + BACKBONE_DONOR_RADIUS + sidechain_hbond_decay_width,sqrt(distance(b->g,a->h)));
+//fprintf(stderr,"check %c %d %c %d G-N distance %g (%g) %g\n",b->id,b->num,a->id,a->num,hbond_distance,sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties.data()) + BACKBONE_DONOR_RADIUS + sidechain_hbond_decay_width,sqrt(distance(b->g,a->h)));
+	   if (hbond_distance < sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties.data()) + BACKBONE_DONOR_RADIUS + mod_params->sidechain_hbond_decay_width) {
+//fprintf(stderr,"found %c %d %c %d G-N distance %g (%g) %g\n",b->id,b->num,a->id,a->num,hbond_distance,sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties.data()) + BACKBONE_DONOR_RADIUS + sidechain_hbond_decay_width,sqrt(distance(b->g,a->h)));
 	      // check C--H--N angle
 	      cos_goc_angle = cosangle(b->g,a->h,a->n);
 //fprintf(stderr,"cos_ghn_angle %g\n",cos_goc_angle);
 	      if (cos_goc_angle < mod_params->sidechain_hbond_angle_cutoff) {
-		 if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties) + BACKBONE_DONOR_RADIUS, mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
+		 if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties.data()) + BACKBONE_DONOR_RADIUS, mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
 //		      fprintf(stderr,"found hbond %c %d G__ >> %c %d N__ %g\n",a->id,a->num,b->id,b->num,distance(a->g,b->n));
 		    erg += -mod_params->sidechain_hbond_strength_b2s * intensity;
 		 }
@@ -1026,10 +1026,10 @@ double sidechain_hbond(Biasmap *biasmap, AA *a, AA *b, model_params *mod_params)
 
 	/* side chain donor - side chain acceptor */
 	if (a->etc &G__ && b->etc &G__) {
-	   if (hbond_donor(a->id,G__, mod_params->sidechain_properties) && hbond_acceptor(b->id,G__, mod_params->sidechain_properties)) {
+	   if (hbond_donor(a->id,G__, mod_params->sidechain_properties.data()) && hbond_acceptor(b->id,G__, mod_params->sidechain_properties.data())) {
 	      // check G-G' distance
 	      hbond_distance = sqrt(distance(a->g,b->g));
-	      if (hbond_distance < sidechain_hbond_donor_radius(a->id,mod_params->sidechain_properties) + sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties) + mod_params->sidechain_hbond_decay_width) {
+	      if (hbond_distance < sidechain_hbond_donor_radius(a->id,mod_params->sidechain_properties.data()) + sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties.data()) + mod_params->sidechain_hbond_decay_width) {
 //fprintf(stderr,"%c%d %c%d G-G distance %g ,",a->id,a->num,b->id,b->num,hbond_distance);
 		 // check B-G,G'-B' angle
 		 vector x, z;
@@ -1037,17 +1037,17 @@ double sidechain_hbond(Biasmap *biasmap, AA *a, AA *b, model_params *mod_params)
 		 subtract(z, b->g, b->cb);
 //fprintf(stderr,"cos_gbbg = %g, gb.bg = %g\n",cosine(x,z),dotprod(x,z));
 //		 if (cosine(x,z)<mod_params->sidechain_hbond_angle_cutoff) { // && dotprod(x,z)<0) {
-		    if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_donor_radius(a->id,mod_params->sidechain_properties) + sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties), mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
+		    if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_donor_radius(a->id,mod_params->sidechain_properties.data()) + sidechain_hbond_acceptor_radius(b->id,mod_params->sidechain_properties.data()), mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
 //	         fprintf(stderr,"found hbond %c %d G__ >> %c %d G__ %g\n",a->id,a->num,b->id,b->num,distance(a->g,b->g));
 		       erg += -mod_params->sidechain_hbond_strength_s2s * intensity;
 		    }
 //		 }
 	      }
 	   }
-	   if (hbond_donor(b->id,G__, mod_params->sidechain_properties) && hbond_acceptor(a->id,G__, mod_params->sidechain_properties)) {
+	   if (hbond_donor(b->id,G__, mod_params->sidechain_properties.data()) && hbond_acceptor(a->id,G__, mod_params->sidechain_properties.data())) {
 	      // check G-G' distance
 	      hbond_distance = sqrt(distance(a->g,b->g));
-	      if (hbond_distance < sidechain_hbond_donor_radius(b->id,mod_params->sidechain_properties) + sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties) + mod_params->sidechain_hbond_decay_width) {
+	      if (hbond_distance < sidechain_hbond_donor_radius(b->id,mod_params->sidechain_properties.data()) + sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties.data()) + mod_params->sidechain_hbond_decay_width) {
 //fprintf(stderr,"%c%d %c%d G-G distance %g ,",a->id,a->num,b->id,b->num,hbond_distance);
 		 // check B-G,G'-B' angle
 		 vector x, z;
@@ -1055,7 +1055,7 @@ double sidechain_hbond(Biasmap *biasmap, AA *a, AA *b, model_params *mod_params)
 		 subtract(z, b->g, b->cb);
 //fprintf(stderr,"cos_gbbg = %g, gb.bg = %g\n",cosine(x,z),dotprod(x,z));
 //		 if (cosine(x,z)<mod_params->sidechain_hbond_angle_cutoff) { // && dotprod(x,z)<0) {
-		    if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_donor_radius(b->id,mod_params->sidechain_properties) + sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties), mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
+		    if ( (intensity = linear_decay(hbond_distance, sidechain_hbond_donor_radius(b->id,mod_params->sidechain_properties.data()) + sidechain_hbond_acceptor_radius(a->id,mod_params->sidechain_properties.data()), mod_params->sidechain_hbond_decay_width )) > 0.0 ) {
 //	         fprintf(stderr,"found hbond %c %d G__ >> %c %d G__ %g\n",a->id,a->num,b->id,b->num,distance(a->g,b->g));
 		       erg += -mod_params->sidechain_hbond_strength_s2s * intensity;
 		    }
@@ -1092,8 +1092,8 @@ double electrostatic(Biasmap*biasmap, AA *a, AA *b, model_params *mod_params) {
 
 	   /* ignore if either is not charged */
 	   if ( a->etc & ELECTROSTATIC && b->etc & ELECTROSTATIC ) {
-	      q1 = charge(a->id, mod_params->sidechain_properties);
-	      q2 = charge(b->id, mod_params->sidechain_properties);
+	      q1 = charge(a->id, mod_params->sidechain_properties.data());
+	      q2 = charge(b->id, mod_params->sidechain_properties.data());
 	   } else {
 	      return 0.0;
 	   }

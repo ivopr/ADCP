@@ -139,20 +139,20 @@ double clash(AA *a, model_params *mod_params)
 
 	if (mod_params->use_gamma_atoms != NO_GAMMA) {
 		if (a->etc & G__) {
-		   if ((rg = sidechain_vdw_radius(a->id,1,mod_params->sidechain_properties)) < 0.0) {
+		   if ((rg = sidechain_vdw_radius(a->id,1,mod_params->sidechain_properties.data())) < 0.0) {
 		      fprintf(stderr,"Negative vdw radius for amino acid %c\n",a->id);
 		      //exit(EXIT_FAILURE);
 		   } else {
 		      /* G__ -- O__ */
 		      if (a->etc & O__ && mod_params->ro > 0.0) {
-			depth = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties)*mod_params->vdw_depth_o_sqrt;
+			depth = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties.data())*mod_params->vdw_depth_o_sqrt;
 			erg_tmp = vdw_fn(a->g, a->o, rg + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 //			if (erg_tmp > 5.) fprintf(stderr,"Clash within residue %d G__-O__.\n",a->num);
 			erg += erg_tmp;
 		      }
 //		      /* G__ -- C__ */
 //		      if (a->etc & C__ && mod_params->rc > 0.0) {
-//			depth = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties)*mod_params->vdw_depth_c_sqrt;
+//			depth = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties.data())*mod_params->vdw_depth_c_sqrt;
 //			erg_tmp = vdw_fn(a->g, a->c, rg + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 //			if (erg_tmp > 5.) fprintf(stderr,"Clash within residue %d G__-C__.\n",a->num);
 //			erg += erg_tmp;
@@ -160,20 +160,20 @@ double clash(AA *a, model_params *mod_params)
 		   }
 		}
 		if (a->etc & G2_) { /* I, V, T */
-		   if ((rg = sidechain_vdw_radius(a->id,2,mod_params->sidechain_properties)) < 0.0) {
+		   if ((rg = sidechain_vdw_radius(a->id,2,mod_params->sidechain_properties.data())) < 0.0) {
 		      fprintf(stderr,"Negative vdw radius for amino acid %c\n",a->id);
 		      //exit(EXIT_FAILURE);
 		   } else {
 		      /* G2_ -- O__ */
 		      if (a->etc & O__ && mod_params->ro > 0.0) {
-			depth = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties)*mod_params->vdw_depth_o_sqrt;
+			depth = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties.data())*mod_params->vdw_depth_o_sqrt;
 			erg_tmp = vdw_fn(a->g2, a->o, rg + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 //			if (erg_tmp > 5.) fprintf(stderr,"Clash within residue %d G2_-O__.\n",a->num);
 			erg += erg_tmp;
 		      }
 //		      /* G2_ -- C__ */
 //		      if (a->etc & C__ && mod_params->rc > 0.0) {
-//			depth = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties)*mod_params->vdw_depth_c_sqrt;
+//			depth = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties.data())*mod_params->vdw_depth_c_sqrt;
 //			erg_tmp = vdw_fn(a->g2, a->c, rg + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 //			if (erg_tmp > 5.) fprintf(stderr,"Clash within residue %d G2_-C__.\n",a->num);
 //			erg += erg_tmp;
@@ -230,20 +230,20 @@ double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
 	/* collect G__ and G2_ vdW parameters */
 	if (mod_params->use_gamma_atoms != NO_GAMMA) {
 		if (a->etc & G__) {
-		   if ((rg_a = sidechain_vdw_radius(a->id,1,mod_params->sidechain_properties)) > 0.0)
-		   eps_g_a_sqrt = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties);
+		   if ((rg_a = sidechain_vdw_radius(a->id,1,mod_params->sidechain_properties.data())) > 0.0)
+		   eps_g_a_sqrt = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties.data());
 		}
 		if (a->etc & G2_) {
-		   if ((rg2_a = sidechain_vdw_radius(a->id,2,mod_params->sidechain_properties)) > 0.0)
-		   eps_g2_a_sqrt = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties);
+		   if ((rg2_a = sidechain_vdw_radius(a->id,2,mod_params->sidechain_properties.data())) > 0.0)
+		   eps_g2_a_sqrt = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties.data());
 		}
 		if (b->etc & G__) {
-		   if ((rg_b = sidechain_vdw_radius(b->id,1,mod_params->sidechain_properties)) > 0.0)
-		   eps_g_b_sqrt = sidechain_vdw_depth_sqrt(b->id,1,mod_params->sidechain_properties);
+		   if ((rg_b = sidechain_vdw_radius(b->id,1,mod_params->sidechain_properties.data())) > 0.0)
+		   eps_g_b_sqrt = sidechain_vdw_depth_sqrt(b->id,1,mod_params->sidechain_properties.data());
 		}
 		if (b->etc & G2_) {
-		   if ((rg2_b = sidechain_vdw_radius(b->id,2,mod_params->sidechain_properties)) > 0.0)
-		   eps_g2_b_sqrt = sidechain_vdw_depth_sqrt(b->id,2,mod_params->sidechain_properties);
+		   if ((rg2_b = sidechain_vdw_radius(b->id,2,mod_params->sidechain_properties.data())) > 0.0)
+		   eps_g2_b_sqrt = sidechain_vdw_depth_sqrt(b->id,2,mod_params->sidechain_properties.data());
 		}
 	}
 
@@ -467,16 +467,16 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
 			return erg;
         
 			if (a->etc & G__) {
-			   if ((rg_a = sidechain_vdw_radius(a->id,1,mod_params->sidechain_properties)) > 0.0);
+			   if ((rg_a = sidechain_vdw_radius(a->id,1,mod_params->sidechain_properties.data())) > 0.0);
 			}
 			if (a->etc & G2_) {
-			   if ((rg2_a = sidechain_vdw_radius(a->id,2,mod_params->sidechain_properties)) > 0.0);
+			   if ((rg2_a = sidechain_vdw_radius(a->id,2,mod_params->sidechain_properties.data())) > 0.0);
 			}
 			if (b->etc & G__) {
-			   if ((rg_b = sidechain_vdw_radius(b->id,1,mod_params->sidechain_properties)) > 0.0);
+			   if ((rg_b = sidechain_vdw_radius(b->id,1,mod_params->sidechain_properties.data())) > 0.0);
 			}
 			if (b->etc & G2_) {
-			   if ((rg2_b = sidechain_vdw_radius(b->id,2,mod_params->sidechain_properties)) > 0.0);
+			   if ((rg2_b = sidechain_vdw_radius(b->id,2,mod_params->sidechain_properties.data())) > 0.0);
 			}
 			
 
@@ -768,20 +768,20 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
 			return erg;
         
 			if (a->etc & G__) {
-			   if ((rg_a = sidechain_vdw_radius(a->id,1,mod_params->sidechain_properties)) > 0.0)
-			   eps_g_a_sqrt = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties);
+			   if ((rg_a = sidechain_vdw_radius(a->id,1,mod_params->sidechain_properties.data())) > 0.0)
+			   eps_g_a_sqrt = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties.data());
 			}
 			if (a->etc & G2_) {
-			   if ((rg2_a = sidechain_vdw_radius(a->id,2,mod_params->sidechain_properties)) > 0.0)
-			   eps_g2_a_sqrt = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties);
+			   if ((rg2_a = sidechain_vdw_radius(a->id,2,mod_params->sidechain_properties.data())) > 0.0)
+			   eps_g2_a_sqrt = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties.data());
 			}
 			if (b->etc & G__) {
-			   if ((rg_b = sidechain_vdw_radius(b->id,1,mod_params->sidechain_properties)) > 0.0)
-			   eps_g_b_sqrt = sidechain_vdw_depth_sqrt(b->id,1,mod_params->sidechain_properties);
+			   if ((rg_b = sidechain_vdw_radius(b->id,1,mod_params->sidechain_properties.data())) > 0.0)
+			   eps_g_b_sqrt = sidechain_vdw_depth_sqrt(b->id,1,mod_params->sidechain_properties.data());
 			}
 			if (b->etc & G2_) {
-			   if ((rg2_b = sidechain_vdw_radius(b->id,2,mod_params->sidechain_properties)) > 0.0)
-			   eps_g2_b_sqrt = sidechain_vdw_depth_sqrt(b->id,2,mod_params->sidechain_properties);
+			   if ((rg2_b = sidechain_vdw_radius(b->id,2,mod_params->sidechain_properties.data())) > 0.0)
+			   eps_g2_b_sqrt = sidechain_vdw_depth_sqrt(b->id,2,mod_params->sidechain_properties.data());
 			}
 			
 
@@ -1160,28 +1160,28 @@ double vdw_gamma_gamma(AA *a, AA *b, model_params *mod_params){
   double ans = mod_params->vdw_backbone_cutoff;
 
   if( a->etc & G2_ && b->etc & G2_){
-	double temp = vdw_low_level(a->ca,b->ca,a->g2,b->g2,sidechain_vdw_radius(a->id,2, mod_params->sidechain_properties),sidechain_vdw_radius(b->id,2, mod_params->sidechain_properties));  
+	double temp = vdw_low_level(a->ca,b->ca,a->g2,b->g2,sidechain_vdw_radius(a->id,2, mod_params->sidechain_properties.data()),sidechain_vdw_radius(b->id,2, mod_params->sidechain_properties.data()));  
 	//fprintf(stderr,"%c %d G2_ - %c %d G2_ is %f.\n",a->id,a->num,b->id,b->num,temp);
     if(temp > ans) {
 	ans = temp;
     }
   }
   if( a->etc & G__ && b->etc & G2_){
-	double temp = vdw_low_level(a->ca,b->ca,a->g,b->g2,sidechain_vdw_radius(a->id,1, mod_params->sidechain_properties),sidechain_vdw_radius(b->id,2, mod_params->sidechain_properties));  
+	double temp = vdw_low_level(a->ca,b->ca,a->g,b->g2,sidechain_vdw_radius(a->id,1, mod_params->sidechain_properties.data()),sidechain_vdw_radius(b->id,2, mod_params->sidechain_properties.data()));  
     if(temp > ans) {
 	ans = temp;
 	//fprintf(stderr,"%c %d G__ - %c %d G2_ is %f.\n",a->id,a->num,b->id,b->num,temp);
     }
   }
   if( a->etc & G2_ && b->etc & G__){
-	double temp = vdw_low_level(a->ca,b->ca,a->g2,b->g,sidechain_vdw_radius(a->id,2, mod_params->sidechain_properties),sidechain_vdw_radius(b->id,1, mod_params->sidechain_properties));  
+	double temp = vdw_low_level(a->ca,b->ca,a->g2,b->g,sidechain_vdw_radius(a->id,2, mod_params->sidechain_properties.data()),sidechain_vdw_radius(b->id,1, mod_params->sidechain_properties.data()));  
     if(temp > ans) {
 	ans = temp;
 	//fprintf(stderr,"%c %d G2_ - %c %d G__ is %f.\n",a->id,a->num,b->id,b->num,temp);
     }
   }
   if( a->etc & G__ && b->etc & G__){
-	double temp = vdw_low_level(a->ca,b->ca,a->g,b->g,sidechain_vdw_radius(a->id,1, mod_params->sidechain_properties),sidechain_vdw_radius(b->id,1, mod_params->sidechain_properties));  
+	double temp = vdw_low_level(a->ca,b->ca,a->g,b->g,sidechain_vdw_radius(a->id,1, mod_params->sidechain_properties.data()),sidechain_vdw_radius(b->id,1, mod_params->sidechain_properties.data()));  
     if(temp > ans) {
 	ans = temp;
 	//fprintf(stderr,"%c %d G__ - %c %d G__ is %f.\n",a->id,a->num,b->id,b->num,temp);
@@ -1198,19 +1198,19 @@ double vdw_gamma_nongamma( AA *a,  AA *b, model_params *mod_params){
   double ans = mod_params->vdw_backbone_cutoff;
 
   if( a->etc & G2_){
-	double temp = vdw_low_level(a->ca,b->ca,a->g2,b->o,sidechain_vdw_radius(a->id,2, mod_params->sidechain_properties),mod_params->ro);  
+	double temp = vdw_low_level(a->ca,b->ca,a->g2,b->o,sidechain_vdw_radius(a->id,2, mod_params->sidechain_properties.data()),mod_params->ro);  
     if(temp > ans) ans = temp;
   }
   if( a->etc & G__ ){
-	double temp = vdw_low_level(a->ca,b->ca,a->g,b->o,sidechain_vdw_radius(a->id,1, mod_params->sidechain_properties),mod_params->ro);  
+	double temp = vdw_low_level(a->ca,b->ca,a->g,b->o,sidechain_vdw_radius(a->id,1, mod_params->sidechain_properties.data()),mod_params->ro);  
     if(temp > ans) ans = temp;
   }
   if( b->etc & G2_){
-	double temp = vdw_low_level(a->ca,b->ca,a->o,b->g2,mod_params->ro,sidechain_vdw_radius(b->id,2, mod_params->sidechain_properties));  
+	double temp = vdw_low_level(a->ca,b->ca,a->o,b->g2,mod_params->ro,sidechain_vdw_radius(b->id,2, mod_params->sidechain_properties.data()));  
     if(temp > ans) ans = temp;
   }
   if(b->etc & G__){
-	double temp = vdw_low_level(a->ca,b->ca,a->o,b->g,mod_params->ro,sidechain_vdw_radius(b->id,1, mod_params->sidechain_properties));  
+	double temp = vdw_low_level(a->ca,b->ca,a->o,b->g,mod_params->ro,sidechain_vdw_radius(b->id,1, mod_params->sidechain_properties.data()));  
     if(temp > ans) ans = temp;
   }
   return ans;	
@@ -1225,9 +1225,9 @@ void vdw_maxgamma_calc(Chain *chain, model_params *mod_params, FILE *outfile, in
 
 	if (mod_params->use_gamma_atoms == NO_GAMMA) return;
 
-	/* Reallocate memory to store the contact cutoff matrices */
-	mod_params->vdw_gamma_gamma_cutoff = (double *)realloc(mod_params->vdw_gamma_gamma_cutoff, 702 * sizeof(double));
-	mod_params->vdw_gamma_nongamma_cutoff = (double *)realloc(mod_params->vdw_gamma_nongamma_cutoff, 702 * sizeof(double));
+	/* Resize storage for the contact cutoff matrices */
+	mod_params->vdw_gamma_gamma_cutoff.resize(702);
+	mod_params->vdw_gamma_nongamma_cutoff.resize(702);
 
 	/* Quick check of side chains */
 	for (int i=1; i<chain->NAA; i++) {

@@ -160,8 +160,8 @@ typedef struct {
   double vdw_Eshift_n_o;
   double vdw_Eshift_o_o;
   double vdw_backbone_cutoff; //the CA_ - CA_ distance cutoff for the backbone atoms up to CB
-  double *vdw_gamma_gamma_cutoff; //the CA_ - CA_ distance cutoff for gamma - gamma vdW interactions 
-  double *vdw_gamma_nongamma_cutoff; //the CA_ - CA_ distance cutoff for gamma - nongamma vdW interactions
+  std::vector<double> vdw_gamma_gamma_cutoff; //the CA_ - CA_ distance cutoff for gamma - gamma vdW interactions
+  std::vector<double> vdw_gamma_nongamma_cutoff; //the CA_ - CA_ distance cutoff for gamma - nongamma vdW interactions
   int vdw_use_extended_cutoff; //whether we should use an extended vdW cutoff, and its value
   double vdw_extended_cutoff; //the value of the extended vdW cutoff (default: 500 for models including gamma atoms, and 100 if gamma atoms are not used)
   int vdw_potential; //the potential form of the vdW interactions
@@ -258,7 +258,7 @@ typedef struct {
   double external_ztip2; /* for conincal potential */
   std::string external_constrained_aalist_file2;
   /* sidechain properties */
-  sidechain_properties_ *sidechain_properties;
+  std::vector<sidechain_properties_> sidechain_properties;
 
 } model_params;
 

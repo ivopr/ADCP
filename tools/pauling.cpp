@@ -265,7 +265,7 @@ int main(int argc, char *argv[])
 			}
 		case 5:
 			if(use_gamma_atoms != NO_GAMMA){
-			  chi = randchi(id,sim_params.protein_model.sidechain_properties);
+			  chi = randchi(id,sim_params.protein_model.sidechain_properties.data());
 			}
 			else{
 			  chi = NaN;
@@ -273,7 +273,7 @@ int main(int argc, char *argv[])
 		case 6:
 			if(use_gamma_atoms != NO_GAMMA){
 			  if(id == 'V' || id == 'T' || id == 'I'){
-			    chi2 = sidechain_dihedral2(id,chi, sim_params.protein_model.sidechain_properties);
+			    chi2 = sidechain_dihedral2(id,chi, sim_params.protein_model.sidechain_properties.data());
 			  }
 			  else chi2 = NaN;  
 			}

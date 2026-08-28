@@ -427,31 +427,31 @@ void output_hphobesin(Chain * chain, model_params *protein_model,char *filename,
     for(i = 1; i < chain->NAA; i++){
       if(chain->aa[i].etc & HYDROPHOBIC){
         int which_atoms_i[3] = {0,0,0};
-        if ((chain->aa[i].etc & CB_) &&  hydrophobic_contact_radius(chain->aa[i].id, CB_, protein_model->sidechain_properties) > 0 ){
+        if ((chain->aa[i].etc & CB_) &&  hydrophobic_contact_radius(chain->aa[i].id, CB_, protein_model->sidechain_properties.data()) > 0 ){
           which_atoms_i[0] = chain->flex_data->oxy_index[i]+2;
         }
-        if ((chain->aa[i].etc & G__) &&  hydrophobic_contact_radius(chain->aa[i].id, G__, protein_model->sidechain_properties) > 0 ){
+        if ((chain->aa[i].etc & G__) &&  hydrophobic_contact_radius(chain->aa[i].id, G__, protein_model->sidechain_properties.data()) > 0 ){
           which_atoms_i[1] = chain->flex_data->oxy_index[i]+4;
         }
-        if ((chain->aa[i].etc & G2_) &&  hydrophobic_contact_radius(chain->aa[i].id, G2_, protein_model->sidechain_properties) > 0 ){
+        if ((chain->aa[i].etc & G2_) &&  hydrophobic_contact_radius(chain->aa[i].id, G2_, protein_model->sidechain_properties.data()) > 0 ){
           which_atoms_i[2] = chain->flex_data->oxy_index[i]+5;
         }
 
         for(j = i+protein_model->hydrophobic_min_separation; j < chain->NAA; j++){
           if(chain->aa[j].etc & HYDROPHOBIC){
-            if ((chain->aa[j].etc & CB_) &&  hydrophobic_contact_radius(chain->aa[j].id, CB_, protein_model->sidechain_properties) > 0 ){
+            if ((chain->aa[j].etc & CB_) &&  hydrophobic_contact_radius(chain->aa[j].id, CB_, protein_model->sidechain_properties.data()) > 0 ){
               if(which_atoms_i[0] != 0 && distance(chain->aa[i].cb,chain->aa[j].cb) < hphobe_distance_squared){number_hphobes++; fprintf(fptr,"%d %d 5\n",which_atoms_i[0],chain->flex_data->oxy_index[j]+2);}
               if(which_atoms_i[1] != 0 && distance(chain->aa[i].g,chain->aa[j].cb) < hphobe_distance_squared){number_hphobes++; fprintf(fptr,"%d %d 5\n",which_atoms_i[1],chain->flex_data->oxy_index[j]+2);}
               if(which_atoms_i[2] != 0 && distance(chain->aa[i].g2,chain->aa[j].cb) < hphobe_distance_squared){number_hphobes++; fprintf(fptr,"%d %d 5\n",which_atoms_i[2],chain->flex_data->oxy_index[j]+2);}
 
             }
-            if ((chain->aa[j].etc & G__) &&  hydrophobic_contact_radius(chain->aa[j].id, G__, protein_model->sidechain_properties) > 0 ){
+            if ((chain->aa[j].etc & G__) &&  hydrophobic_contact_radius(chain->aa[j].id, G__, protein_model->sidechain_properties.data()) > 0 ){
               if(which_atoms_i[0] != 0 && distance(chain->aa[i].cb,chain->aa[j].g) < hphobe_distance_squared){number_hphobes++; fprintf(fptr,"%d %d 5\n",which_atoms_i[0],chain->flex_data->oxy_index[j]+4);}
               if(which_atoms_i[1] != 0 && distance(chain->aa[i].g,chain->aa[j].g) < hphobe_distance_squared){number_hphobes++; fprintf(fptr,"%d %d 5\n",which_atoms_i[1],chain->flex_data->oxy_index[j]+4);}
               if(which_atoms_i[2] != 0 && distance(chain->aa[i].g2,chain->aa[j].g) < hphobe_distance_squared){number_hphobes++; fprintf(fptr,"%d %d 5\n",which_atoms_i[2],chain->flex_data->oxy_index[j]+4);}
 
             }
-            if ((chain->aa[j].etc & G2_) &&  hydrophobic_contact_radius(chain->aa[j].id, G2_, protein_model->sidechain_properties) > 0 ){
+            if ((chain->aa[j].etc & G2_) &&  hydrophobic_contact_radius(chain->aa[j].id, G2_, protein_model->sidechain_properties.data()) > 0 ){
               if(which_atoms_i[0] != 0 && distance(chain->aa[i].cb,chain->aa[j].g2) < hphobe_distance_squared){number_hphobes++; fprintf(fptr,"%d %d 5\n",which_atoms_i[0],chain->flex_data->oxy_index[j]+5);}
               if(which_atoms_i[1] != 0 && distance(chain->aa[i].g,chain->aa[j].g2) < hphobe_distance_squared){number_hphobes++; fprintf(fptr,"%d %d 5\n",which_atoms_i[1],chain->flex_data->oxy_index[j]+5);}
               if(which_atoms_i[2] != 0 && distance(chain->aa[i].g2,chain->aa[j].g2) < hphobe_distance_squared){number_hphobes++; fprintf(fptr,"%d %d 5\n",which_atoms_i[2],chain->flex_data->oxy_index[j]+5);}

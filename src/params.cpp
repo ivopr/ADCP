@@ -214,8 +214,8 @@ void model_param_initialise(model_params *self) {
 
   /* The vdW cutoff distances have to be calculated later, because
      the cutoff calculating routine depends on vdw.c */
-  self->vdw_gamma_gamma_cutoff = NULL;
-  self->vdw_gamma_nongamma_cutoff = NULL;
+  self->vdw_gamma_gamma_cutoff.clear();
+  self->vdw_gamma_nongamma_cutoff.clear();
   self->vdw_backbone_cutoff = 500;
   self->vdw_use_extended_cutoff = 0;
   self->vdw_extended_cutoff = DEFAULT_EXTENDED_VDW_CUTOFF_GAMMA;
@@ -321,7 +321,7 @@ void model_param_initialise(model_params *self) {
   //CAUTION!: aadict.c depends on params.c's model_params.  This means that
   //    initialize_sidechain_properties will have to be called after all updates
   //    of the vdW parameters; it can't be called from here, due to circular dependencies.
-  self->sidechain_properties = (sidechain_properties_*)calloc( 31, sizeof(sidechain_properties_) );
+  self->sidechain_properties.assign(31, sidechain_properties_());
   /* vdw parameters might have changed */
   //initialize_sidechain_properties(self);
 
@@ -352,8 +352,8 @@ void model_param_finalise(model_params *self) {
   self->vdw_depth_s = 0.;
   self->vdw_depth_ring = 0.;
   vdw_param_zero(self);
-  if (self->vdw_gamma_gamma_cutoff) free(self->vdw_gamma_gamma_cutoff);
-  if (self->vdw_gamma_nongamma_cutoff) free(self->vdw_gamma_nongamma_cutoff);
+  self->vdw_gamma_gamma_cutoff.clear();
+  self->vdw_gamma_nongamma_cutoff.clear();
   self->vdw_backbone_cutoff = 0;
   self->vdw_use_extended_cutoff = 0;
   self->vdw_extended_cutoff = 0;
@@ -445,7 +445,7 @@ void model_param_finalise(model_params *self) {
   self->external_ztip2 = 0.0;
   self->external_constrained_aalist_file2.clear();
 
-  if (self->sidechain_properties) free(self->sidechain_properties);
+  self->sidechain_properties.clear();
 }
 
 
@@ -708,30 +708,8 @@ void model_params_copy(model_params *to, model_params *from) {
   *to = *from;
   /* contact_map_file, fixed_aalist_file, external_constrained_aalist_file(2)
      are std::string, already deep-copied by "*to = *from" above. */
-  /* sidechain_properties */
-  sidechain_properties_ *temp;
-  temp = (sidechain_properties_*)malloc(sizeof(sidechain_properties_) * 31);
-  if (!temp) stop("Unable to allocate temp memory in model_params_copy.");
-  to->sidechain_properties = temp;
-  memcpy(to->sidechain_properties, from->sidechain_properties,
-	31 * sizeof(sidechain_properties_));
-  /* vdw cutoff matrices */
-  if (from->vdw_gamma_gamma_cutoff) {
-    double *temp1;
-    temp1 = (double*)malloc(sizeof(double) * 702);
-    if (!temp1) stop("Unable to allocate temp1 memory in model_params_copy.");
-    to->vdw_gamma_gamma_cutoff = temp1;
-    memcpy(to->vdw_gamma_gamma_cutoff, from->vdw_gamma_gamma_cutoff,
-	702 * sizeof(double));
-  }
-  if (from->vdw_gamma_nongamma_cutoff) {
-    double *temp2;
-    temp2 = (double*)malloc(sizeof(double) * 702);
-    if (!temp2) stop("Unable to allocate temp1 memory in model_params_copy.");
-    to->vdw_gamma_nongamma_cutoff = temp2;
-    memcpy(to->vdw_gamma_nongamma_cutoff, from->vdw_gamma_nongamma_cutoff,
-	702 * sizeof(double));
-  }
+  /* sidechain_properties, vdw_gamma_gamma_cutoff, vdw_gamma_nongamma_cutoff are std::vector,
+     already deep-copied by "*to = *from" above. */
 }
 
 
@@ -1434,11 +1412,11 @@ void print_vdw_cutoff_distances(model_params *mod_params, FILE *outfile) {
 	    return;
 	}
 
-	if (mod_params->vdw_gamma_gamma_cutoff == NULL) {
+	if (mod_params->vdw_gamma_gamma_cutoff.empty()) {
 	    fprintf(outfile,"vdW gamma - gamma cutoff was not allocated.\n");
 	    return;
 	}
-	if (mod_params->vdw_gamma_nongamma_cutoff == NULL) {
+	if (mod_params->vdw_gamma_nongamma_cutoff.empty()) {
 	    fprintf(outfile,"vdW gamma - gamma cutoff was not allocated.\n");
 	    return;
 	}

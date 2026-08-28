@@ -1136,28 +1136,28 @@ void hydrophobic_distances(Chain *chain,Biasmap *biasmap, simulation_params *sim
 	char label1;
 	char label2;
 
-//	fprintf(sim_params->outfile,"%c %x\n",'A',hydrophobic_atoms_list('A',sim_params->protein_model.sidechain_properties));     //  CB_,             
-//	fprintf(sim_params->outfile,"%c %x\n",'B',hydrophobic_atoms_list('B',sim_params->protein_model.sidechain_properties));     //  G__,             
-//	fprintf(sim_params->outfile,"%c %x\n",'C',hydrophobic_atoms_list('C',sim_params->protein_model.sidechain_properties));     //  CB_ & G__,       
-//	fprintf(sim_params->outfile,"%c %x\n",'D',hydrophobic_atoms_list('D',sim_params->protein_model.sidechain_properties));     //  G__,             
-//	fprintf(sim_params->outfile,"%c %x\n",'E',hydrophobic_atoms_list('E',sim_params->protein_model.sidechain_properties));     //  G__,                                
-//	fprintf(sim_params->outfile,"%c %x\n",'F',hydrophobic_atoms_list('F',sim_params->protein_model.sidechain_properties));     //  CB_ & G__,       
-//	fprintf(sim_params->outfile,"%c %x\n",'G',hydrophobic_atoms_list('G',sim_params->protein_model.sidechain_properties));     //  0x0,             
-//	fprintf(sim_params->outfile,"%c %x\n",'H',hydrophobic_atoms_list('H',sim_params->protein_model.sidechain_properties));     //  G__,             
-//	fprintf(sim_params->outfile,"%c %x\n",'I',hydrophobic_atoms_list('I',sim_params->protein_model.sidechain_properties));     //  CB_ & G__ & G2_, 
-//	fprintf(sim_params->outfile,"%c %x\n",'K',hydrophobic_atoms_list('K',sim_params->protein_model.sidechain_properties));     //  G__,             
-//	fprintf(sim_params->outfile,"%c %x\n",'L',hydrophobic_atoms_list('L',sim_params->protein_model.sidechain_properties));     //  CB_ & G__,       
-//	fprintf(sim_params->outfile,"%c %x\n",'M',hydrophobic_atoms_list('M',sim_params->protein_model.sidechain_properties));     //  CB_ & G__,       
-//	fprintf(sim_params->outfile,"%c %x\n",'N',hydrophobic_atoms_list('N',sim_params->protein_model.sidechain_properties));     //  G__,             
-//	fprintf(sim_params->outfile,"%c %x\n",'P',hydrophobic_atoms_list('P',sim_params->protein_model.sidechain_properties));     //  G__,             
-//	fprintf(sim_params->outfile,"%c %x\n",'Q',hydrophobic_atoms_list('Q',sim_params->protein_model.sidechain_properties));     //  G__,             
-//	fprintf(sim_params->outfile,"%c %x\n",'R',hydrophobic_atoms_list('R',sim_params->protein_model.sidechain_properties));     //  G__,             
-//	fprintf(sim_params->outfile,"%c %x\n",'S',hydrophobic_atoms_list('S',sim_params->protein_model.sidechain_properties));     //  G__,             
-//	fprintf(sim_params->outfile,"%c %x\n",'T',hydrophobic_atoms_list('T',sim_params->protein_model.sidechain_properties));     //  G2_,
-//	fprintf(sim_params->outfile,"%c %x\n",'V',hydrophobic_atoms_list('V',sim_params->protein_model.sidechain_properties));     //  CB_ & G__ & G2_, 
-//	fprintf(sim_params->outfile,"%c %x\n",'W',hydrophobic_atoms_list('W',sim_params->protein_model.sidechain_properties));     //  CB_ & G__,       
-//	fprintf(sim_params->outfile,"%c %x\n",'Y',hydrophobic_atoms_list('Y',sim_params->protein_model.sidechain_properties));     //  CB_ & G__,       
-//	fprintf(sim_params->outfile,"%c %x\n",'Z',hydrophobic_atoms_list('Z',sim_params->protein_model.sidechain_properties));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'A',hydrophobic_atoms_list('A',sim_params->protein_model.sidechain_properties.data()));     //  CB_,             
+//	fprintf(sim_params->outfile,"%c %x\n",'B',hydrophobic_atoms_list('B',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'C',hydrophobic_atoms_list('C',sim_params->protein_model.sidechain_properties.data()));     //  CB_ & G__,       
+//	fprintf(sim_params->outfile,"%c %x\n",'D',hydrophobic_atoms_list('D',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'E',hydrophobic_atoms_list('E',sim_params->protein_model.sidechain_properties.data()));     //  G__,                                
+//	fprintf(sim_params->outfile,"%c %x\n",'F',hydrophobic_atoms_list('F',sim_params->protein_model.sidechain_properties.data()));     //  CB_ & G__,       
+//	fprintf(sim_params->outfile,"%c %x\n",'G',hydrophobic_atoms_list('G',sim_params->protein_model.sidechain_properties.data()));     //  0x0,             
+//	fprintf(sim_params->outfile,"%c %x\n",'H',hydrophobic_atoms_list('H',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'I',hydrophobic_atoms_list('I',sim_params->protein_model.sidechain_properties.data()));     //  CB_ & G__ & G2_, 
+//	fprintf(sim_params->outfile,"%c %x\n",'K',hydrophobic_atoms_list('K',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'L',hydrophobic_atoms_list('L',sim_params->protein_model.sidechain_properties.data()));     //  CB_ & G__,       
+//	fprintf(sim_params->outfile,"%c %x\n",'M',hydrophobic_atoms_list('M',sim_params->protein_model.sidechain_properties.data()));     //  CB_ & G__,       
+//	fprintf(sim_params->outfile,"%c %x\n",'N',hydrophobic_atoms_list('N',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'P',hydrophobic_atoms_list('P',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'Q',hydrophobic_atoms_list('Q',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'R',hydrophobic_atoms_list('R',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'S',hydrophobic_atoms_list('S',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
+//	fprintf(sim_params->outfile,"%c %x\n",'T',hydrophobic_atoms_list('T',sim_params->protein_model.sidechain_properties.data()));     //  G2_,
+//	fprintf(sim_params->outfile,"%c %x\n",'V',hydrophobic_atoms_list('V',sim_params->protein_model.sidechain_properties.data()));     //  CB_ & G__ & G2_, 
+//	fprintf(sim_params->outfile,"%c %x\n",'W',hydrophobic_atoms_list('W',sim_params->protein_model.sidechain_properties.data()));     //  CB_ & G__,       
+//	fprintf(sim_params->outfile,"%c %x\n",'Y',hydrophobic_atoms_list('Y',sim_params->protein_model.sidechain_properties.data()));     //  CB_ & G__,       
+//	fprintf(sim_params->outfile,"%c %x\n",'Z',hydrophobic_atoms_list('Z',sim_params->protein_model.sidechain_properties.data()));     //  G__,             
 //
 //	return;
 
@@ -1191,36 +1191,36 @@ void hydrophobic_distances(Chain *chain,Biasmap *biasmap, simulation_params *sim
 		}
 
 		/* calculate atomic distances */
-		if ((hydrophobic_atoms_list(chain->aa[ii].id,sim_params->protein_model.sidechain_properties) & CB_) && (chain->aa[ii].etc & CB_)) {
-		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties) & CB_) && (chain->aa[jj].etc & CB_)) {
+		if ((hydrophobic_atoms_list(chain->aa[ii].id,sim_params->protein_model.sidechain_properties.data()) & CB_) && (chain->aa[ii].etc & CB_)) {
+		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties.data()) & CB_) && (chain->aa[jj].etc & CB_)) {
 			fprintf(sim_params->outfile,"%c%c %c %c CBCB %g\n",label1,label2,chain->aa[ii].id,chain->aa[jj].id,sqrt(distance(chain->aa[ii].cb,chain->aa[jj].cb)));
 		    }
-		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties) & G__) && (chain->aa[jj].etc & G__)) {
+		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties.data()) & G__) && (chain->aa[jj].etc & G__)) {
 			fprintf(sim_params->outfile,"%c%c %c %c CBG1 %g\n",label1,label2,chain->aa[ii].id,chain->aa[jj].id,sqrt(distance(chain->aa[ii].cb,chain->aa[jj].g)));
 		    }
-		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties) & G2_) && (chain->aa[jj].etc & G2_)) {
+		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties.data()) & G2_) && (chain->aa[jj].etc & G2_)) {
 			fprintf(sim_params->outfile,"%c%c %c %c CBG2 %g\n",label1,label2,chain->aa[ii].id,chain->aa[jj].id,sqrt(distance(chain->aa[ii].cb,chain->aa[jj].g2)));
 		    }
 		}
-		if ((hydrophobic_atoms_list(chain->aa[ii].id,sim_params->protein_model.sidechain_properties) & G__) && (chain->aa[ii].etc & G__)) {
-		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties) & CB_) && (chain->aa[jj].etc & CB_)) {
+		if ((hydrophobic_atoms_list(chain->aa[ii].id,sim_params->protein_model.sidechain_properties.data()) & G__) && (chain->aa[ii].etc & G__)) {
+		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties.data()) & CB_) && (chain->aa[jj].etc & CB_)) {
 			fprintf(sim_params->outfile,"%c%c %c %c G1CB %g\n",label1,label2,chain->aa[ii].id,chain->aa[jj].id,sqrt(distance(chain->aa[ii].g,chain->aa[jj].cb)));
 		    }
-		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties) & G__) && (chain->aa[jj].etc & G__)) {
+		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties.data()) & G__) && (chain->aa[jj].etc & G__)) {
 			fprintf(sim_params->outfile,"%c%c %c %c G1G1 %g\n",label1,label2,chain->aa[ii].id,chain->aa[jj].id,sqrt(distance(chain->aa[ii].g,chain->aa[jj].g)));
 		    }
-		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties) & G2_) && (chain->aa[jj].etc & G2_)) {
+		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties.data()) & G2_) && (chain->aa[jj].etc & G2_)) {
 			fprintf(sim_params->outfile,"%c%c %c %c G1G2 %g\n",label1,label2,chain->aa[ii].id,chain->aa[jj].id,sqrt(distance(chain->aa[ii].g,chain->aa[jj].g2)));
 		    }
 		}
-		if ((hydrophobic_atoms_list(chain->aa[ii].id,sim_params->protein_model.sidechain_properties) & G2_) && (chain->aa[ii].etc & G2_)) {
-		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties) & CB_) && (chain->aa[jj].etc & CB_)) {
+		if ((hydrophobic_atoms_list(chain->aa[ii].id,sim_params->protein_model.sidechain_properties.data()) & G2_) && (chain->aa[ii].etc & G2_)) {
+		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties.data()) & CB_) && (chain->aa[jj].etc & CB_)) {
 			fprintf(sim_params->outfile,"%c%c %c %c G2CB %g\n",label1,label2,chain->aa[ii].id,chain->aa[jj].id,sqrt(distance(chain->aa[ii].g2,chain->aa[jj].cb)));
 		    }
-		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties) & G__) && (chain->aa[jj].etc & G__)) {
+		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties.data()) & G__) && (chain->aa[jj].etc & G__)) {
 			fprintf(sim_params->outfile,"%c%c %c %c G2G1 %g\n",label1,label2,chain->aa[ii].id,chain->aa[jj].id,sqrt(distance(chain->aa[ii].g2,chain->aa[jj].g)));
 		    }
-		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties) & G2_) && (chain->aa[jj].etc & G2_)) {
+		    if ((hydrophobic_atoms_list(chain->aa[jj].id,sim_params->protein_model.sidechain_properties.data()) & G2_) && (chain->aa[jj].etc & G2_)) {
 			fprintf(sim_params->outfile,"%c%c %c %c G2G2 %g\n",label1,label2,chain->aa[ii].id,chain->aa[jj].id,sqrt(distance(chain->aa[ii].g2,chain->aa[jj].g2)));
 		    }
 		}
