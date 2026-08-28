@@ -10,6 +10,7 @@
 #include <stdio.h>
 #ifdef __cplusplus
 #include <vector>
+#include <string>
 #endif
 
 #ifdef __cplusplus
@@ -190,7 +191,7 @@ typedef struct {
   double sts;    // strength
 
   /* biasing force constants */
-  char *contact_map_file;    // contact map filename
+  std::string contact_map_file;    // contact map filename
   double bias_eta_beta;      // eta_beta
   double bias_eta_alpha;     // eta_alpha
   double bias_kappa_alpha_3; // kappa_alpha_3
@@ -239,7 +240,7 @@ typedef struct {
   double Sbond_dihedral_cutoff;
 
   /* fixed amino acids */
-  char *fixed_aalist_file;
+  std::string fixed_aalist_file;
 
   /* external potential */
   /* harmonic potential in the (+) and (-) directions with an offset */
@@ -248,14 +249,14 @@ typedef struct {
   double external_k[3]; /* x y z */
   double external_r0[3]; /* x y z */
   double external_ztip; /* for conincal potential */
-  char *external_constrained_aalist_file;
+  std::string external_constrained_aalist_file;
   /* second potential */
   int external_potential_type2;
   int external_direction2[3]; /* - neither + both */
   double external_k2[3]; /* x y z */
   double external_r02[3]; /* x y z */
   double external_ztip2; /* for conincal potential */
-  char *external_constrained_aalist_file2;
+  std::string external_constrained_aalist_file2;
   /* sidechain properties */
   sidechain_properties_ *sidechain_properties;
 
@@ -264,15 +265,15 @@ typedef struct {
 
 typedef struct {
   int number_of_processors;
-  char *output_path;
-  char *outputpdb_filename;
-  char *flex_dir;
-  char **filenames_to_read_in;
+  std::string output_path;
+  std::string outputpdb_filename;
+  std::string flex_dir;
+  std::vector<std::string> filenames_to_read_in;
   int size_of_filename_to_read_in;
   double hstrength_cutoff;
   int fromnode, tonode, freq, totalconf;
   int only_bias_hbonds; //= 0 if not, 1 if
-  char *flex_cmd;
+  std::string flex_cmd;
   double step;
   double acceptance_rate_aim;
   double acceptance_rate_tolerance;

@@ -2191,11 +2191,11 @@ void mark_fixed_aa_from_file(Chain *chain, simulation_params *sim_params) {
   //set all amino acids as not fixed (by default, the 0th amino acid is set as fixed.  TODO: check where it is set).
   for (int i=0; i<chain->NAA; i++) chain->aa[i].etc &= ~FIXED;
 
-  if(!(sim_params->protein_model).fixed_aalist_file) return;
+  if((sim_params->protein_model).fixed_aalist_file.empty()) return;
 
-  fprintf(stderr,"marking fixed amino acids from file %s\n",(sim_params->protein_model).fixed_aalist_file);
+  fprintf(stderr,"marking fixed amino acids from file %s\n",(sim_params->protein_model).fixed_aalist_file.c_str());
 
-  FILE *fptr = fopen((sim_params->protein_model).fixed_aalist_file, "r");
+  FILE *fptr = fopen((sim_params->protein_model).fixed_aalist_file.c_str(), "r");
   if (!fptr) stop("mark_fixed_aa_from_file: problems while opening constraint file");
 
   fprintf(stderr, "Fixing amino acids:");
@@ -2217,12 +2217,12 @@ void mark_fixed_aa_from_file(Chain *chain, simulation_params *sim_params) {
 /* constrained amino acids in list file will be marked with CONSTRAINED flag in aa.etc */
 void mark_constrained_aa_from_file(Chain *chain, simulation_params *sim_params) {
 
-  if(!(sim_params->protein_model).external_constrained_aalist_file && !(sim_params->protein_model).external_constrained_aalist_file2) return;
+  if((sim_params->protein_model).external_constrained_aalist_file.empty() && (sim_params->protein_model).external_constrained_aalist_file2.empty()) return;
 
-  if ((sim_params->protein_model).external_constrained_aalist_file) {
-    fprintf(stderr,"1marking constrained amino acids from file %s\n",(sim_params->protein_model).external_constrained_aalist_file);
+  if (!(sim_params->protein_model).external_constrained_aalist_file.empty()) {
+    fprintf(stderr,"1marking constrained amino acids from file %s\n",(sim_params->protein_model).external_constrained_aalist_file.c_str());
 
-    FILE *fptr = fopen((sim_params->protein_model).external_constrained_aalist_file, "r");
+    FILE *fptr = fopen((sim_params->protein_model).external_constrained_aalist_file.c_str(), "r");
     if (!fptr) stop("problems while opening constraint file");
   
     fprintf(stderr, "Constraining amino acids:");
@@ -2238,10 +2238,10 @@ void mark_constrained_aa_from_file(Chain *chain, simulation_params *sim_params) 
     fprintf(stderr,"\n");
     fclose(fptr);
   }
-  if ((sim_params->protein_model).external_constrained_aalist_file2) {
-    fprintf(stderr,"2marking constrained amino acids from file %s\n",(sim_params->protein_model).external_constrained_aalist_file2);
+  if (!(sim_params->protein_model).external_constrained_aalist_file2.empty()) {
+    fprintf(stderr,"2marking constrained amino acids from file %s\n",(sim_params->protein_model).external_constrained_aalist_file2.c_str());
 
-    FILE *fptr = fopen((sim_params->protein_model).external_constrained_aalist_file2, "r");
+    FILE *fptr = fopen((sim_params->protein_model).external_constrained_aalist_file2.c_str(), "r");
     if (!fptr) stop("problems while opening constraint file");
   
     fprintf(stderr, "Constraining amino acids:");

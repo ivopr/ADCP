@@ -552,28 +552,28 @@ int output_and_run_flex(Chain *chain,Biasmap *biasmap, Chain *input_chains, simu
   //if(isnan(totenergy(chain))){fprintf(stderr,"ERROR READ IN OUTPUT_AND_RUN");}
 
   char outpdb[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(outpdb,sim_params->flex_params.output_path);
-  strcat(outpdb,sim_params->flex_params.outputpdb_filename);
+  strcpy(outpdb,sim_params->flex_params.output_path.c_str());
+  strcat(outpdb,sim_params->flex_params.outputpdb_filename.c_str());
 
   char outpdbmat[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(outpdbmat,sim_params->flex_params.output_path);
+  strcpy(outpdbmat,sim_params->flex_params.output_path.c_str());
   strcat(outpdbmat,"pdbmat.structure");
 
   Hyd_pdbout(chain,&(sim_params->protein_model),outpdb,outpdbmat);
 
 
   char hbondsin[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(hbondsin,sim_params->flex_params.output_path);
+  strcpy(hbondsin,sim_params->flex_params.output_path.c_str());
   strcat(hbondsin,"hbonds.in");
   output_hbondsin(chain,&(sim_params->protein_model),sim_params->flex_params.only_bias_hbonds,  hbondsin,sim_params->flex_params.hstrength_cutoff,sim_params->outfile);
 
   char hphobesin[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(hphobesin,sim_params->flex_params.output_path);
+  strcpy(hphobesin,sim_params->flex_params.output_path.c_str());
   strcat(hphobesin,"hphobes.in");
 
   output_hphobesin(chain,&(sim_params->protein_model),hphobesin,sim_params->outfile);
 
-  int k = system(sim_params->flex_params.flex_cmd);
+  int k = system(sim_params->flex_params.flex_cmd.c_str());
   if (k != 0) stop("system returned non-0 exit status.");
 
   return read_in_after_flex(chain,biasmap,input_chains,sim_params,rmsd);
@@ -589,7 +589,7 @@ int read_in_after_flex(Chain *chain,Biasmap *biasmap,Chain *input_chains,simulat
 
   FILE *fptr2;
   char rmsd_filename[DEFAULT_LONG_STRING_LENGTH];
-  sprintf(rmsd_filename,"%srmsd", sim_params->flex_params.output_path);
+  sprintf(rmsd_filename,"%srmsd", sim_params->flex_params.output_path.c_str());
   fptr2 = fopen(rmsd_filename,"r");
 
   double *rmsd_temp = (double*)malloc(sizeof(double)*sim_params->flex_params.size_of_filename_to_read_in);
@@ -599,7 +599,7 @@ int read_in_after_flex(Chain *chain,Biasmap *biasmap,Chain *input_chains,simulat
     FILE *fptr;
 
 
-    if((fptr = fopen(sim_params->flex_params.filenames_to_read_in[inchain], "r"))){
+    if((fptr = fopen(sim_params->flex_params.filenames_to_read_in[inchain].c_str(), "r"))){
 
       int k = fscanf(fptr2,"%lf;\n",&(rmsd_temp[inchain]));
       if (k != 1) stop("could not read rmsd_temp");
@@ -740,17 +740,17 @@ void initialize_flex(Chain *chain, Chain **input_chains,Biasmap *biasmap, simula
   chain->flex_data->read_in_flex = 0;
 
   char create_directory[DEFAULT_SHORT_STRING_LENGTH] ;
-  sprintf(create_directory,"mkdir -p %s",sim_params->flex_params.output_path);
+  sprintf(create_directory,"mkdir -p %s",sim_params->flex_params.output_path.c_str());
   int k = system(create_directory);
   if (k != 0) stop("system returned non-0 exit status.");
 
   char covin[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(covin,sim_params->flex_params.output_path);
+  strcpy(covin,sim_params->flex_params.output_path.c_str());
   strcat(covin,"cov.in");
   output_covin(chain,&(sim_params->protein_model),covin);
 
   char stackedin[DEFAULT_SHORT_STRING_LENGTH];
-  strcpy(stackedin,sim_params->flex_params.output_path);
+  strcpy(stackedin,sim_params->flex_params.output_path.c_str());
   strcat(stackedin,"stacked.in");
   output_stackedin(stackedin);
 
@@ -947,7 +947,7 @@ void ns_for_flex_processor(MPI_Comm FLEX_WORLD, int rank, Biasmap *biasmap, simu
     int k = system(cmd);
     if (k != 0) stop("system returned non-0 exit status.");
 
-    sprintf(cmd,"%sremove_flex.sh %s",sim_params->flex_params.flex_dir,sim_params->flex_params.output_path);
+    sprintf(cmd,"%sremove_flex.sh %s",sim_params->flex_params.flex_dir.c_str(),sim_params->flex_params.output_path.c_str());
     k = system(cmd);
     if (k != 0) stop("system returned non-0 exit status.");
 

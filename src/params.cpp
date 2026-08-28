@@ -248,7 +248,7 @@ void model_param_initialise(model_params *self) {
   self->split = -1.0;
   self->sts = 0.0;
   /* biasing force constants */
-  self->contact_map_file = NULL;
+  self->contact_map_file.clear();
   self->bias_eta_beta = 3.7;
   self->bias_eta_alpha = 15.3;
   self->bias_kappa_alpha_3 = 0.0;
@@ -292,7 +292,7 @@ void model_param_initialise(model_params *self) {
   self->Sbond_dihedral_cutoff = 0.35;
 
   /* fixed amino acids */
-  self->fixed_aalist_file = NULL;
+  self->fixed_aalist_file.clear();
 
   /*optimizing strategy*/
   self->opt = 0;
@@ -308,7 +308,7 @@ void model_param_initialise(model_params *self) {
     self->external_r0[i] = 0.0;
   }
   self->external_ztip = 0.0;
-  self->external_constrained_aalist_file = NULL;
+  self->external_constrained_aalist_file.clear();
   self->external_potential_type2 = 0;
   for (int i=0; i<3; i++) {
     self->external_direction2[i] = EXTERNAL_NONE;
@@ -316,7 +316,7 @@ void model_param_initialise(model_params *self) {
     self->external_r02[i] = 0.0;
   }
   self->external_ztip2 = 0.0;
-  self->external_constrained_aalist_file2 = NULL;
+  self->external_constrained_aalist_file2.clear();
 
   //CAUTION!: aadict.c depends on params.c's model_params.  This means that
   //    initialize_sidechain_properties will have to be called after all updates
@@ -381,7 +381,7 @@ void model_param_finalise(model_params *self) {
   self->split = 0.;
   self->sts = 0.;
   /* biasing force constants */
-  if (self->contact_map_file) free(self->contact_map_file);
+  self->contact_map_file.clear();
   self->bias_eta_beta = 0.;
   self->bias_eta_alpha = 0.;
   self->bias_kappa_alpha_3 = 0.;
@@ -418,7 +418,7 @@ void model_param_finalise(model_params *self) {
   self->hphobic_srgy_offset = 0.;
 
   /* fixed amino acids */
-  if (self->fixed_aalist_file) free(self->fixed_aalist_file);
+  self->fixed_aalist_file.clear();
 
   /*optimizing strategy*/
   self->opt = 0;
@@ -434,7 +434,7 @@ void model_param_finalise(model_params *self) {
     self->external_r0[i] = 0.0;
   }
   self->external_ztip = 0.0;
-  if (self->external_constrained_aalist_file) free(self->external_constrained_aalist_file);
+  self->external_constrained_aalist_file.clear();
   /* external potential #2 */
   self->external_potential_type2 = 0;
   for (int i=0; i<3; i++) {
@@ -443,7 +443,7 @@ void model_param_finalise(model_params *self) {
     self->external_r02[i] = 0.0;
   }
   self->external_ztip2 = 0.0;
-  if (self->external_constrained_aalist_file2) free(self->external_constrained_aalist_file2);
+  self->external_constrained_aalist_file2.clear();
 
   if (self->sidechain_properties) free(self->sidechain_properties);
 }
@@ -451,20 +451,16 @@ void model_param_finalise(model_params *self) {
 
 void flex_params_initialise(FLEX_params *self){
   self->number_of_processors = 0;
-  self->flex_cmd = NULL;
-  self->output_path = NULL;
-  self->outputpdb_filename = NULL;
-  self->output_path = (char*)realloc(self->output_path,DEFAULT_SHORT_STRING_LENGTH);
-  strcpy(self->output_path,"/tmp/");
-  self->outputpdb_filename = (char*)realloc(self->outputpdb_filename,DEFAULT_SHORT_STRING_LENGTH);
-  strcpy(self->outputpdb_filename, "out.pdb");
+  self->flex_cmd.clear();
+  self->output_path = "/tmp/";
+  self->outputpdb_filename = "out.pdb";
   self->fromnode = 7;
   self->tonode = 7;
   self->step = 0.01;
   self->freq = 100;
   self->totalconf = 100;
-  self->flex_dir = NULL;
-  self->filenames_to_read_in = NULL;
+  self->flex_dir.clear();
+  self->filenames_to_read_in.clear();
   self->size_of_filename_to_read_in = 0;
   self->hstrength_cutoff = 1.0;
   self->only_bias_hbonds = 0;
@@ -481,39 +477,16 @@ void flex_params_finalise(FLEX_params *self){
   self->number_of_processors = 0;
   self->fromnode = 7;
   self->tonode = 7;
-  if(self->output_path){
-    free(self->output_path);
-    self->output_path = NULL;
-  }
-  if(self->outputpdb_filename){
-    free (self->outputpdb_filename);
-    self->outputpdb_filename = NULL;
-  }
-  if(self->flex_cmd){
-    free (self->flex_cmd);
-    self->flex_cmd = NULL;
-  }
-  if(self->flex_dir){
-    free (self->flex_dir);
-    self->flex_dir = NULL;
-  }
+  self->output_path.clear();
+  self->outputpdb_filename.clear();
+  self->flex_cmd.clear();
+  self->flex_dir.clear();
   self->step = 0.01;
   self->freq = 100;
   self->totalconf = 100;
 
-  if(self->size_of_filename_to_read_in != 0){
-    int i;
-    for(i = 0; i < self->size_of_filename_to_read_in;i++){
-      if(self->filenames_to_read_in[i]) {
-        free(self->filenames_to_read_in[i]);
-        self->filenames_to_read_in[i] = NULL;
-      }
-    }
-    free(self->filenames_to_read_in);
-    self->filenames_to_read_in = NULL;
-    self->size_of_filename_to_read_in = 0;
-
-  }
+  self->filenames_to_read_in.clear();
+  self->size_of_filename_to_read_in = 0;
 
   self->hstrength_cutoff = 1.0;
   self->only_bias_hbonds = 0;
@@ -733,11 +706,8 @@ void copy_string(char** const to, const char* const from){
 /* Copy model parameters */
 void model_params_copy(model_params *to, model_params *from) {
   *to = *from;
-  /* strings */
-  copy_string(&(to->contact_map_file), from->contact_map_file);
-  copy_string(&(to->fixed_aalist_file), from->fixed_aalist_file);
-  copy_string(&(to->external_constrained_aalist_file), from->external_constrained_aalist_file);
-  copy_string(&(to->external_constrained_aalist_file2), from->external_constrained_aalist_file2);
+  /* contact_map_file, fixed_aalist_file, external_constrained_aalist_file(2)
+     are std::string, already deep-copied by "*to = *from" above. */
   /* sidechain_properties */
   sidechain_properties_ *temp;
   temp = (sidechain_properties_*)malloc(sizeof(sidechain_properties_) * 31);
@@ -816,22 +786,11 @@ void sim_params_copy(simulation_params *to, simulation_params *from) {
 
 void flex_params_copy(FLEX_params *to, FLEX_params *from){
   *to = *from;
-  copy_string(&(to->output_path), from->output_path);
-  copy_string(&(to->outputpdb_filename), from->outputpdb_filename);
-  copy_string(&(to->flex_cmd), from->flex_cmd);
-  copy_string(&(to->flex_dir), from->flex_dir);
+  // output_path, outputpdb_filename, flex_cmd, flex_dir are std::string,
+  // already deep-copied by "*to = *from" above.
 
-  if(to->size_of_filename_to_read_in != 0){
-    to->filenames_to_read_in = NULL;
-    to->filenames_to_read_in = (char**)malloc(sizeof(char*)*to->size_of_filename_to_read_in);
-    int i;
-    for(i = 0; i < to->size_of_filename_to_read_in; i++){
-      copy_string(&(to->filenames_to_read_in[i]),from->filenames_to_read_in[i]);
-    }
-
-  }
-
-
+  // filenames_to_read_in is std::vector<std::string>, already deep-copied
+  // by "*to = *from" above.
 }
 
 
@@ -840,15 +799,7 @@ void flex_params_copy(FLEX_params *to, FLEX_params *from){
 /***********************************************************/
 
 void flex_setup_command(FLEX_params *self){
-  if(self->size_of_filename_to_read_in > 0){
-    int f;
-    for(f = 0; f <self->size_of_filename_to_read_in; f++){
-      free(self->filenames_to_read_in[f]);
-    }
-    free(self->filenames_to_read_in);
-    self->filenames_to_read_in = NULL;
-  }
-
+  self->filenames_to_read_in.clear();
 
   self->size_of_filename_to_read_in = 0;
   self->mode = self->fromnode + (int)(rand()/(double)RAND_MAX * (self->tonode-self->fromnode+1)) % (self->tonode-self->fromnode+1);
@@ -857,14 +808,13 @@ void flex_setup_command(FLEX_params *self){
     //for(freq = self->freq; freq <= self->totalconf; freq+=self->freq){
       //self->freq
 
-      self->size_of_filename_to_read_in+=2;
-      self->filenames_to_read_in = (char**)realloc(self->filenames_to_read_in,sizeof(char*)*self->size_of_filename_to_read_in);
-      self->filenames_to_read_in[self->size_of_filename_to_read_in-1] = NULL;
-      self->filenames_to_read_in[self->size_of_filename_to_read_in-2] = NULL;
-      self->filenames_to_read_in[self->size_of_filename_to_read_in-1] = (char*)malloc(sizeof(char)*DEFAULT_LONG_STRING_LENGTH);
-      self->filenames_to_read_in[self->size_of_filename_to_read_in-2] = (char*)malloc(sizeof(char)*DEFAULT_LONG_STRING_LENGTH);
-      sprintf(self->filenames_to_read_in[self->size_of_filename_to_read_in-2],"%sRuns/Mode%02d-pos/out_froda_%08d.pdb",self->output_path,self->mode,self->freq);
-      sprintf(self->filenames_to_read_in[self->size_of_filename_to_read_in-1],"%sRuns/Mode%02d-neg/out_froda_%08d.pdb",self->output_path,self->mode,self->freq);
+      char pos_filename[DEFAULT_LONG_STRING_LENGTH];
+      char neg_filename[DEFAULT_LONG_STRING_LENGTH];
+      sprintf(pos_filename,"%sRuns/Mode%02d-pos/out_froda_%08d.pdb",self->output_path.c_str(),self->mode,self->freq);
+      sprintf(neg_filename,"%sRuns/Mode%02d-neg/out_froda_%08d.pdb",self->output_path.c_str(),self->mode,self->freq);
+      self->filenames_to_read_in.push_back(pos_filename);
+      self->filenames_to_read_in.push_back(neg_filename);
+      self->size_of_filename_to_read_in += 2;
 
     //}
 
@@ -872,9 +822,9 @@ void flex_setup_command(FLEX_params *self){
 
   //fprintf(stdout,"Mode: %d Freq %d\n",mode,freq); fflush(stdout);
 
-  if(self->flex_cmd){free(self->flex_cmd); self->flex_cmd = NULL;}
-  self->flex_cmd = (char*)malloc(sizeof(char)*1000);
-  sprintf(self->flex_cmd,"%s%s %s %s %d %d %lf %d %d %s",self->flex_dir,"flex_script.sh ",self->output_path,self->outputpdb_filename,self->mode,self->mode,self->step, self->freq,self->freq,self->flex_dir);
+  char flex_cmd_buf[1000];
+  sprintf(flex_cmd_buf,"%s%s %s %s %d %d %lf %d %d %s",self->flex_dir.c_str(),"flex_script.sh ",self->output_path.c_str(),self->outputpdb_filename.c_str(),self->mode,self->mode,self->step, self->freq,self->freq,self->flex_dir.c_str());
+  self->flex_cmd = flex_cmd_buf;
 
 }
 
@@ -896,12 +846,10 @@ int flex_param_read(char *prm, FLEX_params *self){
   if(self->fromnode < 7 || self->tonode < 7){
      stop("Error: node numbers for FLEX must be at least 7\n");
   }
-  self->flex_dir = (char*)malloc(sizeof(char)*DEFAULT_SHORT_STRING_LENGTH);
-
   if(self->totalconf == 0) stop("Error totalconf = 0\n");
 
   if(k>=5){
-    sprintf(self->output_path,"%s",outdir_string);
+    self->output_path = outdir_string;
     returnval += strlen(outdir_string);
 
     for (int digit=1; digit<=self->totalconf; digit*=10) {
@@ -920,7 +868,7 @@ int flex_param_read(char *prm, FLEX_params *self){
     returnval += 4;
   }
   if(k >= 6){
-    strcpy(self->flex_dir,flex_dir);
+    self->flex_dir = flex_dir;
 	returnval += strlen(flex_dir) + 1;
   }
 
@@ -1108,9 +1056,7 @@ void model_param_read(char *prm, /* input line */
 		   &(self->prt),
 		   &(self->bias_r_alpha),
 		   &(self->bias_r_beta))) > 0) {
-		self->contact_map_file = (char*)realloc(self->contact_map_file,DEFAULT_SHORT_STRING_LENGTH);
-		strcpy(self->contact_map_file,contact_map_file);
-//		self->contact_map_file = contact_map_file;
+		self->contact_map_file = contact_map_file;
 		explicit_contact_map_file = 1;
 
 		found_param += 1;
@@ -1202,8 +1148,7 @@ void model_param_read(char *prm, /* input line */
 	char fixed_file[256];
 	if ((k=sscanf(prm, "fixed=%255[^,]",fixed_file)) == 1) {
 		fprintf(stderr,"setting fixed amino acid list file %s\n",fixed_file);
-		self->fixed_aalist_file = (char*)realloc(self->fixed_aalist_file,DEFAULT_SHORT_STRING_LENGTH);
-		strcpy(self->fixed_aalist_file,fixed_file);
+		self->fixed_aalist_file = fixed_file;
 		found_param += 1;
 		start = strlen(fixed_file) + strlen("fixed=");
 	}
@@ -1225,8 +1170,7 @@ void model_param_read(char *prm, /* input line */
 			//stop("unimplemented");
 			if (l>1) {
 				fprintf(stderr,"setting constrained list file %s\n",constraint_file);
-				self->external_constrained_aalist_file = (char*)realloc(self->external_constrained_aalist_file,DEFAULT_SHORT_STRING_LENGTH);
-				strcpy(self->external_constrained_aalist_file,constraint_file);
+				self->external_constrained_aalist_file = constraint_file;
 			}
 
 		} else if (self->external_potential_type == 2) { /* unimplemented */
@@ -1261,8 +1205,7 @@ void model_param_read(char *prm, /* input line */
 				&(self->external_potential_type), constraint_file, &(self->external_k[0]), &(self->external_r0[0]),&(self->external_ztip)); //save r0, k into 1st vector element
 			if (l==5) {
 				fprintf(stderr,"setting constrained list file %s\n",constraint_file);
-				self->external_constrained_aalist_file = (char*)realloc(self->external_constrained_aalist_file,DEFAULT_SHORT_STRING_LENGTH);
-				strcpy(self->external_constrained_aalist_file,constraint_file);
+				self->external_constrained_aalist_file = constraint_file;
 			} else {
 				stop("conical potential needs 4 parameters (constraint list file,k,r0,ztip)");
 			}
@@ -1274,8 +1217,7 @@ void model_param_read(char *prm, /* input line */
 			//stop("unimplemented");
 			if (l > 1) {
 				fprintf(stderr, "setting constrained list file %s\n", constraint_file);
-				self->external_constrained_aalist_file = (char*)realloc(self->external_constrained_aalist_file, DEFAULT_SHORT_STRING_LENGTH);
-				strcpy(self->external_constrained_aalist_file, constraint_file);
+				self->external_constrained_aalist_file = constraint_file;
 			}
 		} else {
 			stop("unknown external potential type, has to be 1 (cylindrical around z) or 3 (conical around z).");
@@ -1295,16 +1237,14 @@ void model_param_read(char *prm, /* input line */
 				&(self->external_potential_type2), constraint_file2, &(self->external_k2[0]), &(self->external_r02[0])); //save r0, k into 1st vector element
 			if (l>1) {
 				fprintf(stderr,"setting constrained list file %s\n",constraint_file2);
-				self->external_constrained_aalist_file2 = (char*)realloc(self->external_constrained_aalist_file2,DEFAULT_SHORT_STRING_LENGTH);
-				strcpy(self->external_constrained_aalist_file2,constraint_file2);
+				self->external_constrained_aalist_file2 = constraint_file2;
 			}
 		} else if (self->external_potential_type2 == 3) { /* conical potential */
 			l=sscanf(prm+9,"%d,%255[^,],%lf,%lf,%lf",
 				&(self->external_potential_type2), constraint_file2, &(self->external_k2[0]), &(self->external_r02[0]),&(self->external_ztip2)); //save r0, k into 1st vector element
 			if (l==5) {
 				fprintf(stderr,"setting constrained list file %s\n",constraint_file2);
-				self->external_constrained_aalist_file2 = (char*)realloc(self->external_constrained_aalist_file2,DEFAULT_SHORT_STRING_LENGTH);
-				strcpy(self->external_constrained_aalist_file2,constraint_file2);
+				self->external_constrained_aalist_file2 = constraint_file2;
 			} else {
 				stop("conical potential needs 4 parameters (constraint list file,k,r0,ztip)");
 			}
@@ -1582,7 +1522,7 @@ void model_param_print(model_params self, FILE *outfile) {
   fprintf(outfile,"sts %g\n",self.sts);
   /* biasing force constants */
   fprintf(outfile,"BIAS\n");
-  fprintf(outfile,"contact map file %s\n",self.contact_map_file);
+  fprintf(outfile,"contact map file %s\n",self.contact_map_file.c_str());
   fprintf(outfile,"eta_beta %g\n",self.bias_eta_beta);
   fprintf(outfile,"eta_alpha %g\n",self.bias_eta_alpha);
   fprintf(outfile,"kappa_alpha_3 %g\n",self.bias_kappa_alpha_3);
@@ -1627,14 +1567,14 @@ void model_param_print(model_params self, FILE *outfile) {
   fprintf(outfile,"S-bond dihedral cutoff %g\n",	self.Sbond_dihedral_cutoff);
   fprintf(outfile,"C-S-S angle hard coded\n");  
   fprintf(outfile,"FIXED AMINO ACIDS\n");
-  fprintf(outfile,"fixed amino acid list file: %s\n",self.fixed_aalist_file);
+  fprintf(outfile,"fixed amino acid list file: %s\n",self.fixed_aalist_file.c_str());
   fprintf(outfile,"EXTERNAL CONSTRAINTS\n");
-  fprintf(outfile,"constrained amino acid list file: %s\n",self.external_constrained_aalist_file);
+  fprintf(outfile,"constrained amino acid list file: %s\n",self.external_constrained_aalist_file.c_str());
   fprintf(outfile,"external type: %d\n",self.external_potential_type);
   fprintf(outfile,"external_k[0]: %g\n",self.external_k[0]);
   fprintf(outfile,"external_r0[0]: %g\n",self.external_r0[0]);
   if (self.external_potential_type == 3) fprintf(outfile,"external_ztip: %g\n",self.external_ztip);
-  fprintf(outfile,"constrained amino acid list file(2): %s\n",self.external_constrained_aalist_file2);
+  fprintf(outfile,"constrained amino acid list file(2): %s\n",self.external_constrained_aalist_file2.c_str());
   fprintf(outfile,"external type(2): %d\n",self.external_potential_type2);
   fprintf(outfile,"external_k[0](2): %g\n",self.external_k2[0]);
   fprintf(outfile,"external_r0[0](2): %g\n",self.external_r02[0]);
@@ -1653,9 +1593,9 @@ void flex_param_print(FLEX_params self, FILE *outfile){
   if(self.only_bias_hbonds == 1.0){fprintf(outfile,"Using Only Bias H-bonds\n");}
   else{fprintf(outfile,"Using All H-bonds\n");}
   fprintf(outfile,"Max Totconf: %d Step: %lf\n",self.totalconf, self.step);
-  fprintf(outfile,"Output path: %s FLEX dir: %s\n",self.output_path,self.flex_dir);
+  fprintf(outfile,"Output path: %s FLEX dir: %s\n",self.output_path.c_str(),self.flex_dir.c_str());
   fprintf(outfile, "Acceptance Rate Aim %lf\n",self.acceptance_rate_aim);
-  fprintf(outfile,"FLEX command: %s\n",self.flex_cmd);
+  fprintf(outfile,"FLEX command: %s\n",self.flex_cmd.c_str());
   fprintf(outfile,"============END=FLEX=PARAMETERS===================\n");
 }
 

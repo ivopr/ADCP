@@ -685,10 +685,9 @@ int main(int argc, char *argv[])
 		/* contact map library */
 		all_biasmaps = (Biasmap*)realloc(all_biasmaps,n_proteins*sizeof(Biasmap));
 		all_biasmaps[n_proteins-1].distb = NULL;
-		sim_params.protein_model.contact_map_file = (char *)realloc(sim_params.protein_model.contact_map_file,DEFAULT_LONG_STRING_LENGTH*sizeof(char));
-		strcpy(sim_params.protein_model.contact_map_file,next_pdb_filename);
-		strcat(sim_params.protein_model.contact_map_file,".icm");
-		fprintf(stderr,"Reading in contact map from file %s\n",sim_params.protein_model.contact_map_file);
+		sim_params.protein_model.contact_map_file = next_pdb_filename;
+		sim_params.protein_model.contact_map_file += ".icm";
+		fprintf(stderr,"Reading in contact map from file %s\n",sim_params.protein_model.contact_map_file.c_str());
 		biasmap_initialise(&(all_chains[n_proteins-1]),&(all_biasmaps[n_proteins-1]),&(sim_params.protein_model));
 		//energy matrix init must be called once all parameters have been fixed
 		//energy_matrix_calculate(&(all_chains[n_proteins-1]),&(all_biasmaps[n_proteins-1]),&(sim_params.protein_model));

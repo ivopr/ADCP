@@ -216,16 +216,16 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 
 	FILE *fin = NULL;
 	//fprintf(stderr,"Opening contact map file %s\n",mod_params->contact_map_file);
-	fin = fopen(mod_params->contact_map_file,"r");
+	fin = fopen(mod_params->contact_map_file.c_str(),"r");
 	int abort = 0;
 	if (fin == NULL) { // no file opened beforehand
-	    if (mod_params->contact_map_file==NULL) {
+	    if (mod_params->contact_map_file.empty()) {
 		fprintf(stderr, "ERROR: Invalid Go-type bias: %s.",
-			mod_params->contact_map_file ? mod_params->contact_map_file : "(null)");
+			!mod_params->contact_map_file.empty() ? mod_params->contact_map_file.c_str() : "(null)");
 		fprintf(stderr, "  No contact map file specified.\n");
 		abort=1;
-	    } else if ((fin = fopen(mod_params->contact_map_file, "r")) == NULL && strcmp(mod_params->contact_map_file,"NULL")!=0) { // nonexisting file and not NULL given
-		fprintf(stderr, "ERROR: Invalid Go-type bias: %s.", mod_params->contact_map_file);
+	    } else if ((fin = fopen(mod_params->contact_map_file.c_str(), "r")) == NULL && mod_params->contact_map_file != "NULL") { // nonexisting file and not NULL given
+		fprintf(stderr, "ERROR: Invalid Go-type bias: %s.", mod_params->contact_map_file.c_str());
 		fprintf(stderr, "  Could not open file (missing?).\n");
 		abort = 1;
 	    }
@@ -251,7 +251,7 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 	}
 
 	// if no biasmap, zero it
-	if (strcmp(mod_params->contact_map_file,"NULL")==0) {
+	if (mod_params->contact_map_file == "NULL") {
 	    fprintf(stderr,"WARNING! Contact map file 'NULL' given, so no bias interactions will be calculated.\n");
 	    for (i = 1; i < chain->NAA; i++) {
 		for (j = 1; j < chain->NAA; j++) {
