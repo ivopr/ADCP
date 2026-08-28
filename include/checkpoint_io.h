@@ -7,6 +7,8 @@
 #ifndef CHECKPOINT_IO_H_
 #define CHECKPOINT_IO_H_
 
+#include <vector>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -19,16 +21,16 @@ typedef struct _ChainHash{
 int read_in_from_checkpoint(simulation_params *sim_params,
 			Biasmap **biasmap,
 			Chain *temporary,
-			Chain **cpoints,
+			std::vector<Chain> &cpoints,
 			Chaint **chaint,
 			ChainHash **chainhash,
 			int rank,
 			int P,void*mpi_comm,int only_output_checkpoint);
 int read_in_from_pdb(simulation_params *sim_params,
-			Biasmap **biasmap, Chain *temporary, Chain **cpoints, Chaint **chaint,
+			Biasmap **biasmap, Chain *temporary, std::vector<Chain> &cpoints, Chaint **chaint,
 			ChainHash **chainhash, int rank, int P, void *mpi_comm);
 void initialize_all_pdb_chains(simulation_params *sim_params,
-			Biasmap **biasmap, Chain *temporary, Chain **cpoints, Chaint **chaint,
+			Biasmap **biasmap, Chain *temporary, std::vector<Chain> &cpoints, Chaint **chaint,
 			ChainHash **chainhash, int rank, int current_stored, int P, void *mpi_comm);
 void open_next_checkpoint_file(simulation_params *sim_params, char *action);
 void initialize_checkpoint_file_as_file_pointer_to_print(simulation_params *sim_params, char *action);
@@ -43,7 +45,7 @@ void mpi_rec_chain(Chain *nsconformation, int from, int to, double *logLstar, in
 #endif
 void copyhash(ChainHash * to, ChainHash *from);
 void constructhashheap(ChainHash * chainhash, int N);
-int store_chain(ChainHash **chainhash, Chain *temporary, Biasmap *biasmap, Chaint *chaint, int P, int *current_stored, int counter, Chain **cpoints, simulation_params *sim_params, int rank, void*mpi_comm);
+int store_chain(ChainHash **chainhash, Chain *temporary, Biasmap *biasmap, Chaint *chaint, int P, int *current_stored, int counter, std::vector<Chain> &cpoints, simulation_params *sim_params, int rank, void*mpi_comm);
 
 
 #ifdef __cplusplus

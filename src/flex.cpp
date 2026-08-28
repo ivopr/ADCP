@@ -761,20 +761,16 @@ void initialize_flex(Chain *chain, Chain **input_chains,Biasmap *biasmap, simula
   }
 
 
-  *input_chains=NULL;
-  *input_chains = (Chain*)malloc(sizeof(Chain)*sim_params->flex_params.size_of_filename_to_read_in);
+  /* new[]{} value-initializes every element, so the per-element pointer
+     nulling below is gone; the size is known here and never grows. */
+  *input_chains = new Chain[sim_params->flex_params.size_of_filename_to_read_in]{};
   int i;
   *rmsd = NULL;
   *rmsd = (double*)malloc(sizeof(double)*sim_params->flex_params.size_of_filename_to_read_in);
 
   for(i = 0; i < sim_params->flex_params.size_of_filename_to_read_in; i++){
 
-      (*input_chains)[i].aa = NULL;
       (*input_chains)[i].NAA = chain->NAA;
-      (*input_chains)[i].xaa = NULL;
-      (*input_chains)[i].xaa_prev = NULL;
-      (*input_chains)[i].erg = NULL;
-
 
       allocmem_chain(&((*input_chains)[i]),chain->NAA,chain->Nchains);
 
@@ -816,7 +812,7 @@ void finalize_flex(Chain *chain,Chain **input_chains, simulation_params *sim_par
   for(i = 0; i < sim_params->flex_params.size_of_filename_to_read_in; i++){
     freemem_chain(&((*input_chains)[i]));
   }
-  free(*input_chains);
+  delete[] *input_chains;
   *input_chains = NULL;
 
   free(*rmsd);

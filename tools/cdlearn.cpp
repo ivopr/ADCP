@@ -13,6 +13,8 @@
 #include<math.h>
 #include<omp.h>
 
+#include<vector>
+
 #include"error.h"
 #include"params.h"
 #include"aadict.h"
@@ -634,10 +636,13 @@ int main(int argc, char *argv[])
 	temporary->NAA = 0; temporary->aa = NULL; temporary->xaa = NULL; temporary->erg = NULL; temporary->xaa_prev = NULL;
 
 	/* PDB library */
-	Chain *all_chains = NULL;
-	Chain *all_chains_sim = NULL;
-	Chaint *all_chaints = NULL;
-	Biasmap *all_biasmaps = NULL;
+	/* std::vector, not realloc: these three grow one element per loop
+	   iteration below, and realloc bitwise-relocates elements that step 3c
+	   makes non-trivially-copyable. */
+	std::vector<Chain> all_chains;
+	std::vector<Chain> all_chains_sim;
+	std::vector<Chaint> all_chaints;
+	std::vector<Biasmap> all_biasmaps;
  
 	FILE *list_file;
 	if (cd_params.pdb_list_filename == NULL) stop("No list file given (-L option).");
@@ -665,12 +670,10 @@ int main(int argc, char *argv[])
 
 		/* allocate memory */
 		/* library */
-		all_chains = (Chain*)realloc(all_chains,n_proteins * sizeof(Chain));
-		all_chains[n_proteins-1].aa=NULL; all_chains[n_proteins-1].xaa=NULL; all_chains[n_proteins-1].erg=NULL; all_chains[n_proteins-1].xaa_prev=NULL;
+		all_chains.emplace_back();
 		allocmem_chain(&(all_chains[n_proteins-1]), temporary->NAA, temporary->Nchains);
 		/* chaint-s for simulate */
-		all_chaints = (Chaint*)realloc(all_chaints,n_proteins * sizeof(Chaint));
-		all_chaints[n_proteins-1].aat = NULL; all_chaints[n_proteins-1].xaat = NULL; all_chaints[n_proteins-1].ergt = NULL; all_chaints[n_proteins-1].xaat_prev = NULL; 
+		all_chaints.emplace_back();
 
 		/* copy temporary into the main one */
 		copybetween(&((all_chains)[n_proteins-1]),temporary);
@@ -682,8 +685,7 @@ int main(int argc, char *argv[])
 		initialize(&(all_chains[n_proteins-1]),&(all_chaints[n_proteins-1]),&sim_params); // peptide modification
 
 		/* contact map library */
-		all_biasmaps = (Biasmap*)realloc(all_biasmaps,n_proteins*sizeof(Biasmap));
-		all_biasmaps[n_proteins-1].distb = NULL;
+		all_biasmaps.emplace_back();
 		sim_params.protein_model.contact_map_file = next_pdb_filename;
 		sim_params.protein_model.contact_map_file += ".icm";
 		fprintf(stderr,"Reading in contact map from file %s\n",sim_params.protein_model.contact_map_file.c_str());
@@ -717,9 +719,8 @@ int main(int argc, char *argv[])
 
 	fprintf(stderr,"Initialising library copy...\n");
 	/* initialise, but not yet copy of the library for simulate */
-	all_chains_sim = (Chain*)realloc(all_chains_sim,n_proteins * sizeof(Chain));
+	all_chains_sim.resize(n_proteins);
 	for (int i=0; i<n_proteins; i++) {
-	   all_chains_sim[i].aa=NULL; all_chains_sim[i].xaa=NULL; all_chains_sim[i].erg=NULL; all_chains_sim[i].xaa_prev=NULL;
 	   allocmem_chain(&(all_chains_sim[i]), all_chains[i].NAA, all_chains[i].Nchains);
 	}
 
@@ -905,10 +906,6 @@ int main(int argc, char *argv[])
 
 		param_finalise(&sim_params_sim[i]);
 	}
-	free(all_chains);
-	free(all_chains_sim);
-	free(all_chaints);
-	free(all_biasmaps);
 	delete[] sim_params_sim;
 	free(energy_change);
 	cd_param_finalise(&cd_params);

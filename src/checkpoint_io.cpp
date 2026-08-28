@@ -346,7 +346,7 @@ void read_checkpoint_entry(Chain *cpoints, simulation_params *sim_params){
 int read_in_from_checkpoint(simulation_params *sim_params,
 			Biasmap **biasmap,
 			Chain *temporary,
-			Chain **cpoints,
+			std::vector<Chain> &cpoints,
 			Chaint **chaint,
 			ChainHash **chainhash,
 			int rank,
@@ -361,7 +361,7 @@ int read_in_from_checkpoint(simulation_params *sim_params,
 
     /* Set up the memory buffer on all nodes */
     /* peptide chains */
-    *cpoints = NULL;
+    cpoints.clear();
     /* peptide chain for MC moves */
     /* realloc on a new'd object is undefined; replace the object outright.
        new T{} value-initializes, so the hand-nulling this drops is covered. */
@@ -497,7 +497,7 @@ int read_in_from_checkpoint(simulation_params *sim_params,
    For a parallel program, the chains are distributed across the processors,
    and the master processor keeps track of which processor has got which chain
    using chainhash. */
-int store_chain(ChainHash **chainhash, Chain *temporary, Biasmap *biasmap, Chaint *chaint, int P, int *current_stored, int counter, Chain **cpoints, simulation_params *sim_params, int rank, void*mpi_comm){
+int store_chain(ChainHash **chainhash, Chain *temporary, Biasmap *biasmap, Chaint *chaint, int P, int *current_stored, int counter, std::vector<Chain> &cpoints, simulation_params *sim_params, int rank, void*mpi_comm){
 
 #ifdef PARALLEL
   MPI_Comm *MPI_COMM = mpi_comm;
@@ -553,15 +553,14 @@ int store_chain(ChainHash **chainhash, Chain *temporary, Biasmap *biasmap, Chain
 #endif
 	    /* store on the master processor */
 	    counter++;
-	    *cpoints = (Chain*)realloc(*cpoints,*current_stored * sizeof(Chain));
-	    (*cpoints)[*current_stored-1].NAA = temporary->NAA;
-	    (*cpoints)[*current_stored-1].Nchains = temporary->Nchains;
-	    (*cpoints)[*current_stored-1].aa = NULL;
-	    (*cpoints)[*current_stored-1].xaa = NULL;
-	    (*cpoints)[*current_stored-1].erg = NULL;
-	    (*cpoints)[*current_stored-1].xaa_prev = NULL;
-	    allocmem_chain(&((*cpoints)[*current_stored-1]),temporary->NAA,temporary->Nchains);
-	    copybetween(&((*cpoints)[*current_stored-1]),temporary);
+	    /* resize, not realloc: realloc bitwise-relocates the already-built
+	       elements, which step 3c makes non-trivially-copyable. New elements
+	       are value-initialized, so the pointer nulling here is gone. */
+	    cpoints.resize(*current_stored);
+	    cpoints[*current_stored-1].NAA = temporary->NAA;
+	    cpoints[*current_stored-1].Nchains = temporary->Nchains;
+	    allocmem_chain(&(cpoints[*current_stored-1]),temporary->NAA,temporary->Nchains);
+	    copybetween(&(cpoints[*current_stored-1]),temporary);
 		//or sending to be stored on another processor...
 #ifdef PARALLEL
 	 } else{
@@ -581,15 +580,11 @@ int store_chain(ChainHash **chainhash, Chain *temporary, Biasmap *biasmap, Chain
 	    MPI_Recv(&got_all,1,MPI_INT,0,MPI_ANY_TAG,*MPI_COMM,&status);
 	    if(got_all != -1){ 
 		(*current_stored)++;
-		*cpoints = (Chain*)realloc(*cpoints,*current_stored * sizeof(Chain));
-		(*cpoints)[*current_stored-1].NAA = temporary->NAA;
-		(*cpoints)[*current_stored-1].Nchains = temporary->Nchains;
-		(*cpoints)[*current_stored-1].aa = NULL;
-		(*cpoints)[*current_stored-1].xaa = NULL;
-		(*cpoints)[*current_stored-1].xaa_prev = NULL;
-		(*cpoints)[*current_stored-1].erg = NULL;
-		allocmem_chain(&((*cpoints)[*current_stored-1]),temporary->NAA,temporary->Nchains);
-		mpi_rec_chain(&((*cpoints)[*current_stored-1]), 0, rank, &(sim_params->logLstar) , *current_stored,*MPI_COMM);
+		cpoints.resize(*current_stored);
+		cpoints[*current_stored-1].NAA = temporary->NAA;
+		cpoints[*current_stored-1].Nchains = temporary->Nchains;
+		allocmem_chain(&(cpoints[*current_stored-1]),temporary->NAA,temporary->Nchains);
+		mpi_rec_chain(&(cpoints[*current_stored-1]), 0, rank, &(sim_params->logLstar) , *current_stored,*MPI_COMM);
 	    }
 	}
     
@@ -613,7 +608,7 @@ int store_chain(ChainHash **chainhash, Chain *temporary, Biasmap *biasmap, Chain
 int read_in_from_pdb(simulation_params *sim_params,
 			Biasmap **biasmap,
 			Chain *temporary,
-			Chain **cpoints,
+			std::vector<Chain> &cpoints,
 			Chaint **chaint,
 			ChainHash **chainhash,
 			int rank,
@@ -633,7 +628,7 @@ int read_in_from_pdb(simulation_params *sim_params,
 
     /* Set up the memory buffer on all nodes */
     /* peptide chains */
-    *cpoints = NULL;
+    cpoints.clear();
     /* peptide chain for MC moves */
     /* realloc on a new'd object is undefined; replace the object outright.
        new T{} value-initializes, so the hand-nulling this drops is covered. */
@@ -782,7 +777,7 @@ int read_in_from_pdb(simulation_params *sim_params,
 void initialize_all_pdb_chains(simulation_params *sim_params,
 			Biasmap **biasmap,
 			Chain *temporary,
-			Chain **cpoints,
+			std::vector<Chain> &cpoints,
 			Chaint **chaint,
 			ChainHash **chainhash,
 			int rank,
@@ -798,19 +793,19 @@ void initialize_all_pdb_chains(simulation_params *sim_params,
     for (int i=0; i<current_stored; i++) {
 
 	// fix peptide if needed
-	if(sim_params->protein_model.fixit) fixpeptide((*cpoints)[i].aa, (*cpoints)[i].NAA, &(sim_params->protein_model));
+	if(sim_params->protein_model.fixit) fixpeptide(cpoints[i].aa, cpoints[i].NAA, &(sim_params->protein_model));
 
 	//mark constrained and fixed amino acids
-	mark_fixed_aa_from_file(&((*cpoints)[i]),sim_params);
-	mark_constrained_aa_from_file(&((*cpoints)[i]),sim_params);
+	mark_fixed_aa_from_file(&(cpoints[i]),sim_params);
+	mark_constrained_aa_from_file(&(cpoints[i]),sim_params);
 
-	chkpeptide((*cpoints)[i].aa, (*cpoints)[i].NAA, &(sim_params->protein_model));
+	chkpeptide(cpoints[i].aa, cpoints[i].NAA, &(sim_params->protein_model));
 	//map chain onto the CRANKITE model
-	initialize(&((*cpoints)[i]),*chaint,sim_params);
+	initialize(&(cpoints[i]),*chaint,sim_params);
 
 	//calculate the energy matrix
-	energy_matrix_calculate(&((*cpoints)[i]),*biasmap,&(sim_params->protein_model));
-	(*cpoints)[i].ll = -totenergy(&((*cpoints)[i]));
+	energy_matrix_calculate(&(cpoints[i]),*biasmap,&(sim_params->protein_model));
+	cpoints[i].ll = -totenergy(&(cpoints[i]));
 
     }
 
@@ -820,7 +815,7 @@ void initialize_all_pdb_chains(simulation_params *sim_params,
 	for (int i=1; i<=sim_params->N; i++) {
 	    int from=(*chainhash)[i].processor;
     	    if (from==0) { //copy from the master
-		(*chainhash)[i].ll = (*cpoints)[(*chainhash)[i].index].ll;
+		(*chainhash)[i].ll = cpoints[(*chainhash)[i].index].ll;
 	    } else { //copy from a slave
 #ifdef PARALLEL
 		int tag = (*chainhash)[i].index;
@@ -835,7 +830,7 @@ void initialize_all_pdb_chains(simulation_params *sim_params,
     } else {
 	for (int i=0; i<current_stored; i++) {
 	    int tag = i;
-	    MPI_Send(&((*cpoints)[i].ll),1,MPI_DOUBLE,0,tag,*MPI_COMM);
+	    MPI_Send(&(cpoints[i].ll),1,MPI_DOUBLE,0,tag,*MPI_COMM);
 	}
 #endif
     }

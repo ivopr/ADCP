@@ -13,6 +13,7 @@
 #include<string.h>
 #include<float.h>
 #include<time.h>
+#include<vector>
 #include"error.h"
 #include"params.h"
 #include"vector.h"
@@ -84,7 +85,7 @@ void repairheap(ChainHash* chainhash,int N){
 }
 
 
-void new_amplitude(Chain **cpoints, Biasmap *biasmap, int current_stored, simulation_params *sim_params, void *mpi_comm){
+void new_amplitude(std::vector<Chain> &cpoints, Biasmap *biasmap, int current_stored, simulation_params *sim_params, void *mpi_comm){
 
   int rank = 0;
   int P = 1;
@@ -96,7 +97,7 @@ void new_amplitude(Chain **cpoints, Biasmap *biasmap, int current_stored, simula
   int copies;
   Chain temporary;
   temporary.aa = NULL; temporary.xaa = NULL; temporary.erg = NULL; temporary.xaa_prev = NULL;
-  allocmem_chain(&temporary,(*cpoints)[0].NAA,(*cpoints)[0].Nchains);
+  allocmem_chain(&temporary,cpoints[0].NAA,cpoints[0].Nchains);
 
   //calculate amplitude
 #ifdef PARALLEL
@@ -108,7 +109,7 @@ void new_amplitude(Chain **cpoints, Biasmap *biasmap, int current_stored, simula
     for(int k = 0; k < 5; k++){
       copies = (int)(rand()/(double)RAND_MAX * current_stored) % (current_stored);
       sim_params->amplitude = oldamp;
-      copybetween(&temporary,&((*cpoints)[copies]));
+      copybetween(&temporary,&(cpoints[copies]));
       aat_init(&temporary,chaint);
       currE = -temporary.ll;
       move(&temporary,chaint,biasmap,sim_params->logLstar,&currE,-1, sim_params);
@@ -129,7 +130,7 @@ void new_amplitude(Chain **cpoints, Biasmap *biasmap, int current_stored, simula
       copies = (int)(rand()/(double)RAND_MAX * current_stored) % (current_stored);
 
       //recalculate amplitude on temporary, not changing the actual NS points
-      copybetween(&temporary,&((*cpoints)[copies]));
+      copybetween(&temporary,&(cpoints[copies]));
       aat_init(&temporary,chaint);
 #ifndef PARALLEL
       sim_params->amplitude = oldamp;
@@ -894,7 +895,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
   void *comm_pointer = NULL;
 
   //NS points and their chaint-s
-  Chain* cpoints = NULL;
+  std::vector<Chain> cpoints;
   Chaint *chaint= new Chaint{};
   //biasmap
   Biasmap *biasmap = new Biasmap{};
@@ -980,14 +981,14 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
   //this stores the processor, index and ll of cpoints arrays from ALL processors
   ChainHash* chainhash = NULL; //only used by master processor of parallel
   //this is used to bring in and send out the P chains at each NS interation and for new sample point generation by MCMC
-  Chain* chaincopies = NULL;
+  std::vector<Chain> chaincopies;
 
 
 
   //read in chains from either PDB file or checkpoint file
   if(sim_params->restart_from_checkpoint == 1){
     //note if only outputting from checkpoint then the tests are performed in here and no chains are stored or sent
-    current_stored = read_in_from_checkpoint(sim_params, &biasmap, temporary, &cpoints, &chaint, &chainhash, rank, P,comm_pointer,only_output_checkpoint);
+    current_stored = read_in_from_checkpoint(sim_params, &biasmap, temporary, cpoints, &chaint, &chainhash, rank, P,comm_pointer,only_output_checkpoint);
   } else {
     //this will also map and initialise the chains
     time_t timer_init1 = 0, timer_init2 = 0;
@@ -996,7 +997,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
 #else
      timer_init1 = time(NULL);
 #endif
-    current_stored = read_in_from_pdb(sim_params, &biasmap, temporary, &cpoints, &chaint, &chainhash, rank, P,comm_pointer);
+    current_stored = read_in_from_pdb(sim_params, &biasmap, temporary, cpoints, &chaint, &chainhash, rank, P,comm_pointer);
 #ifdef PARALLEL
      timer_init2 = MPI_Wtime();
 #else
@@ -1005,7 +1006,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
     if (rank == 0) {
       fprintf(stderr,"NS reading in from checkpoint time: %g\n",(double)timer_init2-(double)timer_init1);
     }
-    initialize_all_pdb_chains(sim_params, &biasmap, temporary, &cpoints, &chaint, &chainhash, rank, current_stored, P,comm_pointer);
+    initialize_all_pdb_chains(sim_params, &biasmap, temporary, cpoints, &chaint, &chainhash, rank, current_stored, P,comm_pointer);
 #ifdef PARALLEL
      timer_init1 = MPI_Wtime();
 #else
@@ -1053,7 +1054,6 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
       delete temporary;
     }
     //for (int i=0; i<current_stored; i++) {   //  freemem_chain(&cpoints[i]);   //}
-    free(cpoints);
     return;
   }
 
@@ -1080,7 +1080,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
   MPI_Bcast(&sim_params->iter_start,1,MPI_INT,0,NS_WORLD);
   MPI_Bcast(&(sim_params->checkpoint_counter),1,MPI_INT,0,NS_WORLD);
   MPI_Bcast(&(sim_params->amplitude),1,MPI_DOUBLE,0,NS_WORLD);
-  if(sim_params->number_initial_MC != 0)  MC_first(chainhash,cpoints, chaint,  current_stored, biasmap,sim_params,  rank,  N, P, &NS_WORLD);
+  if(sim_params->number_initial_MC != 0)  MC_first(chainhash,cpoints.data(), chaint,  current_stored, biasmap,sim_params,  rank,  N, P, &NS_WORLD);
 #endif
 
 
@@ -1100,11 +1100,11 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
     size_of_chaincopies = P;
   }
 #endif
-  chaincopies = (Chain*)malloc(sizeof(Chain)*size_of_chaincopies);
+  /* value-initialized elements, so the per-element pointer nulling the
+     malloc needed is gone; size is known here and never grows. */
+  chaincopies.resize(size_of_chaincopies);
   for(int i = 0; i < size_of_chaincopies; i++){
-    chaincopies[i].aa = NULL; chaincopies[i].erg = NULL;
     chaincopies[i].NAA = temporary->NAA; chaincopies[i].Nchains = temporary->Nchains;
-    chaincopies[i].xaa = NULL; chaincopies[i].xaa_prev = NULL;
     allocmem_chain(&chaincopies[i],chaincopies[i].NAA,chaincopies[i].Nchains);
     for(int k = 0; k < temporary->NAA; k++){
       chaincopies[i].aa[k].id = temporary->aa[k].id;
@@ -1178,7 +1178,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
   /* MAIN NESTED SAMPLING LOOP */
 
   for(sim_params->iter = sim_params->iter_start; sim_params->iter < maxiter && converged; sim_params->iter++){
-    check_to_output_checkpoint_file( cpoints,current_stored,N,sim_params,  rank, comm_pointer);
+    check_to_output_checkpoint_file( cpoints.data(),current_stored,N,sim_params,  rank, comm_pointer);
 
     int heaplength = N; //only master uses it
 
@@ -1206,11 +1206,11 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
     //this works for both parallel (master/slave) and serial
     //chainhash and heap are set to NULL at the beginning for those who don't need it
     if((sim_params->iter+1) % thinning == 0){
-      output_NS_point(chainhash, cpoints, biasmap, sim_params, N,comm_pointer);
+      output_NS_point(chainhash, cpoints.data(), biasmap, sim_params, N,comm_pointer);
     }
 
 #ifdef PARALLEL
-    collect_chains(chainhash,cpoints,chaincopies,sim_params,rank,P,N,&NS_WORLD, instructions);
+    collect_chains(chainhash,cpoints.data(),chaincopies.data(),sim_params,rank,P,N,&NS_WORLD, instructions);
 #else
     do
       copies = 1 + ((int)(rand()/(double)RAND_MAX * N)) % N;
@@ -1236,7 +1236,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
 
     //collect new points on the main processor in the heap
 #ifdef PARALLEL
-    return_and_reheap_chains(chainhash,cpoints,chaincopies,sim_params,rank,P,&heaplength,&NS_WORLD, instructions);
+    return_and_reheap_chains(chainhash,cpoints.data(),chaincopies.data(),sim_params,rank,P,&heaplength,&NS_WORLD, instructions);
 #else
     //put the new one back in heap and send them to overwrite the worst ones
     for(int k = 0; k < P; k++){
@@ -1263,7 +1263,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
 #else
       if(sim_params->iter % N == 0){
 #endif
-        new_amplitude(&cpoints, biasmap, current_stored, sim_params,comm_pointer);
+        new_amplitude(cpoints, biasmap, current_stored, sim_params,comm_pointer);
       }
 
 
@@ -1273,7 +1273,7 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
       if(S != 0){
         int finished = converged;
         if(sim_params->iter == maxiter - 1) finished = 0;
-        deal_with_flex(N,finished,rank, sim_params, NS_WORLD, FLEX_WORLD,chainhash,temporary,cpoints);
+        deal_with_flex(N,finished,rank, sim_params, NS_WORLD, FLEX_WORLD,chainhash,temporary,cpoints.data());
       }
 #endif
 
@@ -1304,7 +1304,6 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
     for(int i = 0; i < size_of_chaincopies; i++){
       freemem_chain(&(chaincopies[i]));
     }
-    free(chaincopies);
 
     freemem_chain(temporary); delete temporary;
     freemem_chaint(chaint);
@@ -1313,7 +1312,6 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
     for(int i = 0; i < current_stored; i++){
       freemem_chain(&cpoints[i]);
     }
-    free(cpoints);
 
     return;
 
