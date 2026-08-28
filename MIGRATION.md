@@ -372,12 +372,13 @@ syntax check, never by running.
 
 - **Every file conversion**: build gcc+clang, run default `ctest` (smoke + functional, ~13 tests, seconds).
 - **Any change touching `energy.cpp`, `vdw.cpp`, `metropolis.cpp`, `probe.cpp`, or `main.cpp`'s swap logic**: also configure `-DADCP_DOCKING_TESTS=ON` and run both `docking` and `validation` labels locally. CI now runs both (see below), so this is a fast local pre-check rather than the only gate. `val_3q47_redock` takes **~2 minutes** — measured at 117s, 120s and 140s. An earlier draft of this document claimed ~30 min and used that to justify leaving it out of CI; that number was wrong.
-- **`func_adcp_fold_determinism`**: run after every `energy.c`/`vdw.c` change without exception. It's the only automated determinism signal, and template-vs-function-pointer codegen changes can alter floating-point accumulation order in Monte Carlo sums (IEEE 754 non-associativity) — a determinism regression here is a blocking failure to investigate, not acceptable drift.
+- **`func_adcp_fold_determinism`**: run after every `energy.c`/`vdw.c` change without exception, **12×, not once**. It's the only automated determinism signal, and template-vs-function-pointer codegen changes can alter floating-point accumulation order in Monte Carlo sums (IEEE 754 non-associativity) — a determinism regression here is a blocking failure to investigate, not acceptable drift. **And per "MECHANISM RESOLVED" below, the `5660a33` hang is a latent bug that unrelated codegen changes can resurface, so the 12× hammer applies to every change in any file, not only container conversions.**
 
 ## FIXED REGRESSION — `energy.cpp`, introduced by `5660a33` (Phase 1 step 6)
 
-**Status: fixed (trigger removed). Mechanism still unexplained — read this before touching
-`scoreSideChain` / `scoreSideChainNoClash` again.**
+**Status: symptom gone. Mechanism now IDENTIFIED as indirect, and the underlying bug
+is still latent — read the "MECHANISM RESOLVED" subsection below before trusting the
+fix or the hypotheses table.**
 
 The fix: `tc` is a fixed-size stack array sized at the largest rotamer set declared in
 `canonicalAA.h` (81 × 11 × 3 floats, ~10 KB), indexed through the same `View3` wrapper.
@@ -436,6 +437,55 @@ Two lessons worth keeping:
   template and restructured a `goto` that this plan had scheduled for Phase 2. It passed
   13/13 plus docking and validation at the time, because the failure is intermittent. **A
   green test run is not evidence that a diff is cast-only — read the diff.**
+
+### MECHANISM RESOLVED — `tc` was a red herring; the real bug is still latent
+
+Re-measured from scratch at `5660a33`, in a throwaway worktree, Release build.
+Three facts, each measured:
+
+| Measurement | Result |
+|---|---|
+| `5660a33` as committed (heap `std::vector` `tc`), fold command | **3 hangs / 13 runs** |
+| `5660a33` with **only** `tc` changed to the fixed stack array | **0 hangs / 16 runs** |
+| Entry counters compiled into `scoreSideChain` **and** `scoreSideChainNoClash`, fold command | **0 calls, in 6 of 6 runs** |
+
+The first two reproduce this document's original bisect. The third breaks it.
+
+**`scoreSideChain` and `scoreSideChainNoClash` are never called on the folding path.**
+Every call to either sits inside `if ((int) mod_params->external_r0[0] == 1)` in
+`ADenergyNoClash`; `external_r0[]` defaults to `0.0` (`params.cpp:308`, `:434`) and is
+only set by `-p external=…`. `tests/run_fold_test.sh` passes only `-p Bias=NULL`. The
+docking tests pass `external=5,con,1.0,1.0,Opt=1,…` — they are the only tests that
+reach this code. The documented *symptom* is likewise docking-only: the
+`currTargetEnergy` spin loop is inside `if (protein_model.opt == 1)` (`main.cpp:188`),
+and `opt` defaults to `0`.
+
+So changing the storage class of a buffer **in a function that never executes on this
+path** moves the hang rate from ~23% to zero. `tc`'s semantics cannot be the cause.
+The effect is indirect — code layout, alignment, inlining and register-allocation
+ripple out from the changed function and perturb something else on the fold path.
+
+**This is why all seven hypotheses in the table above were refuted: every one of them
+assumed `tc` was executing.** They were testing the wrong function.
+
+Consequences, and they are not comfortable:
+
+- **The stack-`tc` fix is a layout coincidence, not a root-cause fix.** The real
+  defect is still in the tree, still latent, and any change that perturbs codegen
+  could resurface it — including changes in unrelated files.
+- **Therefore the 12× hammer stays mandatory for every change, permanently**, not just
+  for container conversions. That is the one mitigation that actually works here, and
+  this document's "validate by hammering, not by reasoning" line is now load-bearing
+  rather than rhetorical.
+- The original claim that the fold test hangs is **correct** — do not "fix" it back.
+  What is wrong is the causal attribution to `tc`.
+- Finding the real bug needs the hang caught in the act. It did **not** reproduce under
+  gdb (0/5) or with entry counters compiled in (0/6), the same timing-sensitivity this
+  document already recorded for ASan. MSan or valgrind, still not installed here,
+  remain the tools of choice.
+
+Do not delete the stack-`tc` array — it is measurably suppressing the symptom. Just do
+not believe it fixed anything.
 
 ## CI hardening (done after Phase 1, before starting Phase 2)
 
