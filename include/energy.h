@@ -58,18 +58,14 @@ void vectorProduct(float *a, float *b, float *c);
 void normalizedVector(float *a, float *b, float *v);
 
 int checkClash(double x, double y, double z, double *setCoords, int ind);
-#ifdef __cplusplus
-/* C++ has no variably-modified types, so these two can't use the C99
-   VLA-parameter syntax the energy.c definitions still use. Neither
-   function is called outside energy.c (still C99), so a plain-pointer
-   declaration is only ever needed to let C++ translation units parse
-   the prototype -- it never has to match a real call's array shape. */
+/* C++ has no variably-modified types, so these take plain pointers; the
+   definitions in energy.cpp index them through the View3 wrapper. The
+   C99 VLA-parameter alternative that used to sit behind an #else here is
+   gone with the last .c file. Neither function is called outside
+   energy.cpp -- see the MECHANISM RESOLVED note in MIGRATION.md before
+   changing anything about them, including their linkage. */
 float scoreSideChain(int nbRot, int nbAtoms, double *acharges, int *aTypes, double *coords, AA *a, int numRand);
 double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atypes, double *coords, AA *a, double* setCoords, int ind, int numRand);
-#else
-float scoreSideChain(int nbRot, int nbAtoms, double *acharges, int *aTypes,  double coords[nbRot][nbAtoms][3], AA *a,  int numRand);
-double scoreSideChainNoClash(int nbRot, int nbAtoms, double charges[nbAtoms], int atypes[nbAtoms],  double coords[nbRot][nbAtoms][3], AA *a, double* setCoords, int ind, int numRand);
-#endif
 
 double ramabias(AA *, AA *, AA *);
 
