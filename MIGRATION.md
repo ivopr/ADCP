@@ -48,9 +48,11 @@ Ordering within Phase 2, by risk × blast radius:
    section below); doing it as one step means changing 13 files at once, which is
    not bisectable against the `energy.cpp` precedent.
    - **3a. Done.** `peptide.cpp`-local cleanup, no header or caller change.
-   - 3b. Tree-wide `malloc(sizeof(Chain|Chaint|Biasmap))` → `new`/`delete`, structs
-     still POD. Prerequisite, no behavior change.
-   - 3c. `Chain`/`Chaint` members → `std::vector`; the wide one.
+   - **3b. Done**, after adding the NS/checkpoint tests it needed (3b-0). No
+     `malloc`/`realloc`/`free` of these three types remains anywhere.
+   - **3c. Partly done**: `erg`, `ergt`, `distb` are `std::vector`. `aa`/`aat` and
+     the four `triplet` members are still raw — see the progress section for what
+     blocks each.
 4. `main.c` idiomatic pass (string/RAII file wrapper — the VLA fix already landed in Phase 1)
 5. `vdw.c` (dispatch templating)
 6. `energy.c`
@@ -211,6 +213,99 @@ runs against the same build directory will wipe each other's scratch space** and
 produce a spurious determinism failure. Hammer sequentially, one `ctest` at a time.
 `--repeat until-fail:12` takes ~10.5 min, which exceeds some command timeouts —
 two batches of 6 is equivalent.
+
+## Phase 2 progress — 3b done, 3c partly done
+
+**3b-0: the riskiest code had no tests.** Nested sampling runs only under `-n`, and
+no test passed `-n`, so `nested.cpp` (1325 lines) and `checkpoint_io.cpp` (991
+lines) had zero coverage — including `store_chain`'s realloc-grow loop over the
+live NS population, the single highest-risk site in step 3. Two tests now drive it
+by feeding a multi-model PDB (`tests/data/output.pdb` already has 1000 `MODEL`
+records; the scripts truncate to 20, and `read_in_from_pdb` stores one `cpoint`
+per model):
+
+- `func_adcp_ns_smoke` — all 20 snapshots stored, same seed gives bit-identical
+  NS output, energies finite and **monotonically decreasing** (the defining NS
+  invariant, asserted instead of a stored baseline because these energies are
+  post-MC and therefore `rand()`-dependent — the same reason `run_fold_test.sh`
+  stores no baseline energy).
+- `func_adcp_checkpoint_roundtrip` — checkpoints written, `-R` resumes at the
+  checkpointed iteration rather than restarting at 0, two restarts agree. It
+  deliberately does **not** compare a restart against an uninterrupted run: the
+  checkpoint stores the population but not the RNG state, so those legitimately
+  diverge. Verified empirically; do not "fix" that by asserting equality.
+
+**Known limit of both, verified by mutation:** perturbing a stored chain by 0.001
+still passes. They catch crashes, miscounts and nondeterminism, not small
+deterministic corruption. That mutation *does* shift every value in the
+`NS energy sequence:` line the NS test prints, so **every conversion in this area
+must also diff that line against the parent commit on the same machine.** It was
+byte-identical across all five commits below.
+
+**3b: no `malloc`/`realloc`/`free` of `Chain`, `Chaint` or `Biasmap` remains.**
+That is the greppable exit criterion, and it holds. Single objects became
+`new T{}`/`delete` (value-initialization also closes the `flex_data`/`ll`/
+`Nchains` holes the hand-nulling never covered); `pdbin`'s `tempchain` became a
+stack `Chain`. Arrays split by whether they grow: the growth loops became
+`std::vector` (`cpoints` — so `Chain **cpoints` is now `std::vector<Chain>&`
+across four `checkpoint_io.h` signatures plus `new_amplitude`; and cdlearn's
+`all_chains`/`all_chaints`/`all_biasmaps`), while fixed-size allocations became
+`new[]`/`delete[]` (`input_chains`) or `resize` (`chaincopies`,
+`all_chains_sim`). ~20 consumers taking a plain `Chain*` were left alone and get
+`.data()`.
+
+**3c so far: `Chain::erg`, `Chaint::ergt` and `Biasmap::distb` are `std::vector`.**
+The largest allocations in the tree (`erg` is NAA², `ergt` is 5·NAA²). `resize`
+also made the lengths `size_t`, fixing an `int` overflow above NAA ≈ 46000/20000,
+and made `aat_init`'s `ergt` path a genuine no-op early-out.
+`allocmem_chain`/`freemem_chain`/`freemem_chaint` were kept as shims, so their ~40
+call sites did not change.
+
+### Still to do in 3c, and why each is blocked
+
+- **`Chain::aa` / `Chaint::aat` (`AA*`).** `getpdb` takes `AA **paa` and reallocs
+  it through `dblalloc`, so converting `aa` means reworking that signature to
+  `std::vector<AA>&` first. `AA` itself is POD and pointer-free and **must not be
+  touched**: 8 whole-`AA` assignments in `metropolis.cpp` and a `memcpy` in
+  `tools/bfactor.cpp` become UB the moment `AA` gains a non-trivial member.
+- **`xaa` / `xaa_prev` / `xaat` / `xaat_prev` (`triplet` = `double[3][3]`).**
+  `std::vector` cannot hold a raw array type. `std::vector<std::array<std::array<
+  double,3>,3>>` indexes identically for `xaa[i][j][k]`, but does **not** decay to
+  `double(*)[3]`, and **60 sites pass `xaa[i]` straight into a `triplet`
+  parameter** (`acidate`, `casttriplet`, `transset`, …). Converting these means
+  either touching all 60 or writing a wrapper struct with a conversion operator.
+  Neither is worth it for the safety gained — these are fixed-size-per-element
+  buffers, not the ones that overflow or leak. Leaving them raw is safe: `Chain`'s
+  implicit move copies the pointer exactly as the old bitwise realloc-move did,
+  and nothing frees them from a destructor.
+
+Because those stay raw, `aat_init`'s `sizeof(chaint)->aat` guard is still broken
+and still always true (it parses as `sizeof(AA*)` == 8). `ergt` no longer cares.
+
+### The MPI build was broken and had never been compiled
+
+`MPI_Comm *MPI_COMM = mpi_comm;` assigns a `void*` to a `T*` implicitly — legal in
+C89, illegal in C++ — at **7 sites** in `nested.cpp` and `checkpoint_io.cpp`, left
+over from Phase 1. So `-DADCP_MPI=ON` could never have built, consistent with this
+document's own note that `adcp_mpi` was never compiled during the migration. Fixed
+with explicit casts. That immediately paid for itself: with the PARALLEL files
+compiling, the very next check caught `mpi_send_chain`/`mpi_rec_chain` passing the
+newly-vectorized `erg` where a `void*` was expected — a break no other gate here
+would have found.
+
+MPI is not installed on the dev machine, so the PARALLEL paths are verified with
+`g++ -std=c++17 -fsyntax-only -DPARALLEL -Iinclude -I<stub>` against a hand-written
+stub `mpi.h` (~20 symbols). **That checks syntax and types, not linking or
+behaviour** — CI's `mpi` job remains the real gate, and it should now actually get
+past the compiler.
+
+### Pre-existing leaks left for RAII, not yet fixed
+
+Deliberately not fixed, because a `Chain` destructor would fix them for free once
+`aa`/`xaa` are owned — revisit when finishing 3c: `flex.cpp:892`'s `chain`/`chaint`
+are never freed; `nested.cpp:122`'s early return skips its cleanup; the
+`only_output_checkpoint` exit leaves the per-element `freemem_chain` commented out;
+`probe.cpp`'s stack `Chaint` and `displacements` are never freed.
 
 ## Validation gates
 
