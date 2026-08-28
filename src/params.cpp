@@ -301,6 +301,12 @@ void model_param_initialise(model_params *self) {
   /* fixed amino acids */
   self->fixed_aalist_file = NULL;
 
+  /*optimizing strategy*/
+  self->opt = 0;
+  self->opt_totE_weight = 1.0;
+  self->opt_firstlastE_weight = 0.0;
+  self->opt_extE_weight = 0.0;
+
   /* external potential */
   self->external_potential_type = 0;
   for (int i=0; i<3; i++) {
