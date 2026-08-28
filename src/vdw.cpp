@@ -41,7 +41,11 @@
    r1: position of atom1
    r2: position of atom2
    Rmin: minimum separation between the two atoms, typically sum of covalent radii */
-inline double vdw_hard_cutoff(vector r1, vector r2, double Rmin, double depth, double vdw_rel_cutoff, double energy_shift, double clash_energy_at_hard_cutoff) {
+/* NOT inline: include/vdw.h declares these without it, and probe.cpp calls them
+   through a function pointer, so a real out-of-line symbol has to exist. It only
+   did before because vdw.cpp took their address; once the callers below became
+   templates the compiler inlined every use and the link broke. */
+double vdw_hard_cutoff(vector r1, vector r2, double Rmin, double depth, double vdw_rel_cutoff, double energy_shift, double clash_energy_at_hard_cutoff) {
         double p = Rmin;
 	double dis2, sqp;
 	
@@ -66,7 +70,7 @@ inline double vdw_hard_cutoff(vector r1, vector r2, double Rmin, double depth, d
    depth: the energy at the minimum energy separation, that is the depth of the potential well
    vdw_rel_cutoff: the cutoff of the potential is (Rmin * vdw_rel_cutoff)
    energy_shift: the energy at the cutoff, to be subtracted to have continuous a function */
-inline double vdw_lj(vector r1, vector r2, double Rmin, double depth, double vdw_rel_cutoff, double energy_shift, double clash_energy_at_hard_cutoff) {
+double vdw_lj(vector r1, vector r2, double Rmin, double depth, double vdw_rel_cutoff, double energy_shift, double clash_energy_at_hard_cutoff) {
 
 	double dis2, p6;// p12;
 	int clashing = 0;
@@ -113,26 +117,24 @@ inline double vdw_lj(vector r1, vector r2, double Rmin, double depth, double vdw
 /* vdW energy contribution within the atoms of 1 amino acid */
 /* Only calculate contributions between atoms separated by >=4 bonds */
 /* Revised by Csilla, 2011-10-28 */
-double clash(AA *a, model_params *mod_params)
+double clash(AA *a, model_params *mod_params);
+
+/* The vdW potential is a run-time choice but is fixed for a whole run, so it
+   is a template parameter here rather than a function pointer re-picked and
+   indirect-called on every invocation. Measured ~1.8% on a fold workload,
+   bit-identical output. */
+template <double VdwFn(vector, vector, double, double, double, double, double)>
+static double clash_impl(AA *a, model_params *mod_params)
 {
 	double erg = 0.0;
 	double rg;
 	double depth = 0;
 	double erg_tmp = 0.0;
 
-	//Assign function pointer to the vdW model
-	double (*vdw_fn) (vector r1, vector r2, double Rmin, double depth, double vdw_rel_cutoff, double energy_shift, double clash_energy_at_hard_cutoff) = NULL;
-	if (mod_params->vdw_potential == HARD_CUTOFF_VDW_POTENTIAL) {
-		vdw_fn = vdw_hard_cutoff;
-	} else if (mod_params->vdw_potential == LJ_VDW_POTENTIAL) {
-		vdw_fn = vdw_lj;
-	} else {
-		stop("Clash cannot be calculated without a valid vdW potential.");
-	}
 
 //	/* CB_ -- O__*/
 //	if (a->etc & CB_ && a->etc & O__ && mod_params->ro > 0.0 && mod_params->rcb > 0.0) {
-//		erg_tmp = vdw_fn(a->cb, a->o, mod_params->rcb + mod_params->ro,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+//		erg_tmp = VdwFn(a->cb, a->o, mod_params->rcb + mod_params->ro,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 //		if (erg_tmp > 5.) fprintf(stderr,"Clash within residue %d CB_-O__.\n",a->num);
 //		erg += erg_tmp;
 //	}
@@ -146,14 +148,14 @@ double clash(AA *a, model_params *mod_params)
 		      /* G__ -- O__ */
 		      if (a->etc & O__ && mod_params->ro > 0.0) {
 			depth = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties.data())*mod_params->vdw_depth_o_sqrt;
-			erg_tmp = vdw_fn(a->g, a->o, rg + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			erg_tmp = VdwFn(a->g, a->o, rg + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 //			if (erg_tmp > 5.) fprintf(stderr,"Clash within residue %d G__-O__.\n",a->num);
 			erg += erg_tmp;
 		      }
 //		      /* G__ -- C__ */
 //		      if (a->etc & C__ && mod_params->rc > 0.0) {
 //			depth = sidechain_vdw_depth_sqrt(a->id,1,mod_params->sidechain_properties.data())*mod_params->vdw_depth_c_sqrt;
-//			erg_tmp = vdw_fn(a->g, a->c, rg + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+//			erg_tmp = VdwFn(a->g, a->c, rg + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 //			if (erg_tmp > 5.) fprintf(stderr,"Clash within residue %d G__-C__.\n",a->num);
 //			erg += erg_tmp;
 //		      }
@@ -167,14 +169,14 @@ double clash(AA *a, model_params *mod_params)
 		      /* G2_ -- O__ */
 		      if (a->etc & O__ && mod_params->ro > 0.0) {
 			depth = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties.data())*mod_params->vdw_depth_o_sqrt;
-			erg_tmp = vdw_fn(a->g2, a->o, rg + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			erg_tmp = VdwFn(a->g2, a->o, rg + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 //			if (erg_tmp > 5.) fprintf(stderr,"Clash within residue %d G2_-O__.\n",a->num);
 			erg += erg_tmp;
 		      }
 //		      /* G2_ -- C__ */
 //		      if (a->etc & C__ && mod_params->rc > 0.0) {
 //			depth = sidechain_vdw_depth_sqrt(a->id,2,mod_params->sidechain_properties.data())*mod_params->vdw_depth_c_sqrt;
-//			erg_tmp = vdw_fn(a->g2, a->c, rg + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+//			erg_tmp = VdwFn(a->g2, a->c, rg + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 //			if (erg_tmp > 5.) fprintf(stderr,"Clash within residue %d G2_-C__.\n",a->num);
 //			erg += erg_tmp;
 //		      }
@@ -205,7 +207,14 @@ double HHvDW(AA *a, AA *b)
 /* Energy contribution of all vdW interaction between 2 neighbouring residues */
 /* order of neighbors matter, b follows a in the chain */
 /* Only calculate contributions between atoms separated by >=4 bonds */
-double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
+double exclude_neighbor(AA *a, AA *b, model_params *mod_params);
+
+/* The vdW potential is a run-time choice but is fixed for a whole run, so it
+   is a template parameter here rather than a function pointer re-picked and
+   indirect-called on every invocation. Measured ~1.8% on a fold workload,
+   bit-identical output. */
+template <double VdwFn(vector, vector, double, double, double, double, double)>
+static double exclude_neighbor_impl(AA *a, AA *b, model_params *mod_params)
 {
 	double erg = 0.0;
 	double rg_a, rg2_a, rg_b, rg2_b;
@@ -215,15 +224,6 @@ double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
 	double depth = 0;
 
 
-	//Assign function pointer to the vdW model
-	double (*vdw_fn) (vector r1, vector r2, double Rmin, double depth, double vdw_rel_cutoff, double energy_shift, double clash_energy_at_hard_cutoff) = NULL;
-	if (mod_params->vdw_potential == HARD_CUTOFF_VDW_POTENTIAL) {
-		vdw_fn = vdw_hard_cutoff;
-	} else if (mod_params->vdw_potential == LJ_VDW_POTENTIAL) {
-		vdw_fn = vdw_lj;
-	} else {
-		stop("Clash cannot be calculated without a valid vdW potential.");
-	}
 
 	erg += HHvDW(a, b);
 
@@ -251,47 +251,47 @@ double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
 
 
 	/* these should not be counted in, since 1-4 interactions */
-//	if (mod_params->rn > 0.0 && mod_params->rn > 0.0 && skip_14_vdw==0) erg += vdw_fn(a->n, b->n, mod_params->rn + mod_params->rn,mod_params->vdw_depth_n_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_n_n, mod_params->vdw_clash_energy_at_hard_cutoff);
-//	if (mod_params->rc > 0.0 && mod_params->rc > 0.0 && skip_14_vdw==0) erg += vdw_fn(a->c, b->c, mod_params->rc + mod_params->rc,mod_params->vdw_depth_c_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_c, mod_params->vdw_clash_energy_at_hard_cutoff);
-//	if (mod_params->rc > 0.0 && mod_params->rcb > 0.0 && skip_14_vdw==0) erg += vdw_fn(a->c, b->cb, mod_params->rc + mod_params->rcb,mod_params->vdw_depth_cb_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_c, mod_params->vdw_clash_energy_at_hard_cutoff);
-//	if (mod_params->rcb > 0.0 && mod_params->rn > 0.0 && skip_14_vdw==0) erg += vdw_fn(a->cb, b->n, mod_params->rcb + mod_params->rn,mod_params->vdw_depth_cb_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_n, mod_params->vdw_clash_energy_at_hard_cutoff);
+//	if (mod_params->rn > 0.0 && mod_params->rn > 0.0 && skip_14_vdw==0) erg += VdwFn(a->n, b->n, mod_params->rn + mod_params->rn,mod_params->vdw_depth_n_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_n_n, mod_params->vdw_clash_energy_at_hard_cutoff);
+//	if (mod_params->rc > 0.0 && mod_params->rc > 0.0 && skip_14_vdw==0) erg += VdwFn(a->c, b->c, mod_params->rc + mod_params->rc,mod_params->vdw_depth_c_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_c, mod_params->vdw_clash_energy_at_hard_cutoff);
+//	if (mod_params->rc > 0.0 && mod_params->rcb > 0.0 && skip_14_vdw==0) erg += VdwFn(a->c, b->cb, mod_params->rc + mod_params->rcb,mod_params->vdw_depth_cb_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_c, mod_params->vdw_clash_energy_at_hard_cutoff);
+//	if (mod_params->rcb > 0.0 && mod_params->rn > 0.0 && skip_14_vdw==0) erg += VdwFn(a->cb, b->n, mod_params->rcb + mod_params->rn,mod_params->vdw_depth_cb_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_n, mod_params->vdw_clash_energy_at_hard_cutoff);
 
 	/* All distances will be counted in, since the LJ vdW potential is long ranged */
 //
 	/* (a) C__ -- (b) O__ */
-	if (mod_params->rc > 0.0 && mod_params->ro > 0.0) erg += vdw_fn(a->c, b->o, mod_params->rc + mod_params->ro,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rc > 0.0 && mod_params->ro > 0.0) erg += VdwFn(a->c, b->o, mod_params->rc + mod_params->ro,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 //
 	/* (a) O__ -- (b) CB_ */
-	if (mod_params->ro > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') erg += vdw_fn(a->o, b->cb, mod_params->ro + mod_params->rcb,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->ro > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') erg += VdwFn(a->o, b->cb, mod_params->ro + mod_params->rcb,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) O__ -- (b) C__ */
-	if (mod_params->ro > 0.0 && mod_params->rc > 0.0) erg += vdw_fn(a->o, b->c, mod_params->ro + mod_params->rc,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->ro > 0.0 && mod_params->rc > 0.0) erg += VdwFn(a->o, b->c, mod_params->ro + mod_params->rc,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) O__ -- (b) O__ */
-	if (mod_params->ro > 0.0 && mod_params->ro > 0.0) erg += vdw_fn(a->o, b->o, mod_params->ro + mod_params->ro,mod_params->vdw_depth_o_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_o_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->ro > 0.0 && mod_params->ro > 0.0) erg += VdwFn(a->o, b->o, mod_params->ro + mod_params->ro,mod_params->vdw_depth_o_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_o_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 
 	/* (a) CA_ -- (b) CB_ */
-	if (mod_params->rca > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') erg += vdw_fn(a->ca, b->cb, mod_params->rca + mod_params->rcb,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rca > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') erg += VdwFn(a->ca, b->cb, mod_params->rca + mod_params->rcb,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) CA_ -- (b) C__ */
-	if (mod_params->rca > 0.0 && mod_params->rc > 0.0) erg += vdw_fn(a->ca, b->c, mod_params->rca + mod_params->rc,mod_params->vdw_depth_ca_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_c, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rca > 0.0 && mod_params->rc > 0.0) erg += VdwFn(a->ca, b->c, mod_params->rca + mod_params->rc,mod_params->vdw_depth_ca_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_c, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) CA_ -- (b) O__ */
-	if (mod_params->rca > 0.0 && mod_params->ro > 0.0) erg += vdw_fn(a->ca, b->o, mod_params->rca + mod_params->ro,mod_params->vdw_depth_ca_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rca > 0.0 && mod_params->ro > 0.0) erg += VdwFn(a->ca, b->o, mod_params->rca + mod_params->ro,mod_params->vdw_depth_ca_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 
 	/* (a) CB_ -- (b) CA_ */
-	if (mod_params->rcb > 0.0 && mod_params->rca > 0.0 && a->id != 'G') erg += vdw_fn(a->cb, b->ca, mod_params->rcb + mod_params->rca,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rcb > 0.0 && mod_params->rca > 0.0 && a->id != 'G') erg += VdwFn(a->cb, b->ca, mod_params->rcb + mod_params->rca,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) CB_ -- (b) CB_ */
-	if (mod_params->rcb > 0.0 && mod_params->rcb > 0.0 && a->id != 'G' && b->id != 'G') erg += vdw_fn(a->cb, b->cb, mod_params->rcb + mod_params->rcb,mod_params->vdw_depth_cb_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rcb > 0.0 && mod_params->rcb > 0.0 && a->id != 'G' && b->id != 'G') erg += VdwFn(a->cb, b->cb, mod_params->rcb + mod_params->rcb,mod_params->vdw_depth_cb_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) CB_ -- (b) C__ */
-	if (mod_params->rcb > 0.0 && mod_params->rc > 0.0 && a->id != 'G') erg += vdw_fn(a->cb, b->c, mod_params->rcb + mod_params->rc,mod_params->vdw_depth_cb_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_c, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rcb > 0.0 && mod_params->rc > 0.0 && a->id != 'G') erg += VdwFn(a->cb, b->c, mod_params->rcb + mod_params->rc,mod_params->vdw_depth_cb_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_c, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) CB_ -- (b) O__ */
-		if (mod_params->rcb > 0.0 && mod_params->ro > 0.0 && a->id != 'G') erg += vdw_fn(a->cb, b->o, mod_params->rcb + mod_params->ro,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+		if (mod_params->rcb > 0.0 && mod_params->ro > 0.0 && a->id != 'G') erg += VdwFn(a->cb, b->o, mod_params->rcb + mod_params->ro,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 
 	/* (a) N__ -- (b) CA_ */
-	if (mod_params->rn > 0.0 && mod_params->rca > 0.0) erg += vdw_fn(a->n, b->ca, mod_params->rn + mod_params->rca,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_n, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rn > 0.0 && mod_params->rca > 0.0) erg += VdwFn(a->n, b->ca, mod_params->rn + mod_params->rca,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_n, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) N__ -- (b) CB_ */
-	if (mod_params->rn > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') erg += vdw_fn(a->n, b->cb, mod_params->rn + mod_params->rcb,mod_params->vdw_depth_cb_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_n, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rn > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') erg += VdwFn(a->n, b->cb, mod_params->rn + mod_params->rcb,mod_params->vdw_depth_cb_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_n, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) N__ -- (b) C__ */
-	if (mod_params->rn > 0.0 && mod_params->rc > 0.0) erg += vdw_fn(a->n, b->c, mod_params->rn + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rn > 0.0 && mod_params->rc > 0.0) erg += VdwFn(a->n, b->c, mod_params->rn + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 	/* (a) N__ -- (b) O__ */
-	if (mod_params->rn > 0.0 && mod_params->ro > 0.0) erg += vdw_fn(a->n, b->o, mod_params->rn + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+	if (mod_params->rn > 0.0 && mod_params->ro > 0.0) erg += VdwFn(a->n, b->o, mod_params->rn + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 
 	/* vdW contribution of gamma atoms */
 
@@ -301,27 +301,27 @@ double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
 		/* (a) C__ -- (b) G__ */
 		if (mod_params->rc > 0.0) {
 		   depth = eps_g_b_sqrt*mod_params->vdw_depth_c_sqrt;
-		   erg += vdw_fn(a->c, b->g, mod_params->rc + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->c, b->g, mod_params->rc + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) O__ -- (b) G__ */
 		if (mod_params->ro > 0.0) {
 		   depth = eps_g_b_sqrt*mod_params->vdw_depth_o_sqrt;
-		   erg += vdw_fn(a->o, b->g, mod_params->ro + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->o, b->g, mod_params->ro + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) CA_ -- (b) G__ */
 		if (mod_params->rca > 0.0) {
 		   depth = eps_g_b_sqrt*mod_params->vdw_depth_ca_sqrt;
-		   erg += vdw_fn(a->ca, b->g, mod_params->rca + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->ca, b->g, mod_params->rca + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) CB_ -- (b) G__ */
 		if (rg_b != 0.0 && mod_params->rcb > 0.0 && a->id != 'G') {
 		   depth = eps_g_b_sqrt*mod_params->vdw_depth_cb_sqrt;
-		   erg += vdw_fn(a->cb, b->g, mod_params->rcb + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->cb, b->g, mod_params->rcb + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) N__ -- (b) G__ */
 		if (rg_b != 0.0 && mod_params->rn > 0.0) {
 		   depth = eps_g_b_sqrt*mod_params->vdw_depth_n_sqrt;
-		   erg += vdw_fn(a->n, b->g, mod_params->rn + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->n, b->g, mod_params->rn + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 	    }
 
@@ -329,27 +329,27 @@ double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
 		/* (a) C__ -- (b) G__ */
 		if (rg2_b != 0.0 && mod_params->rc > 0.0) {
 		   depth = eps_g2_b_sqrt*mod_params->vdw_depth_c_sqrt;
-		   erg += vdw_fn(a->c, b->g2, mod_params->rc + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->c, b->g2, mod_params->rc + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) O__ -- (b) G__ */
 		if (rg2_b != 0.0 && mod_params->ro > 0.0) {
 		   depth = eps_g2_b_sqrt*mod_params->vdw_depth_o_sqrt;
-		   erg += vdw_fn(a->o, b->g2, mod_params->ro + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->o, b->g2, mod_params->ro + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) CA_ -- (b) G__ */
 		if (mod_params->rca > 0.0) {
 		   depth = eps_g2_b_sqrt*mod_params->vdw_depth_ca_sqrt;
-		   erg += vdw_fn(a->ca, b->g2, mod_params->rca + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->ca, b->g2, mod_params->rca + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) CB_ -- (b) G__ */
 		if (rg2_b != 0.0 && mod_params->rcb > 0.0 && a->id != 'G') {
 		   depth = eps_g2_b_sqrt*mod_params->vdw_depth_cb_sqrt;
-		   erg += vdw_fn(a->cb, b->g2, mod_params->rcb + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->cb, b->g2, mod_params->rcb + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) N__ -- (b) G__ */
 		if (rg2_b != 0.0 && mod_params->rn > 0.0) {
 		   depth = eps_g2_b_sqrt*mod_params->vdw_depth_n_sqrt;
-		   erg += vdw_fn(a->n, b->g2, mod_params->rn + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->n, b->g2, mod_params->rn + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 	    }
 
@@ -357,36 +357,36 @@ double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
 		/* (a) G__ -- (b) CA_ */
 		if (mod_params->rca > 0.0) {
 		   depth = eps_g_a_sqrt*mod_params->vdw_depth_ca_sqrt;
-		   erg += vdw_fn(a->g, b->ca, rg_a + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g, b->ca, rg_a + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) C__ */
 		if (mod_params->rc > 0.0) {
 		   depth = eps_g_a_sqrt*mod_params->vdw_depth_c_sqrt;
-		   erg += vdw_fn(a->g, b->c, rg_a + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g, b->c, rg_a + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) O__ */
 		if (mod_params->ro > 0.0) {
 		   depth = eps_g_a_sqrt*mod_params->vdw_depth_o_sqrt;
-		   erg += vdw_fn(a->g, b->o, rg_a + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g, b->o, rg_a + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) CB_ */
 		if (mod_params->rcb > 0.0 && b->id != 'G') {
 		   depth = eps_g_a_sqrt*mod_params->vdw_depth_cb_sqrt;
-		   erg += vdw_fn(a->g, b->cb, rg_a + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g, b->cb, rg_a + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) N__ */
 		if (mod_params->rn > 0.0) {
 		   depth = eps_g_a_sqrt*mod_params->vdw_depth_n_sqrt;
-		   erg += vdw_fn(a->g, b->n, rg_a + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g, b->n, rg_a + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) G__ */
 		if (rg_b != 0.0) {
 		   depth = eps_g_a_sqrt*eps_g_b_sqrt;
-		   erg += vdw_fn(a->g, b->g, rg_a + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g, b->g, rg_a + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		if (rg2_b != 0.0) {
 		   depth = eps_g_a_sqrt*eps_g2_b_sqrt;
-		   erg += vdw_fn(a->g, b->g2, rg_a + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g, b->g2, rg_a + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 	    }
 
@@ -394,36 +394,36 @@ double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
 		/* (a) G__ -- (b) CA_ */
 		if (mod_params->rca > 0.0) {
 		   depth = eps_g2_a_sqrt*mod_params->vdw_depth_ca_sqrt;
-		   erg += vdw_fn(a->g2, b->ca, rg2_a + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g2, b->ca, rg2_a + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) C__ */
 		if (mod_params->rc > 0.0) {
 		   depth = eps_g2_a_sqrt*mod_params->vdw_depth_c_sqrt;
-		   erg += vdw_fn(a->g2, b->c, rg2_a + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g2, b->c, rg2_a + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) O__ */
 		if (mod_params->ro > 0.0) {
 		   depth = eps_g2_a_sqrt*mod_params->vdw_depth_o_sqrt;
-		   erg += vdw_fn(a->g2, b->o, rg2_a + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g2, b->o, rg2_a + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) CB_ */
 		if (mod_params->rcb > 0.0 && b->id != 'G') {
 		   depth = eps_g2_a_sqrt*mod_params->vdw_depth_cb_sqrt;
-		   erg += vdw_fn(a->g2, b->cb, rg2_a + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g2, b->cb, rg2_a + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) N__ */
 		if (mod_params->rn > 0.0) {
 		   depth = eps_g2_a_sqrt*mod_params->vdw_depth_n_sqrt;
-		   erg += vdw_fn(a->g2, b->n, rg2_a + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g2, b->n, rg2_a + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		/* (a) G__ -- (b) G__ */
 		if (rg_b != 0.0) {
 		   depth = eps_g2_a_sqrt*eps_g_b_sqrt;
-		   erg += vdw_fn(a->g2, b->g, rg2_a + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g2, b->g, rg2_a + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 		if (rg2_b != 0.0) {
 		   depth = eps_g2_a_sqrt*eps_g2_b_sqrt;
-		   erg += vdw_fn(a->g2, b->g2, rg2_a + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+		   erg += VdwFn(a->g2, b->g2, rg2_a + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 		}
 	    }
 	}
@@ -436,7 +436,14 @@ double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
    a, b: amino acids
    d2: squared distance of their alpha carbons
    hbond_proxmity: if they or their neighbours connect these guys by H-bonds */
-double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond_proximity)
+double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond_proximity);
+
+/* The vdW potential is a run-time choice but is fixed for a whole run, so it
+   is a template parameter here rather than a function pointer re-picked and
+   indirect-called on every invocation. Measured ~1.8% on a fold workload,
+   bit-identical output. */
+template <double VdwFn(vector, vector, double, double, double, double, double)>
+static double exclude_hard_impl(AA *a, AA *b, double d2, model_params *mod_params, int hbond_proximity)
 {
 	double erg = 0.0;
 	double rg_a, rg2_a, rg_b, rg2_b;
@@ -444,15 +451,6 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
 	double vdw_erg = 0;
 	const double backbone_constants[3] = { mod_params->vdw_backbone_cutoff, mod_params->vdw_backbone_cutoff, mod_params->vdw_backbone_cutoff };
 
-	//Assign function pointer to the vdW model
-	double (*vdw_fn) (vector r1, vector r2, double Rmin, double depth, double vdw_rel_cutoff, double energy_shift, double clash_energy_at_hard_cutoff) = NULL;
-	if (mod_params->vdw_potential == HARD_CUTOFF_VDW_POTENTIAL) {
-		vdw_fn = vdw_hard_cutoff;
-	} else if (mod_params->vdw_potential == LJ_VDW_POTENTIAL) {
-		vdw_fn = vdw_lj;
-	} else {
-		stop("Clash cannot be calculated without a valid vdW potential.");
-	}
 
 	erg += HHvDW(a, b);
 
@@ -483,21 +481,21 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
 		if (rg_a != 0.0) {
 			/* Skip CYS--CYS gamma-gamma interactions (should really only miss when they are S-S bonded!, but let's try this for now) */
 			if (rg_b != 0.0 && (a->id != 'C' || b->id != 'C')) { //&& (mod_params->Sbond_strength == 0 || a->id != 'C' || b->id != 'C' )) 
-			  vdw_erg = vdw_fn(a->g, b->g, rg_a + rg_b,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			  vdw_erg = VdwFn(a->g, b->g, rg_a + rg_b,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 			}
 			if (rg2_b != 0.0) {
-			  vdw_erg = vdw_fn(a->g, b->g2, rg_a + rg2_b,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			  vdw_erg = VdwFn(a->g, b->g2, rg_a + rg2_b,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 			}
 		}
 		if (rg2_a != 0.0) {
 			if (rg_b != 0.0) {
-			   vdw_erg = vdw_fn(a->g2, b->g, rg2_a + rg_b,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			   vdw_erg = VdwFn(a->g2, b->g, rg2_a + rg_b,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 			}
 			if (rg2_b != 0.0) {
-			   vdw_erg = vdw_fn(a->g2, b->g2, rg2_a + rg2_b,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			   vdw_erg = VdwFn(a->g2, b->g2, rg2_a + rg2_b,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 			}
 		}
@@ -509,19 +507,19 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
 			return erg;
         
 		if (rg_a != 0.0 && mod_params->ro > 0.0) {
-			vdw_erg = vdw_fn(a->g, b->o, rg_a + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->o, rg_a + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->ro > 0.0) {
-			vdw_erg = vdw_fn(a->g2, b->o, rg2_a + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->o, rg2_a + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->ro > 0.0) {
-			vdw_erg = vdw_fn(b->g, a->o, rg_b + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->o, rg_b + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->ro > 0.0) {
-			vdw_erg = vdw_fn(b->g2, a->o, rg2_b + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->o, rg2_b + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
         
@@ -530,19 +528,19 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
         
 		/* Skip CYS--CYS beta-gamma interactions (should really only miss when they are S-S bonded!, but let's try this for now) */
 		if (rg_a != 0.0 && mod_params->rcb > 0.0 && (a->id != 'C' || b->id != 'C') && b->id != 'G') {
-			vdw_erg = vdw_fn(a->g, b->cb, rg_a + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->cb, rg_a + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
-			vdw_erg = vdw_fn(a->g2, b->cb, rg2_a + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->cb, rg2_a + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->rcb > 0.0 && (a->id != 'C' || b->id != 'C') && a->id != 'G') {
-			vdw_erg = vdw_fn(b->g, a->cb, rg_b + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->cb, rg_b + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->rcb > 0.0 && a->id != 'G') {
-			vdw_erg = vdw_fn(b->g2, a->cb, rg2_b + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->cb, rg2_b + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
         
@@ -550,19 +548,19 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
 		//	return erg;
         
 		if (rg_a != 0.0 && mod_params->rc > 0.0) {
-			vdw_erg = vdw_fn(a->g, b->c, rg_a + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->c, rg_a + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->rc > 0.0) {
-			vdw_erg = vdw_fn(a->g2, b->c, rg2_a + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->c, rg2_a + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->rc > 0.0) {
-			vdw_erg = vdw_fn(b->g, a->c, rg_b + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->c, rg_b + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->rc > 0.0) {
-			vdw_erg = vdw_fn(b->g2, a->c, rg2_b + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->c, rg2_b + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
         
@@ -570,19 +568,19 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
 		//	return erg;
         
 		if (rg_a != 0.0 && mod_params->rn > 0.0) {
-			vdw_erg = vdw_fn(a->g, b->n, rg_a + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->n, rg_a + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->rn > 0.0) {
-			vdw_erg = vdw_fn(a->g2, b->n, rg2_a + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->n, rg2_a + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->rn > 0.0) {
-			vdw_erg = vdw_fn(b->g, a->n, rg_b + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->n, rg_b + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->rn > 0.0) {
-			vdw_erg = vdw_fn(b->g2, a->n, rg2_b + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->n, rg2_b + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
         
@@ -590,19 +588,19 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
 		//	return erg;
         
 		if (rg_a != 0.0 && mod_params->rca > 0.0) {
-			vdw_erg = vdw_fn(a->g, b->ca, rg_a + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->ca, rg_a + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->rca > 0.0) {
-			vdw_erg = vdw_fn(a->g2, b->ca, rg2_a + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->ca, rg2_a + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->rca > 0.0) {
-			vdw_erg = vdw_fn(b->g, a->ca, rg_b + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->ca, rg_b + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->rca > 0.0) {
-			vdw_erg = vdw_fn(b->g2, a->ca, rg2_b + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->ca, rg2_b + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 
@@ -615,24 +613,24 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
     /* o - o, o - n, o - c */
 
 	if (mod_params->ro > 0.0 && mod_params->ro > 0.0) {
-		vdw_erg = vdw_fn(a->o, b->o, mod_params->ro + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->o, mod_params->ro + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	// only hard cutoff for N-O, the H-bond interactions will pull them in
 	if (mod_params->ro > 0.0 && mod_params->rn > 0.0) {
-		vdw_erg = vdw_fn(a->o, b->n, mod_params->ro + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->n, mod_params->ro + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 		erg += vdw_erg;
 	}
 	if (mod_params->rn > 0.0 && mod_params->ro > 0.0) {
-		vdw_erg = vdw_fn(a->n, b->o, mod_params->rn + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->o, mod_params->rn + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 		erg += vdw_erg;
 	}
 	if (mod_params->ro > 0.0 && mod_params->rc > 0.0) {
-		vdw_erg = vdw_fn(a->o, b->c, mod_params->ro + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->c, mod_params->ro + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->ro > 0.0) {
-		vdw_erg = vdw_fn(a->c, b->o, mod_params->rc + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->o, mod_params->rc + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 
@@ -642,51 +640,51 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
 	/* 3.B  any-any, within N-N, mostly N with others */
 	/* n - n, n - c, c - c, o - cb, o - ca, n - cb, c - cb */
 	if (mod_params->rn > 0.0 && mod_params->rn > 0.0) {
-		vdw_erg = vdw_fn(a->n, b->n, mod_params->rn + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->n, mod_params->rn + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rn > 0.0 && mod_params->rc > 0.0) {
-		vdw_erg = vdw_fn(a->n, b->c, mod_params->rn + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->c, mod_params->rn + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 		erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->rn > 0.0) {
-		vdw_erg = vdw_fn(a->c, b->n, mod_params->rc + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->n, mod_params->rc + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 		erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->rc > 0.0) {
-		vdw_erg = vdw_fn(a->c, b->c, mod_params->rc + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->c, mod_params->rc + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->ro > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
-		vdw_erg = vdw_fn(a->o, b->cb, mod_params->ro + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->cb, mod_params->ro + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->ro > 0.0 && a->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->o, mod_params->rcb + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->o, mod_params->rcb + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->ro > 0.0 && mod_params->rca > 0.0) {
-		vdw_erg = vdw_fn(a->o, b->ca, mod_params->ro + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->ca, mod_params->ro + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rca > 0.0 && mod_params->ro > 0.0) {
-		vdw_erg = vdw_fn(a->ca, b->o, mod_params->rca + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->o, mod_params->rca + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rn > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
-		vdw_erg = vdw_fn(a->n, b->cb, mod_params->rn + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->cb, mod_params->rn + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->rn > 0.0 && a->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->n, mod_params->rcb + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->n, mod_params->rcb + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
-		vdw_erg = vdw_fn(a->c, b->cb, mod_params->rc + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->cb, mod_params->rc + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->rc > 0.0 && a->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->c, mod_params->rcb + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->c, mod_params->rcb + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	
@@ -696,45 +694,62 @@ double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond
 	/* 3.B  rest, within N-CA, mostly ca with all others */
 	/* n - ca, c - ca, cb - ca, cb - cb, ca - ca */
 	if (mod_params->rca > 0.0 && mod_params->rn > 0.0) {
-		vdw_erg = vdw_fn(a->ca, b->n, mod_params->rca + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->n, mod_params->rca + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rn > 0.0 && mod_params->rca > 0.0) {
-		vdw_erg = vdw_fn(a->n, b->ca, mod_params->rn + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->ca, mod_params->rn + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->rca > 0.0) {
-		vdw_erg = vdw_fn(a->c, b->ca, mod_params->rc + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->ca, mod_params->rc + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rca > 0.0 && mod_params->rc > 0.0) {
-		vdw_erg = vdw_fn(a->ca, b->c, mod_params->rca + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->c, mod_params->rca + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->rcb > 0.0 && a->id != 'G' && b->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->cb, mod_params->rcb + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->cb, mod_params->rcb + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rca > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
-		vdw_erg = vdw_fn(a->ca, b->cb, mod_params->rca + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->cb, mod_params->rca + mod_params->rcb,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->rca > 0.0 && a->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->ca, mod_params->rcb + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->ca, mod_params->rcb + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rca > 0.0 && mod_params->rca > 0.0) {
-		vdw_erg = vdw_fn(a->ca, b->ca, mod_params->rca + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->ca, mod_params->rca + mod_params->rca,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
     
 	return erg;
 }
+
+double exclude_hard(AA *a, AA *b, double d2, model_params *mod_params, int hbond_proximity)
+{
+	if (mod_params->vdw_potential == HARD_CUTOFF_VDW_POTENTIAL)
+		return exclude_hard_impl<vdw_hard_cutoff>(a, b, d2, mod_params, hbond_proximity);
+	if (mod_params->vdw_potential == LJ_VDW_POTENTIAL)
+		return exclude_hard_impl<vdw_lj>(a, b, d2, mod_params, hbond_proximity);
+	stop("Clash cannot be calculated without a valid vdW potential.");
+	return 0.0;
+}
 #endif
 /* Energy contribution of all vdW interaction between 2 residues
    a, b: amino acids
    d2: squared distance of their alpha carbons */
-double exclude(AA *a, AA *b, double d2, model_params *mod_params)
+double exclude(AA *a, AA *b, double d2, model_params *mod_params);
+
+/* The vdW potential is a run-time choice but is fixed for a whole run, so it
+   is a template parameter here rather than a function pointer re-picked and
+   indirect-called on every invocation. Measured ~1.8% on a fold workload,
+   bit-identical output. */
+template <double VdwFn(vector, vector, double, double, double, double, double)>
+static double exclude_impl(AA *a, AA *b, double d2, model_params *mod_params)
 {
 	double erg = 0.0;
 	double rg_a, rg2_a, rg_b, rg2_b;
@@ -747,15 +762,6 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
 
 	erg += HHvDW(a, b);
 
-	//Assign function pointer to the vdW model
-	double (*vdw_fn) (vector r1, vector r2, double Rmin, double depth, double vdw_rel_cutoff, double energy_shift, double clash_energy_at_hard_cutoff) = NULL;
-	if (mod_params->vdw_potential == HARD_CUTOFF_VDW_POTENTIAL) {
-		vdw_fn = vdw_hard_cutoff;
-	} else if (mod_params->vdw_potential == LJ_VDW_POTENTIAL) {
-		vdw_fn = vdw_lj;
-	} else {
-		stop("Clash cannot be calculated without a valid vdW potential.");
-	}
 
     /* Calculates the correct index for maxvdw_gamma_gamma 
      * note the other d2 > should be changed for maximum efficiency*/
@@ -789,24 +795,24 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
 			/* Skip CYS--CYS gamma-gamma interactions (should really only miss when they are S-S bonded!, but let's try this for now) */
 			if (rg_b != 0.0 && (a->id != 'C' || b->id != 'C')) { //&& (mod_params->Sbond_strength == 0 || a->id != 'C' || b->id != 'C' )) 
 			  depth = eps_g_a_sqrt*eps_g_b_sqrt;
-			  vdw_erg = vdw_fn(a->g, b->g, rg_a + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			  vdw_erg = VdwFn(a->g, b->g, rg_a + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 			}
 			if (rg2_b != 0.0) {
 			  depth = eps_g_a_sqrt*eps_g2_b_sqrt;
-			  vdw_erg = vdw_fn(a->g, b->g2, rg_a + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			  vdw_erg = VdwFn(a->g, b->g2, rg_a + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 			}
 		}
 		if (rg2_a != 0.0) {
 			if (rg_b != 0.0) {
 			  depth = eps_g2_a_sqrt*eps_g_b_sqrt;
-			   vdw_erg = vdw_fn(a->g2, b->g, rg2_a + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			   vdw_erg = VdwFn(a->g2, b->g, rg2_a + rg_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 			}
 			if (rg2_b != 0.0) {
 			  depth = eps_g2_a_sqrt*eps_g2_b_sqrt;
-			   vdw_erg = vdw_fn(a->g2, b->g2, rg2_a + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			   vdw_erg = VdwFn(a->g2, b->g2, rg2_a + rg2_b,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 			}
 		}
@@ -817,22 +823,22 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
         
 		if (rg_a != 0.0 && mod_params->ro > 0.0) {
 			depth = eps_g_a_sqrt*mod_params->vdw_depth_o_sqrt;
-			vdw_erg = vdw_fn(a->g, b->o, rg_a + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->o, rg_a + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->ro > 0.0) {
 			depth = eps_g2_a_sqrt*mod_params->vdw_depth_o_sqrt;
-			vdw_erg = vdw_fn(a->g2, b->o, rg2_a + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->o, rg2_a + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->ro > 0.0) {
 			depth = eps_g_b_sqrt*mod_params->vdw_depth_o_sqrt;
-			vdw_erg = vdw_fn(b->g, a->o, rg_b + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->o, rg_b + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->ro > 0.0) {
 			depth = eps_g2_b_sqrt*mod_params->vdw_depth_o_sqrt;
-			vdw_erg = vdw_fn(b->g2, a->o, rg2_b + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->o, rg2_b + mod_params->ro,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
         
@@ -842,22 +848,22 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
 		/* Skip CYS--CYS beta-gamma interactions (should really only miss when they are S-S bonded!, but let's try this for now) */
 		if (rg_a != 0.0 && mod_params->rcb > 0.0 && (a->id != 'C' || b->id != 'C') && b->id != 'G') {
 			depth = eps_g_a_sqrt*mod_params->vdw_depth_cb_sqrt;
-			vdw_erg = vdw_fn(a->g, b->cb, rg_a + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->cb, rg_a + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
 			depth = eps_g2_a_sqrt*mod_params->vdw_depth_cb_sqrt;
-			vdw_erg = vdw_fn(a->g2, b->cb, rg2_a + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->cb, rg2_a + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->rcb > 0.0 && (a->id != 'C' || b->id != 'C') && a->id != 'G') {
 			depth = eps_g_b_sqrt*mod_params->vdw_depth_cb_sqrt;
-			vdw_erg = vdw_fn(b->g, a->cb, rg_b + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->cb, rg_b + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->rcb > 0.0 && a->id != 'G') {
 			depth = eps_g2_b_sqrt*mod_params->vdw_depth_cb_sqrt;
-			vdw_erg = vdw_fn(b->g2, a->cb, rg2_b + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->cb, rg2_b + mod_params->rcb,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
         
@@ -866,22 +872,22 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
         
 		if (rg_a != 0.0 && mod_params->rc > 0.0) {
 			depth = eps_g_a_sqrt*mod_params->vdw_depth_c_sqrt;
-			vdw_erg = vdw_fn(a->g, b->c, rg_a + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->c, rg_a + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->rc > 0.0) {
 			depth = eps_g2_a_sqrt*mod_params->vdw_depth_c_sqrt;
-			vdw_erg = vdw_fn(a->g2, b->c, rg2_a + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->c, rg2_a + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->rc > 0.0) {
 			depth = eps_g_b_sqrt*mod_params->vdw_depth_c_sqrt;
-			vdw_erg = vdw_fn(b->g, a->c, rg_b + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->c, rg_b + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->rc > 0.0) {
 			depth = eps_g2_b_sqrt*mod_params->vdw_depth_c_sqrt;
-			vdw_erg = vdw_fn(b->g2, a->c, rg2_b + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->c, rg2_b + mod_params->rc,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
         
@@ -890,22 +896,22 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
         
 		if (rg_a != 0.0 && mod_params->rn > 0.0) {
 			depth = eps_g_a_sqrt*mod_params->vdw_depth_n_sqrt;
-			vdw_erg = vdw_fn(a->g, b->n, rg_a + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->n, rg_a + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->rn > 0.0) {
 			depth = eps_g2_a_sqrt*mod_params->vdw_depth_n_sqrt;
-			vdw_erg = vdw_fn(a->g2, b->n, rg2_a + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->n, rg2_a + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->rn > 0.0) {
 			depth = eps_g_b_sqrt*mod_params->vdw_depth_n_sqrt;
-			vdw_erg = vdw_fn(b->g, a->n, rg_b + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->n, rg_b + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->rn > 0.0) {
 			depth = eps_g2_b_sqrt*mod_params->vdw_depth_n_sqrt;
-			vdw_erg = vdw_fn(b->g2, a->n, rg2_b + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->n, rg2_b + mod_params->rn,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
         
@@ -914,22 +920,22 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
         
 		if (rg_a != 0.0 && mod_params->rca > 0.0) {
 			depth = eps_g_a_sqrt*mod_params->vdw_depth_ca_sqrt;
-			vdw_erg = vdw_fn(a->g, b->ca, rg_a + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g, b->ca, rg_a + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_a != 0.0 && mod_params->rca > 0.0) {
 			depth = eps_g2_a_sqrt*mod_params->vdw_depth_ca_sqrt;
-			vdw_erg = vdw_fn(a->g2, b->ca, rg2_a + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(a->g2, b->ca, rg2_a + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg_b != 0.0 && mod_params->rca > 0.0) {
 			depth = eps_g_b_sqrt*mod_params->vdw_depth_ca_sqrt;
-			vdw_erg = vdw_fn(b->g, a->ca, rg_b + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g, a->ca, rg_b + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 		if (rg2_b != 0.0 && mod_params->rca > 0.0) {
 			depth = eps_g2_b_sqrt*mod_params->vdw_depth_ca_sqrt;
-			vdw_erg = vdw_fn(b->g2, a->ca, rg2_b + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
+			vdw_erg = VdwFn(b->g2, a->ca, rg2_b + mod_params->rca,depth, mod_params->rel_vdw_cutoff, mod_params->vdw_shift*depth, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 		}
 
@@ -942,24 +948,24 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
     /* o - o, o - n, o - c */
 
 	if (mod_params->ro > 0.0 && mod_params->ro > 0.0) {
-		vdw_erg = vdw_fn(a->o, b->o, mod_params->ro + mod_params->ro,mod_params->vdw_depth_o_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_o_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->o, mod_params->ro + mod_params->ro,mod_params->vdw_depth_o_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_o_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	// only hard cutoff for N-O, the H-bond interactions will pull them in
 	if (mod_params->ro > 0.0 && mod_params->rn > 0.0) {
-		vdw_erg = vdw_fn(a->o, b->n, mod_params->ro + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->n, mod_params->ro + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 		erg += vdw_erg;
 	}
 	if (mod_params->rn > 0.0 && mod_params->ro > 0.0) {
-		vdw_erg = vdw_fn(a->n, b->o, mod_params->rn + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->o, mod_params->rn + mod_params->ro,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 		erg += vdw_erg;
 	}
 	if (mod_params->ro > 0.0 && mod_params->rc > 0.0) {
-		vdw_erg = vdw_fn(a->o, b->c, mod_params->ro + mod_params->rc,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->c, mod_params->ro + mod_params->rc,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->ro > 0.0) {
-		vdw_erg = vdw_fn(a->c, b->o, mod_params->rc + mod_params->ro,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->o, mod_params->rc + mod_params->ro,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 
@@ -969,52 +975,52 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
 	/* 3.B  any-any, within N-N, mostly N with others */
 	/* n - n, n - c, c - c, o - cb, o - ca, n - cb, c - cb */
 	if (mod_params->rn > 0.0 && mod_params->rn > 0.0) {
-		vdw_erg = vdw_fn(a->n, b->n, mod_params->rn + mod_params->rn,mod_params->vdw_depth_n_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_n_n, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->n, mod_params->rn + mod_params->rn,mod_params->vdw_depth_n_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_n_n, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	// only hard cutoff for N-C, the H-bond interactions will pull them in
 	if (mod_params->rn > 0.0 && mod_params->rc > 0.0) {
-		vdw_erg = vdw_fn(a->n, b->c, mod_params->rn + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->c, mod_params->rn + mod_params->rc,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 		erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->rn > 0.0) {
-		vdw_erg = vdw_fn(a->c, b->n, mod_params->rc + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->n, mod_params->rc + mod_params->rn,0, mod_params->rel_vdw_cutoff, 0, mod_params->vdw_clash_energy_at_hard_cutoff);
 		erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->rc > 0.0) {
-		vdw_erg = vdw_fn(a->c, b->c, mod_params->rc + mod_params->rc,mod_params->vdw_depth_c_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_c, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->c, mod_params->rc + mod_params->rc,mod_params->vdw_depth_c_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_c, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->ro > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
-		vdw_erg = vdw_fn(a->o, b->cb, mod_params->ro + mod_params->rcb,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->cb, mod_params->ro + mod_params->rcb,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->ro > 0.0 && a->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->o, mod_params->rcb + mod_params->ro,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->o, mod_params->rcb + mod_params->ro,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->ro > 0.0 && mod_params->rca > 0.0) {
-		vdw_erg = vdw_fn(a->o, b->ca, mod_params->ro + mod_params->rca,mod_params->vdw_depth_ca_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->o, b->ca, mod_params->ro + mod_params->rca,mod_params->vdw_depth_ca_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rca > 0.0 && mod_params->ro > 0.0) {
-		vdw_erg = vdw_fn(a->ca, b->o, mod_params->rca + mod_params->ro,mod_params->vdw_depth_ca_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_o, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->o, mod_params->rca + mod_params->ro,mod_params->vdw_depth_ca_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_o, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rn > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
-		vdw_erg = vdw_fn(a->n, b->cb, mod_params->rn + mod_params->rcb,mod_params->vdw_depth_cb_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->cb, mod_params->rn + mod_params->rcb,mod_params->vdw_depth_cb_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->rn > 0.0 && a->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->n, mod_params->rcb + mod_params->rn,mod_params->vdw_depth_cb_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_n, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->n, mod_params->rcb + mod_params->rn,mod_params->vdw_depth_cb_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_n, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
-		vdw_erg = vdw_fn(a->c, b->cb, mod_params->rc + mod_params->rcb,mod_params->vdw_depth_cb_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_c, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->cb, mod_params->rc + mod_params->rcb,mod_params->vdw_depth_cb_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_c, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->rc > 0.0 && a->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->c, mod_params->rcb + mod_params->rc,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_ca, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->c, mod_params->rcb + mod_params->rc,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_ca, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	
@@ -1024,35 +1030,35 @@ double exclude(AA *a, AA *b, double d2, model_params *mod_params)
 	/* 3.B  rest, within N-CA, mostly ca with all others */
 	/* n - ca, c - ca, cb - ca, cb - cb, ca - ca */
 	if (mod_params->rca > 0.0 && mod_params->rn > 0.0) {
-		vdw_erg = vdw_fn(a->ca, b->n, mod_params->rca + mod_params->rn,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_n, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->n, mod_params->rca + mod_params->rn,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_n, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rn > 0.0 && mod_params->rca > 0.0) {
-		vdw_erg = vdw_fn(a->n, b->ca, mod_params->rn + mod_params->rca,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_n, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->n, b->ca, mod_params->rn + mod_params->rca,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_n, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rc > 0.0 && mod_params->rca > 0.0) {
-		vdw_erg = vdw_fn(a->c, b->ca, mod_params->rc + mod_params->rca,mod_params->vdw_depth_ca_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_c, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->c, b->ca, mod_params->rc + mod_params->rca,mod_params->vdw_depth_ca_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_c, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rca > 0.0 && mod_params->rc > 0.0) {
-		vdw_erg = vdw_fn(a->ca, b->c, mod_params->rca + mod_params->rc,mod_params->vdw_depth_ca_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_c, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->c, mod_params->rca + mod_params->rc,mod_params->vdw_depth_ca_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_c, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->rcb > 0.0 && a->id != 'G' && b->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->cb, mod_params->rcb + mod_params->rcb,mod_params->vdw_depth_cb_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->cb, mod_params->rcb + mod_params->rcb,mod_params->vdw_depth_cb_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rca > 0.0 && mod_params->rcb > 0.0 && b->id != 'G') {
-		vdw_erg = vdw_fn(a->ca, b->cb, mod_params->rca + mod_params->rcb,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->cb, mod_params->rca + mod_params->rcb,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rcb > 0.0 && mod_params->rca > 0.0 && a->id != 'G') {
-		vdw_erg = vdw_fn(a->cb, b->ca, mod_params->rcb + mod_params->rca,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->cb, b->ca, mod_params->rcb + mod_params->rca,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
 	if (mod_params->rca > 0.0 && mod_params->rca > 0.0) {
-		vdw_erg = vdw_fn(a->ca, b->ca, mod_params->rca + mod_params->rca,mod_params->vdw_depth_ca_ca, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_ca, mod_params->vdw_clash_energy_at_hard_cutoff);
+		vdw_erg = VdwFn(a->ca, b->ca, mod_params->rca + mod_params->rca,mod_params->vdw_depth_ca_ca, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_ca, mod_params->vdw_clash_energy_at_hard_cutoff);
 			  erg += vdw_erg;
 	}
     
@@ -1364,4 +1370,39 @@ void update_sim_params_from_chain(Chain *chain,simulation_params *sim_params) {
 	stop("vdw.c: The number of chains != the last chain ID.\n");
   }
   sim_params->Nchains = Nchains;
+}
+
+/* vdW potential dispatchers: pick the potential once per call and hand the
+   rest of the work to a body specialized on it, instead of indirect-calling
+   through a function pointer at every atom pair. */
+
+double clash(AA *a, model_params *mod_params)
+{
+	if (mod_params->vdw_potential == HARD_CUTOFF_VDW_POTENTIAL)
+		return clash_impl<vdw_hard_cutoff>(a, mod_params);
+	if (mod_params->vdw_potential == LJ_VDW_POTENTIAL)
+		return clash_impl<vdw_lj>(a, mod_params);
+	stop("Clash cannot be calculated without a valid vdW potential.");
+	return 0.0;
+}
+
+double exclude_neighbor(AA *a, AA *b, model_params *mod_params)
+{
+	if (mod_params->vdw_potential == HARD_CUTOFF_VDW_POTENTIAL)
+		return exclude_neighbor_impl<vdw_hard_cutoff>(a, b, mod_params);
+	if (mod_params->vdw_potential == LJ_VDW_POTENTIAL)
+		return exclude_neighbor_impl<vdw_lj>(a, b, mod_params);
+	stop("Clash cannot be calculated without a valid vdW potential.");
+	return 0.0;
+}
+
+
+double exclude(AA *a, AA *b, double d2, model_params *mod_params)
+{
+	if (mod_params->vdw_potential == HARD_CUTOFF_VDW_POTENTIAL)
+		return exclude_impl<vdw_hard_cutoff>(a, b, d2, mod_params);
+	if (mod_params->vdw_potential == LJ_VDW_POTENTIAL)
+		return exclude_impl<vdw_lj>(a, b, d2, mod_params);
+	stop("Clash cannot be calculated without a valid vdW potential.");
+	return 0.0;
 }
