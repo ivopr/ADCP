@@ -59,7 +59,8 @@ Ordering within Phase 2, by risk × blast radius:
 6. **Done, cold paths only.** `energy.c` — the hot allocations, the three
    `ADenergyNoClash` VLAs and the whole `tc`/`View3` region stay as they are, on
    purpose; see the step 6 section below.
-7. `probe.c`, `metropolis.c`
+7. **Done.** `probe.c` — all 32 diagnostic mask bits swept under ASan, three real
+   bugs fixed. `metropolis.c` — dead code only; the per-move path is untouched.
 8. `flex.c`, `checkpoint_io.c`
 9. `nested.c`
 10. `tools/*`
@@ -453,6 +454,92 @@ lines that no test reaches.
 `secondary_radius_of_gyration`; and the non-trivial `external`/`external2` bodies —
 all have zero automated coverage. The grid-map and `scoreSideChain*` code is reached
 **only** by the opt-in 3Q47 docking tests.
+
+## Phase 2 progress — step 7 (probe.cpp, metropolis.cpp) done
+
+Two files needing opposite treatment: `probe.cpp` is entirely cold diagnostics,
+`metropolis.cpp` is the per-move Monte Carlo engine.
+
+### probe.cpp — the mask-bit sweep found three real bugs
+
+`tests()` maps table entry N to mask bit N, and the default masks are `0x8803`
+(MC) / `0x18803` (NS) — so **only 5 of 32 bits had ever executed**, and 27 had
+never been under a sanitizer. Ran a fold once per bit under ASan+UBSan on a
+20-residue peptide. **Three bits reported; 29 were clean** — the clean result is
+worth recording too, because it bounds how much is left to find here.
+
+| bit | diagnostic | finding |
+|---|---|---|
+| `0x1000000` | `number_of_contacts` | two `calloc(NAA)` never freed, on any path. ASan: 1680 bytes × 20 objects, twice — once per output snapshot, so it accumulated. Now `std::vector<int>`. |
+| `0x8000000` | `CA_geometry` | heap-buffer-overflow **read**. The `aa[1..16]` block had no guard at all; the second block reads `aa[24]` while guarded by `NAA > 17`, so it overran on anything under 25 residues. Guards are now `> 16` and `> 24`. |
+| `0x40000000` | `vdw_max_gamma` | leaked the `->sequence` that `sim_params_copy` had just allocated. |
+
+**The third one is the interesting one.** `copy_string` deliberately does *not*
+free its target — the free is commented out with *"would crash things in
+model_params_copy"* — so `build_peptide_from_sequence` overwriting
+`my_sim_params->sequence` orphans the previous copy. Fixed locally in
+`vdw_cutoff_distances_calculate`, matching the `->seq` line directly above it.
+`copy_string` itself was left alone: making it free would touch every caller in
+the tree, and the comment says that was already tried. **Any other
+`copy_string` into an already-populated field is the same bug** — that is the
+generalisable finding, not the single site.
+
+It only bites when the function runs *after* `->sequence` is populated, which is
+why `main.cpp`'s startup call has never shown it.
+
+Suspected by reading but **not** reproduced by any sanitizer, so documented rather
+than patched: shift UB in `hpattern` (`1 << (15 - j + i)` can go negative or past
+31), uninitialized `nca`/`cacb` in `all_torsions`' `G2_`-without-`G__` branch
+(MSan territory, not installed), and `hbm` left dangling after `free`.
+
+Also deleted six diagnostics that had a definition, a header declaration and a
+*commented-out* table entry — `vdw_contributions`, `cm_ideal_4`, `cm_alpha_8`,
+`cm_native_go`, `fasta`, `hbond_pattern`. **Bit numbering is the thing that could
+have broken there**; it did not, verified by count and by re-running the three
+bits the sweep had reported on.
+
+### metropolis.cpp — ~400 dead lines, and nothing else
+
+`crankshaft_adk()` (262 lines, zero callers) and `flipChain()` (130 lines, zero
+callers), plus 11 commented `//free(ADEnergy_Chaint)` fossils sitting next to the
+stack VLAs that replaced the heap version, and the never-used `reject` static.
+
+**Nothing on the per-move path was touched** — `allowed()`, `crankshaft()`,
+`crankshaftcyclic()`, `move()`, `reModNum()`, `indMoved()`, and every VLA. In
+particular `crankshaft()`'s 113-line one-shot table build stays inline: extracting
+cold code from a hot function is the textbook improvement and is exactly the
+layout edit step 6 proved can flip the hang rate.
+
+### transopt's `mod` parameter is inert — measured, deliberately left inert
+
+```c
+int maxStep = 10;  int maxNoImprovStep = 3;
+if (mod == 1){ int maxStep = 30; int maxNoImprovStep = 5; }   /* shadows, dies at the brace */
+```
+
+`main.cpp` passes `mod == 1` from **six of its seven** call sites, so "hard
+minimization" has never differed from the soft mode. Making it real was measured
+on the 3Q47 redock rather than assumed:
+
+| | val_3q47_redock | dock_3q47_smoke | RMSD | top targetE |
+|---|---|---|---|---|
+| shipped (inert) | 130 s | 8.6 s | **0.72 Å** | **-28.95** |
+| `maxStep = 30` | 156 s | 19.3 s | 0.80 Å | -28.34 |
+
+**+20% on the validation run, 2.25× on the smoke test, for no quality gain** — the
+RMSD and energy differences sit inside the noise of a 16-run stochastic search and
+if anything favour the current behaviour. So the change was **not** shipped: ADCP's
+published results were produced with this budget, and whether hard minimization
+should finally do something is a science decision for the ADFRsuite maintainers.
+The shadowing is replaced by a comment carrying these numbers, so the next reader
+finds the measurement instead of "fixing" it silently.
+
+### Latent, documented, not fixed
+
+`transmove`'s `while (vecind2 == vecind1)` loop spins forever when `chain->NAA == 2`
+(one residue): `rand()%1 + 1` is identically 1. It needs `NAA >= 3` to terminate
+and `external_potential_type == 5` to be reached. Fixing it means adding a branch
+to a warm function, which is not worth it for a one-residue peptide.
 
 ## Validation gates
 
