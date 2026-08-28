@@ -2875,7 +2875,7 @@ void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_param
 
 
 	//do not change the original mod_params
-	model_params * mod_params = (model_params*)malloc(sizeof(model_params));
+	model_params * mod_params = new model_params();
 	model_params_copy(mod_params,&(sim_params->protein_model));
 
 	/* save the previous results into last */
@@ -3037,7 +3037,7 @@ void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_param
 	//putchar('\n');
 
 	model_param_finalise(mod_params);
-	free(mod_params);
+	delete mod_params;
 
 }
 
