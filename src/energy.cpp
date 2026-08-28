@@ -13,6 +13,7 @@
 #include<math.h>
 
 #include"canonicalAA.h"
+#include<memory>
 #include<vector>
 
 #include"error.h"
@@ -215,17 +216,20 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 	int i, j, k;
 	double val;
 
-	FILE *fin = NULL;
-	//fprintf(stderr,"Opening contact map file %s\n",mod_params->contact_map_file);
-	fin = fopen(mod_params->contact_map_file.c_str(),"r");
+	/* RAII handle: this function has three exits and used to repeat the close
+	   at each one. */
+	struct FinCloser { void operator()(FILE *f) const { if (f) fclose(f); } };
+	std::unique_ptr<FILE, FinCloser> fin(fopen(mod_params->contact_map_file.c_str(), "r"));
 	int abort = 0;
-	if (fin == NULL) { // no file opened beforehand
+	if (!fin) { // no file opened beforehand
 	    if (mod_params->contact_map_file.empty()) {
 		fprintf(stderr, "ERROR: Invalid Go-type bias: %s.",
 			!mod_params->contact_map_file.empty() ? mod_params->contact_map_file.c_str() : "(null)");
 		fprintf(stderr, "  No contact map file specified.\n");
 		abort=1;
-	    } else if ((fin = fopen(mod_params->contact_map_file.c_str(), "r")) == NULL && mod_params->contact_map_file != "NULL") { // nonexisting file and not NULL given
+	    } else if (mod_params->contact_map_file != "NULL") { // nonexisting file and not NULL given
+		/* the old code re-tried the identical fopen here; it cannot succeed
+		   the second time, so the retry was dead and only the test remains */
 		fprintf(stderr, "ERROR: Invalid Go-type bias: %s.", mod_params->contact_map_file.c_str());
 		fprintf(stderr, "  Could not open file (missing?).\n");
 		abort = 1;
@@ -237,10 +241,6 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 
 	//if the biasmap has been already initialised (e.g. nested sampling), do not reread it
 	if(!(biasmap)->distb.empty()) {
-		if (fin) {
-			fclose(fin);
-			//fprintf(stderr,"Closing contact map file %s\n",mod_params->contact_map_file);
-		}
 		return; //when nested sampling - probe1 is only to be done once
 	}
 
@@ -258,22 +258,22 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 		    (biasmap)->distb[i * (biasmap)->NAA + j] = 0.0;
 		}
 	    }
-	    if (fin) {
-		fclose(fin);
-		//fprintf(stderr,"Closing contact map file %s\n",mod_params->contact_map_file);
-	    }
 	    return;
 	}
 
 	// otherwise read in contact map
-	for (i = 1; i < chain->NAA; i++)
+	/* `eof` replaces a `goto out`. The outer loop must `break` rather than fail
+	   its condition, so that `i` keeps the value it had when EOF hit -- it is
+	   reported below as the number of rows actually read. */
+	bool eof = false;
+	for (i = 1; i < chain->NAA; i++) {
 		for (j = 1; j < chain->NAA; j++) {
 			/* the fscanf consumes whitespaces, numbers,
 			   decimal points, signs, but not most letters
 			   so XOUZ is a good alphabet for symbolic maps */
-			k = fscanf(fin, "%lf", &val); /* read in actual number 0, 1 or -1 */
+			k = fscanf(fin.get(), "%lf", &val); /* read in actual number 0, 1 or -1 */
 			if (k == 0) { /* symbols used, not numbers */
-				switch (fgetc(fin) & 0x3) { /* character code % 4 */
+				switch (fgetc(fin.get()) & 0x3) { /* character code % 4 */
 				case 0:	/* X */
 					val = 1.0;
 					break;
@@ -287,8 +287,10 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 					val = 0.0;
 					break;
 				}
-			} else if (k == EOF)
-				goto out;
+			} else if (k == EOF) {
+				eof = true;
+				break;
+			}
 
 			/* use 0s in the diagonal, if in the diagonal of the contact map the amino acid letters are printed,
 			otherwise they take a value according to the 1 letter code of the amino acid */
@@ -296,10 +298,7 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 
 			(biasmap)->distb[i * (biasmap)->NAA + j] = val;
 		}
-      out:
-	if (fin) {
-		fclose(fin);
-		//fprintf(stderr,"Closing contact map file %s\n",mod_params->contact_map_file);
+		if (eof) break;
 	}
 	fprintf(stderr, "Go-type bias: %dx%d\n", i - 1, chain->NAA - 1);
 
