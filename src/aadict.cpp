@@ -13,6 +13,7 @@
 #include<float.h>
 #include<stdlib.h>
 #include<math.h>
+#include<string>
 #include"error.h"
 #include"params.h"
 #include"aadict.h"
@@ -288,9 +289,8 @@ void initialize_sidechain_properties(model_params *mod_params){
     initialize_one_sidechain_properties(mod_params->sidechain_properties,30,  '0', 0,     -1,    -1,	               -1,     -1,               -1,    -1,    -1,     -1,  0,       0,        0x0,              -1,    -1,   -1,     0x0,      0,        0x0,  0x0,    -1,    -1  );
     
     } else if (mod_params->use_gamma_atoms != NO_GAMMA) {
-	char error_string[DEFAULT_LONG_STRING_LENGTH]="";
-	sprintf(error_string,"Unknown value for use_gamma_atoms (%d)",mod_params->use_gamma_atoms);
-	stop(error_string);
+	std::string error_string = "Unknown value for use_gamma_atoms (" + std::to_string(mod_params->use_gamma_atoms) + ")";
+	stop(error_string.c_str());
     }
 	  
   return;
