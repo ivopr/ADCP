@@ -903,9 +903,17 @@ void ns_for_flex_processor(MPI_Comm FLEX_WORLD, int rank, Biasmap *biasmap, simu
 
 
   MPI_Bcast(&chain->NAA,1,MPI_INT,0,FLEX_WORLD);
+  /* The master (nested.cpp) broadcasts NAA and the per-residue id/num/etc, but
+     never Nchains or chainid, so the worker's view is single-chain by
+     construction. Nchains was previously left uninitialized and read here to
+     size xaa_prev; chainid likewise stayed whatever realloc returned, which
+     fulfill() then uses to index xaa_prev. Set both explicitly. */
+  chain->Nchains = 1;
   allocmem_chain(chain,chain->NAA,chain->Nchains);
 
+  chain->aa[0].chainid = 0; /* dummy residue at the virtual 0th position */
   for(i = 1; i < chain->NAA; i++){
+    chain->aa[i].chainid = 1; /* chain ids start at 1 */
     MPI_Bcast(&chain->aa[i].id,1,MPI_CHAR,0,FLEX_WORLD);
     MPI_Bcast(&chain->aa[i].num,1,MPI_INT,0,FLEX_WORLD);
     MPI_Bcast(&chain->aa[i].etc,1,MPI_INT,0,FLEX_WORLD);

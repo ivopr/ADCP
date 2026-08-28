@@ -1277,7 +1277,10 @@ void vdw_cutoff_distances_calculate(simulation_params *sim_params, FILE *outfile
 	my_sim_params->infile = NULL;
 	my_sim_params->outfile = NULL;
 	my_sim_params->checkpoint_file = NULL;
-	Chain *chain = (Chain *)malloc(sizeof(Chain)*28); chain->NAA = 0;
+	/* One Chain, not 28: the *28 was mis-sized against the 26-letter probe
+	   sequence below, but that string indexes chain->aa[l], not chain[l].
+	   Nothing ever touched chain[1..27]. */
+	Chain *chain = (Chain *)malloc(sizeof(Chain));
         Chaint* chaint = (Chaint *)malloc(sizeof(Chaint));
       	chain->NAA =0; chain->Nchains = 0;
       	chain->aa = NULL; chain->xaa = NULL; chain->xaa_prev = NULL; chain->erg = NULL;

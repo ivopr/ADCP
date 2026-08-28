@@ -367,6 +367,9 @@ int read_in_from_checkpoint(simulation_params *sim_params,
     *chaint = (Chaint*)realloc(*chaint,sizeof(Chaint));
     (*chaint)->aat = NULL; (*chaint)->ergt = NULL;  (*chaint)->xaat = NULL; (*chaint)->xaat_prev = NULL;
     /* bias map */
+    /* release distb first, mirroring the freemem_chaint above: overwriting it
+       with NULL below otherwise leaks the contact map on a second call. */
+    if (*biasmap && (*biasmap)->distb) free((*biasmap)->distb);
     *biasmap = (Biasmap*)realloc(*biasmap,sizeof(Biasmap));
     (*biasmap)->distb = NULL;
 
@@ -636,6 +639,9 @@ int read_in_from_pdb(simulation_params *sim_params,
     *chaint = (Chaint*)realloc(*chaint,sizeof(Chaint));
     (*chaint)->aat = NULL; (*chaint)->ergt = NULL;  (*chaint)->xaat = NULL; (*chaint)->xaat_prev = NULL;
     /* bias map */
+    /* release distb first, mirroring the freemem_chaint above: overwriting it
+       with NULL below otherwise leaks the contact map on a second call. */
+    if (*biasmap && (*biasmap)->distb) free((*biasmap)->distb);
     *biasmap = (Biasmap*)realloc(*biasmap,sizeof(Biasmap));
     (*biasmap)->distb = NULL;
 
