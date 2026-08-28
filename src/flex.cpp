@@ -582,10 +582,8 @@ int output_and_run_flex(Chain *chain,Biasmap *biasmap, Chain *input_chains, simu
 int read_in_after_flex(Chain *chain,Biasmap *biasmap,Chain *input_chains,simulation_params *sim_params,double *rmsd){
 
   int ans = 0;
-  Chain *ichain = (Chain *)malloc(sizeof(Chain)); ichain->NAA = 0;
-  ichain->NAA =0; ichain->aa = NULL; ichain->xaa = NULL; ichain->erg = NULL; ichain->xaa_prev = NULL;
-  Chaint *ichaint= (Chaint*)malloc(sizeof(Chaint));
-  ichaint->aat = NULL; ichaint->ergt = NULL;  ichaint->xaat = NULL; ichaint->xaat_prev = NULL;
+  Chain *ichain = new Chain{};
+  Chaint *ichaint= new Chaint{};
 
   FILE *fptr2;
   char rmsd_filename[DEFAULT_LONG_STRING_LENGTH];
@@ -632,9 +630,9 @@ int read_in_after_flex(Chain *chain,Biasmap *biasmap,Chain *input_chains,simulat
   //fprintf(stdout,"\n");
 
   freemem_chain(ichain);
-  free(ichain);
+  delete ichain;
   freemem_chaint(ichaint);
-  free(ichaint);
+  delete ichaint;
 
   fclose(fptr2);
 
@@ -889,10 +887,8 @@ void ns_for_flex_processor(MPI_Comm FLEX_WORLD, int rank, Biasmap *biasmap, simu
   int finished = 1;
   MPI_Status status;
   int i;
-  Chain *chain = (Chain *)malloc(sizeof(Chain)); chain->NAA = 0;
-  chain->NAA =0; chain->aa = NULL; chain->xaa = NULL; chain->erg = NULL; chain->xaa_prev = NULL;
-  Chaint *chaint= (Chaint*)malloc(sizeof(Chaint));
-  chaint->aat = NULL; chaint->ergt = NULL;  chaint->xaat = NULL; chaint->xaat_prev = NULL;
+  Chain *chain = new Chain{};
+  Chaint *chaint= new Chaint{};
 
   sim_params->outfile_name = (char*)malloc(sizeof(char)*DEFAULT_SHORT_STRING_LENGTH);
   strcpy(sim_params->outfile_name,"flex.log");

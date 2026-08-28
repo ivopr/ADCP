@@ -344,7 +344,7 @@ void biasmap_finalise(Biasmap *biasmap){
 
     if(biasmap){   
 	if (biasmap->distb) free(biasmap->distb);
-	free(biasmap); 
+	delete biasmap;
     }
 
 }

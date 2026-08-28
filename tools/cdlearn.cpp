@@ -51,8 +51,7 @@ double simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_para
 {
 	double temp; //unused for MC
 	
-	Chain *chain2 = (Chain *)malloc(sizeof(Chain));
-	chain2->aa = NULL; chain2->xaa = NULL; chain2->erg = NULL; chain2->xaa_prev = NULL;
+	Chain *chain2 = new Chain{};
 	allocmem_chain(chain2,chain->NAA,chain->Nchains);
 	
 	/* do tests at step 0 */
@@ -96,7 +95,7 @@ double simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_para
 	sprintf(my_string,"%s\n", my_string);
 #endif
 
-	freemem_chain(chain2); free(chain2);
+	freemem_chain(chain2); delete chain2;
 
 	return new_energy - old_energy;
 	
@@ -631,7 +630,7 @@ int main(int argc, char *argv[])
 	/* READ IN ALL PDB CHAINS */
 	fprintf(stderr,"Creating PDB library.\n");
 	/* allocate memory for the original PDB library */
-	Chain *temporary = (Chain *)malloc(sizeof(Chain));
+	Chain *temporary = new Chain{};
 	temporary->NAA = 0; temporary->aa = NULL; temporary->xaa = NULL; temporary->erg = NULL; temporary->xaa_prev = NULL;
 
 	/* PDB library */
@@ -696,7 +695,7 @@ int main(int argc, char *argv[])
 	    if (i==1) stop("ERROR! EOF while reading in from input PDB file.");
 
 	}
-	free(temporary);
+	freemem_chain(temporary); delete temporary;
 	fclose(list_file);
 	list_file = NULL;
 

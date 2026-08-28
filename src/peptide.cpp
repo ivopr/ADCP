@@ -1835,8 +1835,11 @@ int pdbin(Chain *chain, simulation_params *sim_params, FILE *infile)
 
 	/* scan the PDB-like input from infile, and allocate the memory */
 
-    Chain *tempchain = (Chain*)malloc(sizeof(Chain));
-	tempchain->NAA = 0; tempchain->Nchains = 0; tempchain->aa = NULL; tempchain->erg = NULL; tempchain->xaa = NULL; tempchain->xaa_prev = NULL;
+    /* Value-initialized on the stack: it never escapes this function, and {}
+       zeroes every member including ll and flex_data, which the hand-nulling
+       it replaces did not. */
+    Chain tempchain_storage{};
+    Chain *tempchain = &tempchain_storage;
 	retv = getpdb(&(tempchain->aa), &(tempchain->NAA), &(tempchain->Nchains), infile);
 //	fprintf(stderr,"tempchain->NAA=%d\n",tempchain->NAA);
 	
@@ -1886,7 +1889,6 @@ int pdbin(Chain *chain, simulation_params *sim_params, FILE *infile)
         copybetween(chain,tempchain);
         //fprintf(stderr,"%d amino acids in %d chains have been read in.\n", chain->NAA-1, chain->aa[chain->NAA-1].chainid);
         freemem_chain(tempchain);
-        free(tempchain); 	
 
 	    if (retv != EOF) {
 // fixing peptide moved to main
@@ -1903,7 +1905,6 @@ int pdbin(Chain *chain, simulation_params *sim_params, FILE *infile)
    else{
 //	fprintf(stderr, "pdbin: return EOF\n");
       freemem_chain(tempchain);
-      free(tempchain); 
       return EOF;
     }
 

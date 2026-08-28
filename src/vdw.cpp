@@ -1280,11 +1280,8 @@ void vdw_cutoff_distances_calculate(simulation_params *sim_params, FILE *outfile
 	/* One Chain, not 28: the *28 was mis-sized against the 26-letter probe
 	   sequence below, but that string indexes chain->aa[l], not chain[l].
 	   Nothing ever touched chain[1..27]. */
-	Chain *chain = (Chain *)malloc(sizeof(Chain));
-        Chaint* chaint = (Chaint *)malloc(sizeof(Chaint));
-      	chain->NAA =0; chain->Nchains = 0;
-      	chain->aa = NULL; chain->xaa = NULL; chain->xaa_prev = NULL; chain->erg = NULL;
-      	chaint->aat = NULL; chaint->xaat = NULL; chaint->xaat_prev = NULL; chaint->ergt = NULL;  
+	Chain *chain = new Chain{};
+        Chaint* chaint = new Chaint{};
 	if (my_sim_params->seq) free(my_sim_params->seq);
 	copy_string(&(my_sim_params->seq),"ABCDEFGHIGKLMNGPQRSTGVWGYZ");
 	build_peptide_from_sequence(chain,chaint,my_sim_params->seq, my_sim_params);
@@ -1311,9 +1308,9 @@ void vdw_cutoff_distances_calculate(simulation_params *sim_params, FILE *outfile
 
 	/* free memory */
 	freemem_chaint(chaint);
-	free(chaint);
+	delete chaint;
 	freemem_chain(chain); //free amino acid chain and energy matrix
-	free(chain);
+	delete chain;
 
 }
 

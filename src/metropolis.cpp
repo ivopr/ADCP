@@ -1853,9 +1853,9 @@ int move(Chain *chain,Chaint *chaint, Biasmap *biasmap, double logLstar, double 
 void finalize(Chain *chain, Chaint *chaint, Biasmap *biasmap){
 
 	freemem_chaint(chaint);
-	free(chaint);
+	delete chaint;
 	freemem_chain(chain); //free amino acid chain and energy matrix
-	free(chain);
+	delete chain;
 	biasmap_finalise(biasmap); //free contact map
 
 }

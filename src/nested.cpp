@@ -91,8 +91,7 @@ void new_amplitude(Chain **cpoints, Biasmap *biasmap, int current_stored, simula
   double amptot = 0;
   double oldamp = sim_params->amplitude;
   Chaint *chaint;
-  chaint = (Chaint*)malloc(sizeof(Chaint));
-  chaint->aat = NULL; chaint->ergt = NULL;  chaint->xaat = NULL; chaint->xaat_prev = NULL;
+  chaint = new Chaint{};
   double currE;
   int copies;
   Chain temporary;
@@ -167,7 +166,7 @@ void new_amplitude(Chain **cpoints, Biasmap *biasmap, int current_stored, simula
 
   freemem_chain(&temporary);
   freemem_chaint(chaint);
-  free(chaint);
+  delete chaint;
 }
 
 #ifdef PARALLEL
@@ -896,15 +895,11 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
 
   //NS points and their chaint-s
   Chain* cpoints = NULL;
-  Chaint *chaint= (Chaint*)malloc(sizeof(Chaint));
-  chaint->aat = NULL; chaint->ergt = NULL;  chaint->xaat = NULL; chaint->xaat_prev = NULL;
+  Chaint *chaint= new Chaint{};
   //biasmap
-  Biasmap *biasmap = (Biasmap*)malloc(sizeof(Biasmap));
-  biasmap->distb = NULL;
+  Biasmap *biasmap = new Biasmap{};
   //temporary chain for reading in
-  Chain* temporary = NULL;
-  temporary = (Chain *)malloc(sizeof(Chain));
-  temporary->aa = NULL; temporary->xaa = NULL; temporary->erg = NULL; temporary->xaa_prev = NULL;
+  Chain* temporary = new Chain{};
   //number of chains
   int N = 0;
   //number of chains stored on this processor
@@ -1051,10 +1046,11 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
       //do the tests and then free up and return  //for (int i=0; i<current_stored; i++) {      //  tests(&cpoints[i],biasmap,sim_params->tmask, sim_params, 0x11);      //}
       //fprintf(stderr,"ERROR ERROR ERROR, only outputting the chains stored on processor 0, bug needs to be fixed\n"); fflush(stderr);
       freemem_chaint(chaint);
-      free(chaint);
+      delete chaint;
       free(chainhash);
       biasmap_finalise(biasmap);
       freemem_chain(temporary);
+      delete temporary;
     }
     //for (int i=0; i<current_stored; i++) {   //  freemem_chain(&cpoints[i]);   //}
     free(cpoints);
@@ -1310,9 +1306,9 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
     }
     free(chaincopies);
 
-    freemem_chain(temporary); free(temporary);
+    freemem_chain(temporary); delete temporary;
     freemem_chaint(chaint);
-    free(chaint);
+    delete chaint;
     biasmap_finalise(biasmap);
     for(int i = 0; i < current_stored; i++){
       freemem_chain(&cpoints[i]);

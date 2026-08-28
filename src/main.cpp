@@ -179,8 +179,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 {
 	unsigned int i, j, k = sim_params->intrvl;
 	double temp;
-	Chain *chain2 = (Chain *)malloc(sizeof(Chain));
-	chain2->aa = NULL; chain2->xaa = NULL; chain2->erg = NULL; chain2->xaa_prev = NULL;
+	Chain *chain2 = new Chain{};
 	allocmem_chain(chain2,chain->NAA,chain->Nchains);
 
 	energy_matrix_print(chain, biasmap, &(sim_params->protein_model));
@@ -237,8 +236,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 
 		//initialize swapping pool, last element is with the best energy
 		for (int i = 0; i < swapLength + 1; i++) {
-			swapChains[i] = (Chain *)malloc(sizeof(Chain));
-			swapChains[i]->aa = NULL; swapChains[i]->xaa = NULL; swapChains[i]->erg = NULL; swapChains[i]->xaa_prev = NULL;
+			swapChains[i] = new Chain{};
 			allocmem_chain(swapChains[i], chain->NAA, chain->Nchains);
 			copybetween(swapChains[i], chain);
 			swapEnergy[i] = 9999.;
@@ -536,7 +534,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 		for (int i = 0; i < swapLength + 1; i++) {
 			fprintf(sim_params->outfile, "-+- %5d CLUSTERS BLOCK %5d -+-\n", swapLength+1, i);
 			tests(swapChains[i], biasmap, sim_params->tmask, sim_params, 0x11, NULL);
-			freemem_chain(swapChains[i]); free(swapChains[i]);
+			freemem_chain(swapChains[i]); delete swapChains[i];
 		}
 
 	}
@@ -642,7 +640,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 		}
 		
 	}
-	freemem_chain(chain2); free(chain2);
+	freemem_chain(chain2); delete chain2;
 }
 
 char *read_options(int argc, char *argv[], simulation_params *sim_params)
@@ -975,14 +973,12 @@ int main(int argc, char *argv[])
 
 	if(!sim_params.NS){
 	    /* allocate memory for the peptide */
-	    Chain *chain = (Chain *)malloc(sizeof(Chain)); chain->NAA = 0;
-            Chaint* chaint = (Chaint *)malloc(sizeof(Chaint));
-      	    chain->NAA =0;
-      	    chain->aa = NULL; chain->xaa = NULL; chain->erg = NULL; chain->xaa_prev = NULL;
-      	    chaint->aat = NULL; chaint->xaat = NULL; chaint->ergt = NULL; chaint->xaat_prev = NULL;
+	    /* new T{} value-initializes every member, including the ll, Nchains
+	       and flex_data that the hand-nulling below never covered. */
+	    Chain *chain = new Chain{};
+            Chaint* chaint = new Chaint{};
 	    /* allocate memory for the biasmap */
-            Biasmap *biasmap = (Biasmap *)malloc(sizeof(Biasmap));
-      	    biasmap->distb = NULL;
+            Biasmap *biasmap = new Biasmap{};
 
 	   /* read in / generate the peptide */
 	   if (sim_params.seq != NULL) {

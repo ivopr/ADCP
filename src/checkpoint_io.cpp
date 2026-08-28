@@ -363,15 +363,15 @@ int read_in_from_checkpoint(simulation_params *sim_params,
     /* peptide chains */
     *cpoints = NULL;
     /* peptide chain for MC moves */
-    if (*chaint) freemem_chaint(*chaint);
-    *chaint = (Chaint*)realloc(*chaint,sizeof(Chaint));
-    (*chaint)->aat = NULL; (*chaint)->ergt = NULL;  (*chaint)->xaat = NULL; (*chaint)->xaat_prev = NULL;
+    /* realloc on a new'd object is undefined; replace the object outright.
+       new T{} value-initializes, so the hand-nulling this drops is covered. */
+    if (*chaint) { freemem_chaint(*chaint); delete *chaint; }
+    *chaint = new Chaint{};
     /* bias map */
     /* release distb first, mirroring the freemem_chaint above: overwriting it
-       with NULL below otherwise leaks the contact map on a second call. */
-    if (*biasmap && (*biasmap)->distb) free((*biasmap)->distb);
-    *biasmap = (Biasmap*)realloc(*biasmap,sizeof(Biasmap));
-    (*biasmap)->distb = NULL;
+       otherwise leaks the contact map on a second call. */
+    if (*biasmap) { if ((*biasmap)->distb) free((*biasmap)->distb); delete *biasmap; }
+    *biasmap = new Biasmap{};
 
     //temporary chain for reading
     temporary->aa = NULL; temporary->xaa = NULL; temporary->erg = NULL; temporary->xaa_prev = NULL;
@@ -635,15 +635,15 @@ int read_in_from_pdb(simulation_params *sim_params,
     /* peptide chains */
     *cpoints = NULL;
     /* peptide chain for MC moves */
-    if (*chaint) freemem_chaint(*chaint);
-    *chaint = (Chaint*)realloc(*chaint,sizeof(Chaint));
-    (*chaint)->aat = NULL; (*chaint)->ergt = NULL;  (*chaint)->xaat = NULL; (*chaint)->xaat_prev = NULL;
+    /* realloc on a new'd object is undefined; replace the object outright.
+       new T{} value-initializes, so the hand-nulling this drops is covered. */
+    if (*chaint) { freemem_chaint(*chaint); delete *chaint; }
+    *chaint = new Chaint{};
     /* bias map */
     /* release distb first, mirroring the freemem_chaint above: overwriting it
-       with NULL below otherwise leaks the contact map on a second call. */
-    if (*biasmap && (*biasmap)->distb) free((*biasmap)->distb);
-    *biasmap = (Biasmap*)realloc(*biasmap,sizeof(Biasmap));
-    (*biasmap)->distb = NULL;
+       otherwise leaks the contact map on a second call. */
+    if (*biasmap) { if ((*biasmap)->distb) free((*biasmap)->distb); delete *biasmap; }
+    *biasmap = new Biasmap{};
 
     //temporary chain for reading
     temporary->aa = NULL; temporary->xaa = NULL; temporary->erg = NULL; temporary->xaa_prev = NULL;
