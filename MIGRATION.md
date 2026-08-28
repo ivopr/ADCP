@@ -61,8 +61,10 @@ Ordering within Phase 2, by risk × blast radius:
    purpose; see the step 6 section below.
 7. **Done.** `probe.c` — all 32 diagnostic mask bits swept under ASan, three real
    bugs fixed. `metropolis.c` — dead code only; the per-move path is untouched.
-8. `flex.c`, `checkpoint_io.c`
-9. `nested.c`
+8. **Partly done.** `flex.c`, `checkpoint_io.c` — dead code and two reproduced
+   buffer overflows fixed. The MPI half is **blocked**: see the CMake finding below.
+9. **Partly done.** `nested.c` — dead FAST branch removed and a real nested-sampling
+   bug fixed. MPI half blocked the same way.
 10. `tools/*`
 11. **Done, ahead of schedule.** Cleanup: drop `LANGUAGES C` / `CMAKE_C_STANDARD*` once `find src tools -name '*.c'` is empty — `CMakeLists.txt` has been `LANGUAGES CXX` only since Phase 1 finished, no C sources ever remained afterward.
 
@@ -540,6 +542,109 @@ finds the measurement instead of "fixing" it silently.
 (one residue): `rand()%1 + 1` is identically 1. It needs `NAA >= 3` to terminate
 and `external_potential_type == 5` to be reached. Fixing it means adding a branch
 to a warm function, which is not worth it for a one-residue peptide.
+
+## Phase 2 progress — steps 8 and 9 (partly done; the MPI half is blocked)
+
+### The MPI build has never compiled ANY of the MPI code
+
+`src/CMakeLists.txt` makes `PARALLEL` **`PRIVATE` to the `adcp_mpi` executable**,
+which is only `main.cpp`. `adcp_core` — containing `nested.cpp`,
+`checkpoint_io.cpp`, `flex.cpp`, `probe.cpp` — is compiled **once, without
+`PARALLEL`**, and linked into both `adcp` and `adcp_mpi`. Consequences:
+
+- `adcp_mpi` is an MPI `main` linked against a **serial `nestedsampling()`**. Every
+  rank would run the same complete serial simulation.
+- `mpi_send_chain` / `mpi_rec_chain` are **never emitted into any object file**.
+- **~1150 lines of MPI code are unbuilt by every configuration**, `-DADCP_MPI=ON`
+  included.
+
+This is why step 6's fix (7 implicit `void*`→`T*` conversions) only got `main.cpp`
+compiling — nothing else was ever being compiled with `PARALLEL` at all. **Every
+"validated on MPI" or "the CI mpi job covers it" claim in this document, past or
+future, should be read against this.** The CI `mpi` job builds a binary that cannot
+work.
+
+**Blocked, not fixed.** Fixing it properly means compiling `adcp_core` twice (an
+`OBJECT` library, or a second static lib with `PARALLEL` and `MPI::MPI_CXX`), and
+verifying that requires a real MPI. `libopenmpi-dev` is available in apt but not
+installed, and installing it needs `sudo`. Until then the stub-`mpi.h`
+`-fsyntax-only` check remains the only local gate — it checks syntax and types, not
+linking or behaviour.
+
+### A real nested-sampling bug
+
+The serial live-point draw was `copies = 1 + (rand*N) % N`, i.e. `1..N`. But
+`find_worst` swaps the heap root out to `chainhash[heaplength]` and decrements, so
+with `P == 1` **the discarded worst point sits at index `N`** and the live heap is
+`1..N-1`. So with probability `1/N` the new sample was seeded from the point being
+discarded — nested sampling's validity rests on drawing from the *surviving* prior
+mass. Confirmed by instrumentation: a run drew `copies==20` with `N==20` whose `ll`
+equalled `logLstar` exactly, and `logLstar` is by definition the discarded point's
+likelihood. The PARALLEL branch already did it right with `% (N-P)`.
+
+**The NS energy sequence baseline changed as a result**, deliberately:
+
+```
+before  40.058829 31.225769 10.764044 7.463047 6.393763
+after   40.058829 688.128472 81.995422 10.222738 7.086147
+```
+
+### …which exposed that the NS test's own assertion was wrong
+
+`run_ns_test.sh` asserted the energies decrease **monotonically**, described in step
+3b-0 as "the defining invariant of nested sampling". It is not an invariant of this
+implementation. Measured on *unmodified* code, varying only the seed:
+
+| seed | sequence | monotonic |
+|---|---|---|
+| 12345 | 40.06 31.23 10.76 7.46 6.39 | yes |
+| 99 | 40.06 13.14 **13.69** 7.46 6.39 | no |
+| 4242 | 40.06 13.14 **30.20** 7.46 6.39 | no |
+| 555 | 40.06 **313.37** 13.14 10.22 7.46 | no |
+
+3 of 8 arbitrary seeds violate it. It had been passing only because the seed is
+pinned at 12345 — so the test was one seed change from failing on correct code, and
+it **actively vetoed the sampling fix above** on evidence that was an artefact of its
+own strictness. Replaced with a property that does hold on 15 of 15 seeds: the last
+reported energy is below the first. **Lesson: an invariant asserted from theory and
+confirmed on one seed is not confirmed.**
+
+### Unreachable feature branches deleted
+
+- **`nested.cpp`'s `FAST` branch** — `FAST` is `#define`d nowhere in the tree or in
+  any CMake file, so the `#else` of `#ifndef FAST` (241 lines: a second
+  `collect_chains`/`return_and_reheap_chains` pair, the whole instruction-set
+  machinery) plus two `#ifdef FAST` blocks were unreachable in every configuration.
+  That orphaned the `Instructions` type: the surviving functions took an
+  `Instructions*` they never referenced and both call sites passed `NULL`.
+- **`flex.cpp`'s `setup_bias_hbonds`** — gated on `flex_params.only_bias_hbonds == 1`,
+  which is initialised to 0 twice and assigned nowhere else. It was the only writer
+  of `FLEX_data::Hbond_aaH`/`Hbond_aaO`, so deleting it also removed 12
+  grow-one-element-at-a-time `realloc`s of the `p = realloc(p, n)` form that leaks
+  and then dereferences NULL on failure, plus both struct members.
+
+### Two buffer overflows, both reproduced
+
+- **`flex.cpp`, seven `char[256]` path buffers.** `output_path` holds up to 255 chars
+  (`"%255[^,]"`), and every site concatenated a prefix or suffix into 256 bytes —
+  worst of all `create_directory` (`"mkdir -p " + path`), which then goes to
+  `system()`. ASan on a 250-char path: `stack-buffer-overflow, WRITE of size 260`.
+  All seven are `std::string` now. Reachable without MPI via `-t 40000 -p FLEX=1,…`,
+  which is how it was tested — no suite test covers this code.
+- **`checkpoint_io.cpp`'s `read_checkpoint_header`.** `fscanf(..., "%s\n", seq)` with
+  no field width, into `malloc(NAA+2)` where `NAA` came from the same file's header.
+  A hand-corrupted checkpoint gives `heap-buffer-overflow, WRITE of size 401`. Now
+  width-limited and length-checked, plus a `NAA >= 1` guard and a `free` of any
+  previous `seq` that the old code leaked.
+
+### Still outstanding here
+
+Not done, and worth naming: `checkpoint_io.cpp`'s loop bound
+`cpoints->aa[NAA-1].chainid` is a value read *from the file* used to index
+`xaa_prev`, and the consistency check that would catch it runs *after* the read loop.
+The `sprintf` into `malloc(1010)` sites from argv-controlled paths. `nested.cpp`'s
+`fclose(fptr)` with no NULL check and two unchecked `fopen`s. And everything gated
+behind getting a real MPI.
 
 ## Validation gates
 
