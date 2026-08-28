@@ -814,6 +814,15 @@ void amidorient(triplet x, AA *a, AA *b)
 	eulerset(x, alpha, beta, gamma);
 }
 
+/* ponytail: both guards below are broken and always true, so every fulfill()
+   call reallocs all four Chaint buffers and re-runs the field copy loop, on the
+   Monte Carlo hot path. `sizeof(chaint)->aat` parses as `sizeof((chaint)->aat)`,
+   i.e. sizeof(AA*) == 8, a compile-time constant -- it is not a capacity check.
+   Deliberately left as-is: Chaint carries no size field to check against, and
+   changing allocation frequency on the hot path here would make any determinism
+   regression unbisectable against the rest of this step. Fix in Phase 2 step 3c,
+   where converting these members to std::vector makes resize() the real no-op
+   early-out for free. */
 void aat_init(Chain * chain, Chaint * chaint){
   if(sizeof(chaint)->aat != chain->NAA * sizeof(AA)){
     (chaint)->aat = (AA *) realloc((chaint)->aat, chain->NAA * sizeof(AA));
@@ -906,28 +915,23 @@ void build_peptide_from_sequence(Chain * chain, Chaint *chaint, char *str, simul
 	   and also take notes of which chain the amino acid is in */
 	fprintf(stderr,"Building protein from sequence: %s.\n",str);
 	copy_string(&(sim_params->sequence),str);
-	char * str_without_separator = (char *)malloc((strlen(str)+1)*sizeof(char));
-	int * chain_ids = (int *)malloc((strlen(str)+2)*sizeof(int));
-	int next = 0;
+	std::string str_without_separator;
+	std::vector<int> chain_ids;
 	int next_chain_id = 1; /* starting from 1 */
 	for (int j = 0; str[j] != '\0'; j++){
 		if (str[j]!='_') { /* copy amino acid characters */
-			str_without_separator[next] = str[j]; //starting from 0
-			chain_ids[next] = next_chain_id; //starting from 1
-			next ++;
+			str_without_separator.push_back(str[j]); //starting from 0
+			chain_ids.push_back(next_chain_id); //starting from 1
 		} else { /* separator means new chain */
 			next_chain_id ++;
 		}
 		//fprintf(stderr,"%c %d\n",str[j],next_chain_id);
 	}
-	str_without_separator[next] = '\0';
-	str_without_separator = (char *) realloc(str_without_separator, (strlen(str_without_separator)+1)*sizeof(char));
-	chain_ids = (int *) realloc(chain_ids, (strlen(str_without_separator))*sizeof(int));
-	fprintf(stderr,"Building protein from sequence: %s (%d amino acids, %d chains).\n",str_without_separator, (int)strlen(str_without_separator), chain_ids[(int)strlen(str_without_separator)-1]);
+	fprintf(stderr,"Building protein from sequence: %s (%d amino acids, %d chains).\n",str_without_separator.c_str(), (int)str_without_separator.size(), chain_ids[str_without_separator.size()-1]);
 
 	//fprintf(stderr,"Building peptide from sequence. ");
 	//NAA = strlen(str) + 1;
-	allocmem_chain(chain,strlen(str_without_separator)+1,next_chain_id);
+	allocmem_chain(chain,str_without_separator.size()+1,next_chain_id);
 	/* setting default parameters for the 0th amino acid (not used) */
 	chain->aa[0].id = 'A';
 	chain->aa[0].num = 0;
@@ -938,14 +942,13 @@ void build_peptide_from_sequence(Chain * chain, Chaint *chaint, char *str, simul
 	chain->Nchains = next_chain_id;
 
 	/* parse the string */
-	for (i = 0; str_without_separator[i] != '\0'; i++) {
+	for (i = 0; i < (int)str_without_separator.size(); i++) {
 		chain->aa[i + 1].id = (str_without_separator[i] & COD) | 0x40;
 		chain->aa[i + 1].etc = (str_without_separator[i] & ~COD);
 		chain->aa[i + 1].num = i + 1;	/* enumerate */
 		chain->aa[i + 1].chainid = chain_ids[i]; /* starting from 0 */
 		fputc(str_without_separator[i], stderr);
 	}
-	if (chain_ids) free(chain_ids);
 
 	/* Pauling and Corey alpha-helix with phi = -57 and psi = -45 */
 	eulerset(helix, -1.25, 1.65, 2.15);
@@ -1074,7 +1077,6 @@ void build_peptide_from_sequence(Chain * chain, Chaint *chaint, char *str, simul
 	/* build side chain and initialise energy */
 	fulfill(chain,chaint,sim_params);
 
-	free(str_without_separator);
 }
 
 
