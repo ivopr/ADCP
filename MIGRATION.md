@@ -56,7 +56,9 @@ Ordering within Phase 2, by risk × blast radius:
      destructor would have fixed were fixed by hand instead.
 4. **Done.** `main.c` idiomatic pass
 5. **Done.** `vdw.c` dispatch templating — measured 5.6% faster, bit-identical
-6. `energy.c`
+6. **Done, cold paths only.** `energy.c` — the hot allocations, the three
+   `ADenergyNoClash` VLAs and the whole `tc`/`View3` region stay as they are, on
+   purpose; see the step 6 section below.
 7. `probe.c`, `metropolis.c`
 8. `flex.c`, `checkpoint_io.c`
 9. `nested.c`
@@ -367,6 +369,90 @@ are a reasonable place to look for more of the same.
 
 Two of the four are `#ifdef PARALLEL` and are verified only by the stub-`mpi.h`
 syntax check, never by running.
+
+## Phase 2 progress — step 6 (energy.cpp, cold paths only) done
+
+`energy.cpp` splits cleanly into cold setup/diagnostic code and hot per-MC-move
+code. **Only the cold half was touched.** Nothing in this step puts a heap
+container, or any new indirection, on a per-move path — which matters more than it
+used to, because of what step 6-0 turned up (see "MECHANISM RESOLVED" below).
+
+**Real bugs fixed:**
+
+- **Three heap overflows in the setup parsers.** `gridmap_initialise`,
+  `transpts_initialise` and `ramaprob_initialise` each size a buffer from a count in
+  the file header, then write one element per input line without ever comparing the
+  two. A file with more data lines than its header declares silently overflows the
+  heap. All three now stop and warn; they are cold parse paths, so the check is free.
+- **A dead `fopen` retry** in `biasmap_initialise`: on failure the old code re-ran the
+  identical `fopen` with identical arguments. It cannot succeed the second time, so
+  only the `!= "NULL"` test it was ANDed with ever did anything.
+
+**Cleanups:**
+
+- The four `#ifdef LJ_HBONDED_HARD` blocks in `all_vdw`. `LJ_HBONDED_HARD` is never
+  `#define`d anywhere and no CMake target sets it — only `PARALLEL` is — so this was
+  dead in every configuration. It also carried a bug no compiler ever saw:
+  `((i1>=1) || (i1<chain->NAA))` uses `||` where `&&` is meant, so the bounds check is
+  vacuous. Deleted rather than repaired. **`vdw.cpp`'s own `LJ_HBONDED_HARD` block is
+  still there** — it guards `exclude_hard`, which step 5 templated.
+- Twelve commented-out `malloc`/`free` corpses, including two copies of
+  `//free(tc),…` left from the heap-`tc` version.
+- The cold VLA in `energy_matrix_calculate` → `std::vector` (docking-only code).
+- `biasmap_initialise`'s `FILE*` → `unique_ptr`, collapsing three repeated
+  `if (fin) fclose(fin);` blocks. Readability only — the old pairing was correct.
+- **The last `goto` is gone.** MIGRATION.md's other scheduled site (old
+  `energy.c:2876`) had already been removed by the `distb` conversion.
+- `energy.h`'s `#ifdef __cplusplus` fork around the `scoreSideChain*` prototypes:
+  the `#else` branch held C99 VLA-parameter declarations and has been dead text since
+  the last `.c` file went away.
+
+### The `goto` had one trap worth recording
+
+The outer loop must `break` rather than fall out through its condition. Failing the
+condition runs `i++` one extra time, and `i` is read *after* the loop to report how
+many contact-map rows were actually read — so getting it wrong silently turns
+`Go-type bias: 6x12` into `7x12`. The flag version breaks out of both loops.
+
+### How the uncovered code was validated
+
+`biasmap_initialise`'s contact-map branch has **no test coverage** — every test passes
+`Bias=NULL`, which returns before the read loop. So groups (c) and (d) were validated
+by hand: a generated 12×12 contact map, plus a deliberately truncated one that drives
+the EOF path the `goto` used to serve. Both produce byte-identical stderr and ATOM
+records across the change, and both are clean under ASan+UBSan, which had never seen
+this code. That harness is worth rebuilding if anyone touches `bias()` — it is ~200
+lines that no test reaches.
+
+### Deliberately not done, and why
+
+- **The five hot allocations** — `sbond_energy`'s `cyslist`/`cyspos`/`cysdist` and
+  `secondary_radius_of_gyration`'s `s_com`/`weights`. Biggest RAII win in the file
+  (8 `free`s and a quadratic realloc loop) but they run per MC move.
+  `secondary_radius_of_gyration` additionally has zero coverage — it needs
+  `srgy_param`/`hphobic_srgy_param` nonzero.
+- **The three `ADenergyNoClash` VLAs**, coupled to `metropolis.cpp`'s matching VLA on
+  the same call, and the whole `tc`/`View3` region.
+- **The ten file-scope setup allocations stay raw pointers.** The plan called for
+  `std::vector`, but they are already freed at `main.cpp:1099-1107`, and
+  `Xpts`/`Ypts`/`Zpts` are read from `metropolis.cpp`'s `transmove` and
+  `peptide.cpp` — a move path. The actual defect was the missing bounds checks, and
+  those are fixed without touching a type or a header.
+- **The 19 remaining `energy.h` declarations with no external callers stay public.**
+  Making them `static` changes inlining, and most of them (`bias`, `hbond`,
+  `hydrophobic`, `electrostatic`, `sidechain_hbond`, `stress`, `proline`) run per MC
+  move. Tidying a header is not worth codegen churn in this file.
+- **Latent, documented, not fixed:** casting `±inf` to `int` in `getindex` is UB and
+  runs on every fold move — benign today only because of the `< 0` check right after.
+  It is in the innermost function in the program.
+
+### Coverage holes in energy.cpp, for whoever comes next
+
+`bias()` and the contact-map reader (~200 lines); the gradient/finite-difference block
+(~300 lines, needs `-t 2000`); `energy2cyclic`/`cyclic_energy`;
+`secondary_radius_of_gyration`; and the non-trivial `external`/`external2` bodies —
+all have zero automated coverage. The grid-map and `scoreSideChain*` code is reached
+**only** by the opt-in 3Q47 docking tests.
 
 ## Validation gates
 
