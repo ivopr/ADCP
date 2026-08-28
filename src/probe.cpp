@@ -57,8 +57,6 @@ struct TEST test[] = {
 	{evidence,"log(Evidence) estimate (only NS, default)", 0x11 },
 	{information,"Information estimate (only NS, default)", 0x11 },
 	{cm_ideal, "Ideal contact map", 0x11 },
-	//{cm_ideal_4, "Ideal contact map including i,i+4 alpha contacts", 0x11 },
-	//{cm_native_go, "Native contact map including all Cbeta-Cbeta contacts (useful for the calculation of the number of native contacts).", 0x01 },
 	{test_flex,"Test Flex",0x10 }, /* only after init */
 	{energy_contributions, "Energy contributions of all different terms", 0x10 }, /* only after init */
 	{exclude_energy_contributions, "Exclude energy of amino acid pairs", 0x10 }, /* only after init */
@@ -72,11 +70,7 @@ struct TEST test[] = {
 	{atomic_distances,"List all atomic distances, useful for LJ testing",0x10 },
 	{hbond_geometry, "All geometrical parameters of Hbonds: d(O,H), <(C,O,H), <(O,H,N)",0x10 },
 	{vdw_max_gamma, "Calculate vdW max gamma-(non)gamma tables for the given vdW parameters. Use peptide ABCDEFGHIGKLMNGPQRSTGVWGYZ, and do not forget to specify the VDW parameters.",0x10 },
-//	{vdw_contributions, "Calculate vdW contributions between all atoms.",0x10 },
-	//{hbond_pattern, "Calculate H-bond pattern.",0x01 },
 	{checkpoint_out, "Snapshots in CHK format", 0x11 }, /* ((before and)) after init */
-//	{cm_alpha_8, "Contact map with contacts where d(CA-CA) < 8 Angstroms.", 0x01 },
-	//{fasta, "Print fasta sequence.", 0x01 },
 	{NULL, NULL, 0x0 }
 };
 
@@ -154,55 +148,6 @@ void CA_geometry(Chain *chain, Biasmap *biasmap, simulation_params *sim_params, 
       }
 }
 
-/* various geometrical parameters using CA atoms*/
-void vdw_contributions(Chain *chain, Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm) {
-
-	model_params *mod_params = &sim_params->protein_model;
-
-	//Assign function pointer to the vdW model
-	double (*vdw_fn) (vector r1, vector r2, double Rmin, double depth, double vdw_rel_cutoff, double energy_shift, double clash_at_vdw_cutoff) = NULL;
-	if (mod_params->vdw_potential == HARD_CUTOFF_VDW_POTENTIAL) {
-		vdw_fn = vdw_hard_cutoff;
-	} else if (mod_params->vdw_potential == LJ_VDW_POTENTIAL) {
-		vdw_fn = vdw_lj;
-	} else {
-		stop("Clash cannot be calculated without a valid vdW potential.");
-	}
-
-
-	for (int i=1; i<chain->NAA; i++) {
-	    for (int j=i; j<chain->NAA; j++) {
-		fprintf(sim_params->outfile,"%d %d interactions:",i,j);
-		AA *a = &(chain->aa[i]);
-		AA *b = &(chain->aa[j]);
-		fprintf(sim_params->outfile,"CA_ CA_ %g\n",vdw_fn(a->ca, b->ca, mod_params->rca + mod_params->rca,mod_params->vdw_depth_ca_ca, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_ca, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"CA_ CB_ %g\n",vdw_fn(a->ca, b->cb, mod_params->rca + mod_params->rcb,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"CA_ C__ %g\n",vdw_fn(a->ca, b->c, mod_params->rca + mod_params->rc,mod_params->vdw_depth_ca_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_c, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"CA_ N__ %g\n",vdw_fn(a->ca, b->n, mod_params->rca + mod_params->rn,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_n, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"CA_ O__ %g\n",vdw_fn(a->ca, b->o, mod_params->rca + mod_params->ro,mod_params->vdw_depth_ca_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_o, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"CB_ CA_ %g\n",vdw_fn(a->cb, b->ca, mod_params->rca + mod_params->rca,mod_params->vdw_depth_ca_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_cb, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"CB_ CB_ %g\n",vdw_fn(a->cb, b->cb, mod_params->rcb + mod_params->rcb,mod_params->vdw_depth_cb_cb, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_cb, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"CB_ C__ %g\n",vdw_fn(a->cb, b->c, mod_params->rcb + mod_params->rc,mod_params->vdw_depth_cb_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_c, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"CB_ N__ %g\n",vdw_fn(a->cb, b->n, mod_params->rcb + mod_params->rn,mod_params->vdw_depth_cb_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_n, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"CB_ O__ %g\n",vdw_fn(a->cb, b->o, mod_params->rcb + mod_params->ro,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"C__ CA_ %g\n",vdw_fn(a->c, b->ca, mod_params->rcb + mod_params->rca,mod_params->vdw_depth_ca_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_c, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"C__ CB_ %g\n",vdw_fn(a->c, b->cb, mod_params->rc + mod_params->rcb,mod_params->vdw_depth_cb_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_c, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"C__ C__ %g\n",vdw_fn(a->c, b->c, mod_params->rc + mod_params->rc,mod_params->vdw_depth_c_c, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_c, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"C__ N__ %g\n",vdw_fn(a->c, b->n, mod_params->rc + mod_params->rn,mod_params->vdw_depth_c_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_n, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"C__ O__ %g\n",vdw_fn(a->c, b->o, mod_params->rc + mod_params->ro,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"N__ CA_ %g\n",vdw_fn(a->n, b->ca, mod_params->rn + mod_params->rca,mod_params->vdw_depth_ca_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_n, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"N__ CB_ %g\n",vdw_fn(a->n, b->cb, mod_params->rn + mod_params->rcb,mod_params->vdw_depth_cb_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_n, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"N__ C__ %g\n",vdw_fn(a->n, b->c, mod_params->rn + mod_params->rc,mod_params->vdw_depth_c_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_n, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"N__ N__ %g\n",vdw_fn(a->n, b->n, mod_params->rn + mod_params->rn,mod_params->vdw_depth_n_n, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_n_n, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"N__ O__ %g\n",vdw_fn(a->n, b->o, mod_params->rn + mod_params->ro,mod_params->vdw_depth_n_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_n_o, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"O__ CA_ %g\n",vdw_fn(a->o, b->ca, mod_params->ro + mod_params->rca,mod_params->vdw_depth_ca_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_ca_o, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"O__ CB_ %g\n",vdw_fn(a->o, b->cb, mod_params->ro + mod_params->rcb,mod_params->vdw_depth_cb_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_cb_o, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"O__ C__ %g\n",vdw_fn(a->o, b->c, mod_params->ro + mod_params->rc,mod_params->vdw_depth_c_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_c_o, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"O__ N__ %g\n",vdw_fn(a->o, b->n, mod_params->ro + mod_params->rn,mod_params->vdw_depth_n_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_n_o, mod_params->vdw_clash_energy_at_hard_cutoff));
-		fprintf(sim_params->outfile,"O__ O__ %g\n",vdw_fn(a->o, b->o, mod_params->ro + mod_params->ro,mod_params->vdw_depth_o_o, mod_params->rel_vdw_cutoff, mod_params->vdw_Eshift_o_o, mod_params->vdw_clash_energy_at_hard_cutoff));
-	    }
-	}
-}
 
 /* the displacement of atoms and generated clashes during initialization */
 void initialize_displacement(Chain *chain, Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm) {
@@ -1914,12 +1859,6 @@ void cm_ideal(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void
 	
 }
 
-/* DSSP-like H-bond-based ideal contact map generation with i,i+4 alpha contacts */
-void cm_ideal_4(Chain *chain, Biasmap *biasmap,simulation_params *sim_params, void *mpi_comm) {
-
-	dssp(chain,biasmap,/* secondary_structure */ 0, /* contact_map */ 1, /* alpha_i_i4_contacts */ 1, sim_params);
-
-}
 
 void ergtot(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm)
 {	/*changed, can be removed */ 
@@ -2125,135 +2064,6 @@ void hydrophobic_rgyr(Chain *chain, Biasmap *biasmap,simulation_params *sim_para
 
 }
 
-/* Contact map, with contacts defined as CA-CA distances under 8 Angstroms. */
-void cm_alpha_8(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm)
-{
-	int i, j;
 
-	//fprintf(stderr,"Printing contact map, NAA %d\n",chain->NAA);
-	//if there is a contact, print 1, and 0 otherwise
-	for (i = 1; i < chain->NAA; i++) {
-	    for (j = 1; j < chain->NAA; j++) {
-		if (distance(chain->aa[i].ca,chain->aa[j].ca)<64.0) {
-		    fputc('1',sim_params->outfile);
-		} else {
-		    fputc('0',sim_params->outfile);
-		}
-	        if (j!=chain->NAA-1) fputc(' ',sim_params->outfile);
-	    }
-	    fputc('\n',sim_params->outfile);
-	}
 
-}
 
-/* Print a contact map with all CB-CB contacts within the contact cutoff. */
-//TODO: multi-chain protein
-void cm_native_go(Chain *chain, Biasmap *biasmap,simulation_params *sim_params, void *mpi_comm)
-{
-
-	//allocate memory if needed
-	if (biasmap->distb.empty()) {
-		(biasmap)->distb.resize((size_t)chain->NAA * chain->NAA);
-		(biasmap)->NAA = chain->NAA;
-	}
-
-	//calculate contact map according to the actual contacts (1: contact, 0: no contact)
-	fprintf(stderr,"Calculating CB--CB contact map, using a cutoff of %g.\n",sqrt(sim_params->protein_model.touch2));
-	for (int i = 1; i < chain->NAA; i++) {
-		Distb(i, i) = 0;
-		for (int j = 1; j < i - 1; j++) {
-			Distb(i, j) = 0;
-			Distb(j, i) = 0;
-			if (contact((chain->aa) + i, (chain->aa) + j, &(sim_params->protein_model)) && (chain->aa)[i].id != 'G' && (chain->aa)[j].id != 'G') {
-				Distb(i, j) = 1;
-				Distb(j, i) = 1;
-			}
-		}
-	}
-	//print contact map (X: contact, O: no contact)
-	for (int i = 1; i < chain->NAA; i++) {
-		for (int j = 1; j < chain->NAA; j++) {
-			if (Distb(i,j)==1) {
-				fputc('X',sim_params->outfile);
-			} else if (Distb(i,j)==0) {
-				fputc('O',sim_params->outfile);
-			} else {
-				stop("Unknown value in contact map.");
-			}
-		}
-		fputc('\n',sim_params->outfile);
-	}
-}
-
-/* Print fasta sequence */
-void fasta(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm)
-{
-
-	for (int i = 1; i < chain->NAA; i++) {
-	    fputc(chain->aa[i].id,sim_params->outfile);
-	}
-	fputc('\n',sim_params->outfile);
-
-}
-
-/* calculating Hbond pattern an individual snapshot */
-void hbond_pattern (Chain *chain, Biasmap *biasmap,simulation_params *sim_params, void *mpi_comm) {
-
-	unsigned int donor, accep;
-	AA *a, *b;
-
-	int *forward_pattern = NULL;
-	int *backward_pattern = NULL;
-
-	forward_pattern = (int *)malloc(chain->NAA * sizeof(int));
-	backward_pattern = (int *)malloc(chain->NAA * sizeof(int));
-	for (int i = 0; i< chain->NAA; i++) {
-		forward_pattern[i] = 0;
-		backward_pattern[i] = 0;
-	}
-
-	for (int i = 5; i < chain->NAA - 4; i++) {
-		donor = accep = 0;
-		a = chain->aa + i;
-
-		for (int j = 1; j < chain->NAA; j++) {
-			if (i == j)
-				continue;
-
-			b = (chain->aa) + j;
-
-			/* H-pattern within the same chain only */
-			if (a->chainid != b->chainid)
-				continue;
-
-			if (hdonor(a, b, &(sim_params->protein_model))) {
-				//fprintf(stderr,"Found hbond don: %d to acc: %d\n",i,j);
-				donor |= 1 << (15 - j + i);
-				if (i<j) forward_pattern[j-i]++;
-				else backward_pattern[i-j]++;
-			}
-			if (hdonor(b, a, &(sim_params->protein_model))) {
-				//fprintf(stderr,"Found hbond don: %d to acc: %d\n",j,i);
-				accep |= 1 << (15 - i + j);
-				if (i<j) backward_pattern[j-i]++;
-				else forward_pattern[i-j]++;
-			}
-		}
-		//printf("%3d   %.8X   %.8X\n", i, donor, accep);
-		//printf("%3d   %8X   %8X\n", i, donor, accep);
-	}
-	//printf("Backward_pattern ");
-	for (int i = chain->NAA -1; i > 0; i--) {
-		fprintf(sim_params->outfile,"%d ", backward_pattern[i]);
-	}
-		fprintf(sim_params->outfile,"0");
-	//printf("Forward_pattern ");
-	for (int i = 1; i < chain->NAA; i++) {
-		fprintf(sim_params->outfile," %d", forward_pattern[i]);
-	}
-	fprintf(sim_params->outfile,"\n");
-
-	free(forward_pattern);
-	free(backward_pattern);
-
-}

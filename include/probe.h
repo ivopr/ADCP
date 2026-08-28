@@ -37,8 +37,6 @@ void cm_txt(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *
 void cm_pbm(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void cm_ideal(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void test_flex(Chain *chain, Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
-void cm_ideal_4(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
-void cm_native_go(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void hbss(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void writhe(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void torsion(Chain *chain,Biasmap *biasmap, double*,double*,int);
@@ -51,16 +49,10 @@ void hydrophobic_distances(Chain *chain,Biasmap *biasmap, simulation_params *sim
 void number_of_contacts(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void atomic_distances(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void vdw_max_gamma(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
-void vdw_contributions(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void checkpoint_out(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
-void hbond_pattern(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 //Nested Sampling only
 void evidence(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
 void information(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
-void cm_alpha_8(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
-void fasta(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm);
-
-
 #ifdef __cplusplus
 }
 #endif
