@@ -141,6 +141,39 @@ set_tests_properties(func_adcp_fold_short PROPERTIES
 )
 
 # ---------------------------------------------------------------------------
+# Functional — nested sampling and checkpointing
+# ---------------------------------------------------------------------------
+#
+# Everything above runs the plain MC folding path. Nested sampling only runs
+# under -n, so until these existed nested.cpp and checkpoint_io.cpp — including
+# store_chain's realloc-grow loop over the live NS population — had no coverage
+# at all. Both drive that loop by feeding a multi-model PDB: one snapshot read
+# and stored per MODEL record.
+
+set(SNAPSHOTS ${CMAKE_CURRENT_SOURCE_DIR}/data/output.pdb)
+
+add_test(NAME func_adcp_ns_smoke
+  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_ns_test.sh
+          ${SRC_BIN} ${TEST_WORK}/ns ${RAMAPROB} ${SNAPSHOTS}
+)
+set_tests_properties(func_adcp_ns_smoke PROPERTIES
+  LABELS "functional" TIMEOUT 300
+  PASS_REGULAR_EXPRESSION "PASS: deterministic NS"
+)
+
+# Restarts are compared against each other, not against an uninterrupted run:
+# the checkpoint stores the population but not the RNG state, so trajectories
+# legitimately diverge after the restart point.
+add_test(NAME func_adcp_checkpoint_roundtrip
+  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_checkpoint_test.sh
+          ${SRC_BIN} ${TEST_WORK}/ckpt ${RAMAPROB} ${SNAPSHOTS}
+)
+set_tests_properties(func_adcp_checkpoint_roundtrip PROPERTIES
+  LABELS "functional" TIMEOUT 300
+  PASS_REGULAR_EXPRESSION "PASS: .* checkpoints written"
+)
+
+# ---------------------------------------------------------------------------
 # Docking — the AutoDock grid path (opt-in: needs the published 3Q47 target)
 # ---------------------------------------------------------------------------
 #
