@@ -42,8 +42,8 @@ Apply per category:
 
 Ordering within Phase 2, by risk × blast radius:
 
-1. Leaves: `error.c`, `vector.c`, `rotation.c`, `random16.c`, `aadict.c`, `canonicalAA.c`
-2. `params.c` — do before anything downstream depends on its idiomatic shape
+1. **Done.** Leaves: `error.c`, `vector.c`, `rotation.c`, `random16.c`, `aadict.c`, `canonicalAA.c`
+2. **Done.** `params.c` — do before anything downstream depends on its idiomatic shape
 3. `peptide.c` — owns the shared structs; converting `Chain`'s arrays touches every file that reads `chain->aa[i]`, so do it once, early, before those callers are themselves converted
 4. `main.c` idiomatic pass (string/RAII file wrapper — the VLA fix already landed in Phase 1)
 5. `vdw.c` (dispatch templating)
@@ -52,7 +52,61 @@ Ordering within Phase 2, by risk × blast radius:
 8. `flex.c`, `checkpoint_io.c`
 9. `nested.c`
 10. `tools/*`
-11. Cleanup: drop `LANGUAGES C` / `CMAKE_C_STANDARD*` once `find src tools -name '*.c'` is empty
+11. **Done, ahead of schedule.** Cleanup: drop `LANGUAGES C` / `CMAKE_C_STANDARD*` once `find src tools -name '*.c'` is empty — `CMakeLists.txt` has been `LANGUAGES CXX` only since Phase 1 finished, no C sources ever remained afterward.
+
+## Phase 2 progress — steps 1 and 2 (params.cpp) done
+
+**Step 1 (leaves).** `error.cpp`, `vector.cpp`, `rotation.cpp`, `random16.cpp`,
+`canonicalAA.cpp`: reviewed against all four idiomatic categories, nothing to convert —
+Phase 1's cast-only pass already left them idiomatic. `aadict.cpp`: the one real site
+(a local `sprintf`-into-fixed-buffer error message) converted to `std::string`.
+
+**Step 2 (params.cpp).** Every `malloc`/`realloc`/`free`'d field in `model_params`,
+`FLEX_params` and `simulation_params` that this plan's Phase 2 section named is converted:
+
+- `simulation_params`'s `energy_gradient`, `energy_probe_1_this`, `energy_probe_1_last`
+  (36-element `double*`) and `energy_probe_1_calc` (`int*`) → `std::vector`.
+- `FLEX_params`'s `output_path`, `outputpdb_filename`, `flex_cmd`, `flex_dir` and
+  `model_params`'s `contact_map_file`, `fixed_aalist_file`,
+  `external_constrained_aalist_file`(`2`) → `std::string`.
+- `FLEX_params`'s `filenames_to_read_in` (`char**`) → `std::vector<std::string>`.
+- `model_params`'s `vdw_gamma_gamma_cutoff`, `vdw_gamma_nongamma_cutoff` (702-element
+  `double*`) → `std::vector<double>`.
+- `model_params`'s `sidechain_properties` (31-element `sidechain_properties_*`) →
+  `std::vector<sidechain_properties_>` — the widest blast radius of the pass: it's passed
+  by raw pointer into helper functions across 13 files (`aadict.cpp`'s
+  `sidechain_vdw_radius`, `sidechain_dihedral`, `hbond_donor`/`acceptor`, `charge`, etc.).
+  Those helpers keep their `sidechain_properties_ *` signatures unchanged; every call site
+  now passes `.data()` instead of the field directly, safe because `std::vector` guarantees
+  contiguous storage.
+
+Left out of this pass (not named in the plan's representative sites, still raw
+`char*`/`malloc`): `simulation_params`'s generic strings (`seq`, `sequence`, `infile_name`,
+`outfile_name`, `prm`, `checkpoint_filename`) and `MC_lookup_table`/`MC_lookup_table_n`
+(dynamically-sized, `NULL`-checked). `params.cpp`'s malloc/realloc/free count dropped from
+20/10/26 to 4/0/9 — the remainder is exactly these left-out fields plus the generic
+`copy_string` helper they still use.
+
+**A real bug found along the way, not a migration regression in the usual sense:** two
+call sites — `vdw.cpp`'s `vdw_cutoff_distances_calculate` and `cdlearn.cpp`'s
+per-protein `simulation_params` array setup — `malloc`/`realloc`'d raw `simulation_params`
+memory and then called `sim_params_copy` on it (which does `*to = *from`). That's fine for
+a plain-old-data struct. It is undefined behaviour the moment the struct owns a
+`std::vector`/`std::string` member (`operator=` runs on an unconstructed object), and it
+segfaulted `func_adcp_fold_short`/`determinism` immediately once `simulation_params` grew
+its first `std::vector` field. Fixed by switching both sites to `new`/`delete`.
+`model_params`'s one analogous site (`energy.cpp`'s `energy_probe_1` scratch copy) was
+fixed pre-emptively before `model_params` gained its own vector members. **Lesson for
+`peptide.c` (Phase 2 step 3, next up):** before converting any field in a struct, grep for
+raw `malloc(sizeof(TheStruct))` / `realloc(..., n * sizeof(TheStruct))` on that struct type
+across the whole tree and fix those sites to `new`/`delete` first — this bug class is cheap
+to have missed and expensive to debug once hit.
+
+Validated per group: full `ctest` suite (13/13) after every conversion; the determinism
+test hammered 12× after every group (all clean); the `docking|validation` label gate run
+after the `params.cpp` groups specifically, since `realloc`→container conversions are the
+exact pattern flagged in the risk register below — one run got a live network fetch of the
+3Q47 target and passed `dock_fetch_target`/`dock_3q47_smoke`/`val_3q47_redock` in full.
 
 ## Validation gates
 
