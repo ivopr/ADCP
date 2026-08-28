@@ -579,10 +579,23 @@ int transopt(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, doubl
 	int step = 0;
 	int maxStep = 10;
 	int maxNoImprovStep = 3;
-	if (mod == 1){
-		int maxStep = 30;
-		int maxNoImprovStep = 5;
-	}
+	/* `mod` is inert, and deliberately left that way. This block used to read
+	       if (mod == 1){ int maxStep = 30; int maxNoImprovStep = 5; }
+	   -- shadowing declarations that died at the closing brace, so the "hard
+	   minimization" mode has always run the soft budget, at all six call sites
+	   in main.cpp that pass mod==1. Making it real was tried and measured on
+	   the 3Q47 redock:
+
+	       shipped (inert)   val 130s, dock_3q47_smoke  8.6s, RMSD 0.72 A, targetE -28.95
+	       maxStep=30        val 156s, dock_3q47_smoke 19.3s, RMSD 0.80 A, targetE -28.34
+
+	   i.e. +20% on the validation run and 2.25x on the smoke test, with no
+	   quality gain -- the RMSD and energy differences are within the noise of a
+	   16-run stochastic search, and if anything favour the current behaviour.
+	   ADCP's published results were produced with this budget, so changing it
+	   is a science decision for the maintainers, not a migration cleanup.
+	   See MIGRATION.md. */
+	(void)mod;
 
 	for (step = 0; step < maxStep; step++) {
 		if (noImprovStep >= maxNoImprovStep) break;
