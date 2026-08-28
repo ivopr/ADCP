@@ -13,6 +13,8 @@
 #include<math.h>
 
 #include"canonicalAA.h"
+#include<vector>
+
 #include"error.h"
 #include"params.h"
 #include"vector.h"
@@ -101,9 +103,9 @@ void energy_matrix_calculate(Chain *chain, Biasmap *biasmap, model_params *mod_p
 	/* (0,0) */
 	chain->Erg(0, 0) = 0.0;
 	if (mod_params->external_potential_type == 5){
-		double ADenergies[chain->NAA-1];
+		std::vector<double> ADenergies(chain->NAA-1);
 
-		ADenergyNoClash(ADenergies, 1, chain->NAA-1, chain, NULL, mod_params, 0);
+		ADenergyNoClash(ADenergies.data(), 1, chain->NAA-1, chain, NULL, mod_params, 0);
 
 		for (i = 1; i < chain->NAA; i++) {
 			chain->Erg(0, i) = ADenergies[i-1];
@@ -422,10 +424,16 @@ void gridmap_initialise(char *filename, int atype) {
 	char line[256];
 	int i = 0;
 	double *curr_gridmap_values = (double*)malloc(NX*NY*NZ * sizeof(double));
+	const int n_grid = NX * NY * NZ; /* the map file's 6-line header is skipped below */
 	while (fgets(line, sizeof(line), gridmap_file)) {
 		if (i < 6) {
 			i++;
 			continue;
+		}
+		if (i - 6 >= n_grid) {
+			fprintf(stderr, "WARNING: %s has more than %d grid values; ignoring the rest.\n",
+				filename, n_grid);
+			break;
 		}
 		curr_gridmap_values[i - 6] = lower_gridenergy(atof(line));
 		i++;
@@ -465,6 +473,11 @@ void transpts_initialise() {
 
 
 	while (fgets(line, sizeof(line), transpts_file)) {
+		if (i >= transPtsCount) {
+			fprintf(stderr, "WARNING: transpoints declares %d points but has more lines; ignoring the rest.\n",
+				transPtsCount);
+			break;
+		}
 		char * pch;
 		pch = strtok(line, " ");
 		j = 0;
@@ -504,6 +517,10 @@ void ramaprob_initialise() {
 	glyprob = (double*)malloc(32400 * sizeof(double));
 
 	while (fgets(line, sizeof(line), ramaprob_file)) {
+		if (i >= 32400) {
+			fprintf(stderr, "WARNING: ramaprob.data has more than 32400 entries; ignoring the rest.\n");
+			break;
+		}
 		char * pch;
 		pch = strtok(line, " ");
 		j = 0;
