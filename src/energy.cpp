@@ -111,7 +111,6 @@ void energy_matrix_calculate(Chain *chain, Biasmap *biasmap, model_params *mod_p
 			//chain->Erg(0, i) = ADenergy(chain->aa + i, mod_params);
 			chain->Erg(0, 0) += chain->Erg(0, i);
 		}
-		//free(ADenergies);
 		//chain->Erg(0, 0) = global_energy(0,0,chain, NULL,biasmap, mod_params);
 
 	}
@@ -1623,7 +1622,6 @@ float scoreSideChain(int nbRot, int nbAtoms, double *charges, int *atypes,  doub
 		
 
 	//fprintf(stderr, "score %g \n", bestScore);
-	//free(tc),free(v1),free(v2),free(v3),free(mat);
 
 	return bestScore;
 
@@ -1809,7 +1807,6 @@ double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atype
 		
 
 	//fprintf(stderr, "score %g \n", bestScore);
-	//free(tc),free(v1),free(v2),free(v3),free(mat);
 
 	return bestScore;
 
@@ -1971,9 +1968,7 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 
         // MS that limits the size of peptide to 30*NAA atoms
 	double coordsSet[30 * chain->NAA];
-	//double *currgridmapvalues = malloc(NX*NY*NZ * sizeof(double));
 
-	//double *coordsSet = malloc(21 * chain->NAA * sizeof(double));
 
 	int ind = 0;
 	int numRand = 1;
@@ -2037,8 +2032,6 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 	double exC = 0.0, exCa = 0.0, exN = 0.0, exO = 0.0, exCb = 0.0, exH = 0.0;
 	double CCharge = 0.241, CaCharge = 0.186, NCharge = -0.346, OCharge = -0.271, CbCharge = 0.050, HCharge = 0.163;
 	//for (int i =0; i< ind; i++) fprintf(stderr, "count C %g \n", coordsSet[i]);
-	//double *energiesforward = malloc((end-start+1) * sizeof(double));
-	//double *energiesbackward = malloc((end-start+1) * sizeof(double));
 	double energiesforward[end-start+1];
 	double energiesbackward[end-start+1];
 	for(int m=start; m<=end; m++){
@@ -2250,7 +2243,6 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 	}
 	//if (mod == 1)
 	//	fprintf(stderr, "bb Energy %g %g\n", totE1,totE2);
-	//free(coordsSet);
 	//double* ADenergies;
 	if (totE1 < totE2){
 		//ADenergies = energiesforward;
@@ -2261,7 +2253,6 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 			//	fprintf(stderr, "Forward Energy  i %d %g \n", m, ADEnergies[m-start]);
 			//}
 		}
-		//free(energiesbackward);
 	} else {
 		for(m=start; m<=end; m++){
 			ADEnergies[m-start] = energiesbackward[m-start];
@@ -2270,13 +2261,11 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 			//}
 		}
 		//ADenergies = energiesbackward;
-		//free(energiesforward);
 	}
 
 
 
 
-	//free(coordsSet);
 	//ADenergies = energiesforward;
 	//for(int m=start; m<=end; m++){
 	//	fprintf(stderr, "bb Energy %g %d %d\n", energiesforward[m-start],start,end);
@@ -2289,7 +2278,6 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 	//}
 
 	//return energiesforward;
-	//free(coordsSet);
 }
 
 
@@ -2679,9 +2667,6 @@ double all_vdw(Biasmap *biasmap, Chain *chain, model_params *mod_params) {
 	int i, j;
 	double val = 0.;
 	double d2 = 0.;
-#ifdef LJ_HBONDED_HARD
-	int hbond_proximity;
-#endif
 
 	for (i = 1; i < chain->NAA; i++) {
 		val += clash(chain->aa + i, mod_params);
@@ -2691,33 +2676,9 @@ double all_vdw(Biasmap *biasmap, Chain *chain, model_params *mod_params) {
 				val += exclude_neighbor(chain->aa + i, chain->aa + j, mod_params);
 				break;
 			default:
-
-#ifdef LJ_HBONDED_HARD
-				/* calc if the residues are in contact due to a H-bond */
-				/* to exclude the LJ interactions due to H-bond proximity */
-				hbond_proximity = 0;
-				for (int i1 = i-1; i1<i+2; i1++) {
-				    for (int j1 = j-1; j1<j+2; j1++) {
-					if (((i1>=1) || (i1<chain->NAA)) && ((j1>=1) || (j1<chain->NAA))) {
-					    if (( hstrength(chain->aa[i1].n,chain->aa[i1].h,chain->aa[j1].o,chain->aa[j1].c, mod_params) != 0 ) ||
-						( hstrength(chain->aa[j1].n,chain->aa[j1].h,chain->aa[i1].o,chain->aa[i1].c, mod_params) != 0 )) {
-						hbond_proximity = 1;
-					    }
-					}
-				    }
-				}
-#endif
 				d2 = distance((chain->aa + i)->ca, (chain->aa + j)->ca);
 				if (d2 < mod_params->vdw_extended_cutoff) {
-#ifdef LJ_HBONDED_HARD
-					if (hbond_proximity) {
-					val += exclude_hard(chain->aa + i, chain->aa + j, d2, mod_params,hbond_proximity);
-					} else {
-#endif
 					val += exclude(chain->aa + i, chain->aa + j, d2, mod_params);
-#ifdef LJ_HBONDED_HARD
-					}
-#endif
 				}
 				break;
 			}
