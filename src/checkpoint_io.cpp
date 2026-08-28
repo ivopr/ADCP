@@ -156,7 +156,7 @@ void output_checkpoint_file(Chain *cpoints, int current_stored, simulation_param
 	char action[2];
 
 #ifdef PARALLEL
-	MPI_Comm *MPI_COMM = mpi_comm;
+	MPI_Comm *MPI_COMM = (MPI_Comm *)mpi_comm; /* C++ needs the explicit cast from void* */
 	int P = 1;
 	int tag = 0;
 	MPI_Status status;
@@ -352,7 +352,7 @@ int read_in_from_checkpoint(simulation_params *sim_params,
 			int rank,
 			int P, void*mpi_comm, int only_output_checkpoint){
 #ifdef PARALLEL
-  MPI_Comm *MPI_COMM = mpi_comm;
+  MPI_Comm *MPI_COMM = (MPI_Comm *)mpi_comm; /* C++ needs the explicit cast from void* */
 #endif
 
 
@@ -370,11 +370,11 @@ int read_in_from_checkpoint(simulation_params *sim_params,
     /* bias map */
     /* release distb first, mirroring the freemem_chaint above: overwriting it
        otherwise leaks the contact map on a second call. */
-    if (*biasmap) { if ((*biasmap)->distb) free((*biasmap)->distb); delete *biasmap; }
+    delete *biasmap; /* its distb vector frees itself */
     *biasmap = new Biasmap{};
 
     //temporary chain for reading
-    temporary->aa = NULL; temporary->xaa = NULL; temporary->erg = NULL; temporary->xaa_prev = NULL;
+    temporary->aa = NULL; temporary->xaa = NULL; temporary->erg.clear(); temporary->xaa_prev = NULL;
 
     // only read on the master processor
     if(rank == 0){
@@ -500,7 +500,7 @@ int read_in_from_checkpoint(simulation_params *sim_params,
 int store_chain(ChainHash **chainhash, Chain *temporary, Biasmap *biasmap, Chaint *chaint, int P, int *current_stored, int counter, std::vector<Chain> &cpoints, simulation_params *sim_params, int rank, void*mpi_comm){
 
 #ifdef PARALLEL
-  MPI_Comm *MPI_COMM = mpi_comm;
+  MPI_Comm *MPI_COMM = (MPI_Comm *)mpi_comm; /* C++ needs the explicit cast from void* */
   //if this is first one then give heads up to other processors
 	if((rank == 0 && counter == 0) || rank != 0){ //counter = 0 only holds for master
 	    //send and get NAA, seq etc from processor 0
@@ -619,7 +619,7 @@ int read_in_from_pdb(simulation_params *sim_params,
     if (sim_params->restart_from_checkpoint) stop("Attempted to read in pdb when restarting from checkpoint file was requested.");
 
 #ifdef PARALLEL
-  MPI_Comm *MPI_COMM = mpi_comm;
+  MPI_Comm *MPI_COMM = (MPI_Comm *)mpi_comm; /* C++ needs the explicit cast from void* */
 #endif
 
 //    if(rank == 0){
@@ -637,11 +637,11 @@ int read_in_from_pdb(simulation_params *sim_params,
     /* bias map */
     /* release distb first, mirroring the freemem_chaint above: overwriting it
        otherwise leaks the contact map on a second call. */
-    if (*biasmap) { if ((*biasmap)->distb) free((*biasmap)->distb); delete *biasmap; }
+    delete *biasmap; /* its distb vector frees itself */
     *biasmap = new Biasmap{};
 
     //temporary chain for reading
-    temporary->aa = NULL; temporary->xaa = NULL; temporary->erg = NULL; temporary->xaa_prev = NULL;
+    temporary->aa = NULL; temporary->xaa = NULL; temporary->erg.clear(); temporary->xaa_prev = NULL;
     temporary->ll = 0;
 
     // only read on the master processor
@@ -785,7 +785,7 @@ void initialize_all_pdb_chains(simulation_params *sim_params,
 			int P, void *mpi_comm){
 
 #ifdef PARALLEL
-    MPI_Comm *MPI_COMM = mpi_comm;
+    MPI_Comm *MPI_COMM = (MPI_Comm *)mpi_comm; /* C++ needs the explicit cast from void* */
     MPI_Status status;
 #endif
 
@@ -862,7 +862,7 @@ void mpi_send_chain(Chain* nsconformation, int from, int to, double *logLstar, i
   int chainids[NAA];
   double xaa_prev[(Nchains+1)*9];
   if(from==0)MPI_Send(logLstar,1,MPI_DOUBLE,to,iter*10,MPI_COMM);
-  MPI_Send(nsconformation->erg,NAA*NAA,MPI_DOUBLE,to,iter*10+1,MPI_COMM);
+  MPI_Send(nsconformation->erg.data(),NAA*NAA,MPI_DOUBLE,to,iter*10+1,MPI_COMM);
   MPI_Send(&(nsconformation->ll),1,MPI_DOUBLE,to,iter*10+2,MPI_COMM);
   for(j = 0; j < NAA; j++){
     etcs[j] = nsconformation->aa[j].etc;
@@ -916,7 +916,7 @@ void mpi_rec_chain(Chain *nsconformation, int from, int to, double *logLstar, in
   int Nchains;
   MPI_Status info;
   if(from==0) MPI_Recv(logLstar,1,MPI_DOUBLE,from,iter*10,MPI_COMM,&info);
-  MPI_Recv(nsconformation->erg,NAA*NAA,MPI_DOUBLE,from,iter*10+1,MPI_COMM,&info);
+  MPI_Recv(nsconformation->erg.data(),NAA*NAA,MPI_DOUBLE,from,iter*10+1,MPI_COMM,&info);
   MPI_Recv(&(nsconformation->ll),1,MPI_DOUBLE,from,iter*10+2,MPI_COMM,&info);
   MPI_Recv(coords,NAA*35,MPI_DOUBLE,from,iter*10+3,MPI_COMM,&info);
   MPI_Recv(etcs,NAA,MPI_INT,from,iter*10+4,MPI_COMM,&info);

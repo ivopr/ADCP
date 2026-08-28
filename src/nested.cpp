@@ -96,12 +96,12 @@ void new_amplitude(std::vector<Chain> &cpoints, Biasmap *biasmap, int current_st
   double currE;
   int copies;
   Chain temporary;
-  temporary.aa = NULL; temporary.xaa = NULL; temporary.erg = NULL; temporary.xaa_prev = NULL;
+  temporary.aa = NULL; temporary.xaa = NULL; temporary.xaa_prev = NULL;
   allocmem_chain(&temporary,cpoints[0].NAA,cpoints[0].Nchains);
 
   //calculate amplitude
 #ifdef PARALLEL
-  MPI_Comm *MPI_COMM = mpi_comm;
+  MPI_Comm *MPI_COMM = (MPI_Comm *)mpi_comm; /* C++ needs the explicit cast from void* */
   MPI_Status status;
   MPI_Comm_size(*MPI_COMM, &P);
   MPI_Comm_rank(*MPI_COMM, &rank);
@@ -824,7 +824,7 @@ void output_NS_point(ChainHash *chainhash, Chain *cpoints, Biasmap *biasmap, sim
 	int P = 1;
 //get the chain to be output
 #ifdef PARALLEL
-	MPI_Comm *MPI_COMM = mpi_comm;
+	MPI_Comm *MPI_COMM = (MPI_Comm *)mpi_comm; /* C++ needs the explicit cast from void* */
 	int rank = 0;
 	MPI_Status status;
 	MPI_Comm_size(*MPI_COMM, &P);
@@ -832,7 +832,7 @@ void output_NS_point(ChainHash *chainhash, Chain *cpoints, Biasmap *biasmap, sim
 	Chain temporary; //if the chain needs collecting from another processor
 
 	if (rank == 0) {
-	  temporary.aa = NULL; temporary.xaa = NULL; temporary.erg = NULL; temporary.xaa_prev = NULL;
+	  temporary.aa = NULL; temporary.xaa = NULL; temporary.xaa_prev = NULL;
 	  allocmem_chain(&temporary,cpoints[0].NAA,cpoints[0].Nchains);
 	  //We need to update AA.id and AA.num, because those are not sent through MPI.
 	  for (int i=0; i< sim_params->NAA; i++) {

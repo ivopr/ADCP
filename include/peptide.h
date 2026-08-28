@@ -9,6 +9,10 @@
 #ifndef PEPTIDE_H_
 #define PEPTIDE_H_
 
+/* outside the extern "C" block on purpose: giving libstdc++'s declarations
+   C linkage would not compile. */
+#include <vector>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -74,28 +78,28 @@ typedef struct _FLEX_data{
 
 /* amino acid chain type */
 typedef struct _Chain {
-	AA *aa;
-	triplet *xaa;
-	triplet *xaa_prev; //previous xaa for chain start only
-	double *erg;
-	double ll; /*logL only used for Nested sampling */
-    int NAA;
-    int Nchains;
-    FLEX_data *flex_data; //only used in nma.c otherwise ignored
+	AA *aa = nullptr;
+	triplet *xaa = nullptr;
+	triplet *xaa_prev = nullptr; //previous xaa for chain start only
+	std::vector<double> erg;
+	double ll = 0.0; /*logL only used for Nested sampling */
+    int NAA = 0;
+    int Nchains = 0;
+    FLEX_data *flex_data = nullptr; //only used in nma.c otherwise ignored
 } Chain;
 
 /* temporary amino acid chain type */
 typedef struct _Chaint {
-	triplet *xaat;
-	triplet *xaat_prev; //previous xaa for chain start only
-	AA *aat;
-	double *ergt;
+	triplet *xaat = nullptr;
+	triplet *xaat_prev = nullptr; //previous xaa for chain start only
+	AA *aat = nullptr;
+	std::vector<double> ergt;
 } Chaint;
 
 /* bias map type */
 typedef struct _Biasmap {
-	double *distb;
-    int NAA;
+	std::vector<double> distb;
+    int NAA = 0;
 } Biasmap;
 
 

@@ -633,7 +633,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr,"Creating PDB library.\n");
 	/* allocate memory for the original PDB library */
 	Chain *temporary = new Chain{};
-	temporary->NAA = 0; temporary->aa = NULL; temporary->xaa = NULL; temporary->erg = NULL; temporary->xaa_prev = NULL;
+	temporary->NAA = 0; temporary->aa = NULL; temporary->xaa = NULL; temporary->xaa_prev = NULL;
 
 	/* PDB library */
 	/* std::vector, not realloc: these three grow one element per loop
@@ -902,7 +902,6 @@ int main(int argc, char *argv[])
 		freemem_chain(&(all_chains_sim[i]));
 		freemem_chaint(&(all_chaints[i]));
 
-		free(all_biasmaps[i].distb);
 
 		param_finalise(&sim_params_sim[i]);
 	}

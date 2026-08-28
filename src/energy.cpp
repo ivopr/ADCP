@@ -235,7 +235,7 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 	}
 
 	//if the biasmap has been already initialised (e.g. nested sampling), do not reread it
-	if((biasmap)->distb != NULL) {
+	if(!(biasmap)->distb.empty()) {
 		if (fin) {
 			fclose(fin);
 			//fprintf(stderr,"Closing contact map file %s\n",mod_params->contact_map_file);
@@ -244,11 +244,10 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
 	}
 
 	// allocate memory
-	(biasmap)->distb = (double *) realloc((biasmap)->distb, chain->NAA * chain->NAA * sizeof(double));
+	/* resize instead of realloc; std::vector aborts on OOM, which is what the
+	   NULL check below did explicitly. */
+	(biasmap)->distb.resize((size_t)chain->NAA * chain->NAA);
 	(biasmap)->NAA = chain->NAA;
-	if ((biasmap)->distb == NULL) {
-		stop("biasmap_initialise: Insufficient memory");
-	}
 
 	// if no biasmap, zero it
 	if (mod_params->contact_map_file == "NULL") {
@@ -342,9 +341,8 @@ void biasmap_initialise(Chain *chain, Biasmap *biasmap, model_params *mod_params
    close input file  */
 void biasmap_finalise(Biasmap *biasmap){
 
-    if(biasmap){   
-	if (biasmap->distb) free(biasmap->distb);
-	delete biasmap;
+    if(biasmap){
+	delete biasmap; /* its distb vector frees itself */
     }
 
 }
@@ -658,7 +656,7 @@ double bias(Biasmap *biasmap, AA *a, AA *b, model_params *mod_params)
     double rs = 2.15; /* rs */
     double bs = -0.25; /*kappa s */
 
-	if (biasmap->distb == NULL) {
+	if (biasmap->distb.empty()) {
 		stop("Contact matrix is not initialised.  Perhaps missing contact map?");
 	}
 
@@ -2497,7 +2495,7 @@ double energy2cyclic(Biasmap *biasmap, AA *a,  AA *b, model_params *mod_params)
 
 	/* Go-type bias potential */
 	
-	if (biasmap->distb && Distb(a->num, b->num) != 0.0)		
+	if (!biasmap->distb.empty() && Distb(a->num, b->num) != 0.0)		
 		retval += bias(biasmap, a, b, mod_params);
 	//fprintf(stderr,"e21 %g\n",retval);
 
@@ -2526,7 +2524,7 @@ double energy2(Biasmap *biasmap, AA *a,  AA *b, model_params *mod_params)
 
 	/* Go-type bias potential */
 	
-	if (biasmap->distb && Distb(a->num, b->num) != 0.0)		
+	if (!biasmap->distb.empty() && Distb(a->num, b->num) != 0.0)		
 		retval += bias(biasmap, a, b, mod_params);
 	//fprintf(stderr,"e21 %g\n",retval);
 
@@ -2894,7 +2892,7 @@ void energy_probe_1(Chain* chain, Biasmap *biasmap, simulation_params *sim_param
 	    probe1[3] = dfdx(chain,biasmap,hbond, &(mod_params->hbs), 0.01, mod_params);
 
 	/* bias potential */
-	if (biasmap->distb != NULL) {
+	if (!biasmap->distb.empty()) {
 	/* gradient of energy derivative (likelihood) */
 	if (sim_params->energy_probe_1_calc[4])
 	    probe1[4] = dfdx(chain,biasmap,bias, &(mod_params->bias_eta_beta), 0.01, mod_params);

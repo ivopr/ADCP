@@ -815,20 +815,16 @@ void amidorient(triplet x, AA *a, AA *b)
 	eulerset(x, alpha, beta, gamma);
 }
 
-/* ponytail: both guards below are broken and always true, so every fulfill()
-   call reallocs all four Chaint buffers and re-runs the field copy loop, on the
-   Monte Carlo hot path. `sizeof(chaint)->aat` parses as `sizeof((chaint)->aat)`,
-   i.e. sizeof(AA*) == 8, a compile-time constant -- it is not a capacity check.
-   Deliberately left as-is: Chaint carries no size field to check against, and
-   changing allocation frequency on the hot path here would make any determinism
-   regression unbisectable against the rest of this step. Fix in Phase 2 step 3c,
-   where converting these members to std::vector makes resize() the real no-op
-   early-out for free. */
+/* NOTE: the guard below is still the broken `sizeof(chaint)->aat`, which parses
+   as sizeof(AA*) == 8 and is therefore always true, so the aat/xaat reallocs run
+   on every call. Those two are still raw pointers (see the triplet note in
+   peptide.h), so the guard still cannot be written correctly here. ergt no
+   longer cares: resize() is a genuine no-op when the size already matches. */
 void aat_init(Chain * chain, Chaint * chaint){
   if(sizeof(chaint)->aat != chain->NAA * sizeof(AA)){
     (chaint)->aat = (AA *) realloc((chaint)->aat, chain->NAA * sizeof(AA));
     (chaint)->xaat = (triplet *) realloc((chaint)->xaat, chain->NAA * sizeof(triplet));
-    (chaint)->ergt = (double *) realloc((chaint)->ergt, 5 * chain->NAA * chain->NAA * sizeof(double));
+    (chaint)->ergt.resize(5 * (size_t)chain->NAA * chain->NAA);
     int i;	
     for (i = 1; i < chain->NAA; i++) {
 	  (chaint)->aat[i].id = chain->aa[i].id;
@@ -873,15 +869,15 @@ void allocmem_chain(Chain *chain, int NAA, int Nchains)
 	(chain)->Nchains = Nchains;
 	(chain)->aa =  (AA*)realloc((chain)->aa, (chain)->NAA * sizeof(AA));
 //	fprintf(stderr,"allocating erg: %ld\n",(chain)->NAA * (chain)->NAA * sizeof(double));
-	(chain)->erg = (double*)realloc((chain)->erg, (chain)->NAA * (chain)->NAA * sizeof(double));
-	///fprintf(stderr," %g",chain->erg);
+	/* size_t product: the old int one overflowed above NAA ~ 46000. resize is
+	   also a real no-op when the size already matches, where realloc was not. */
+	(chain)->erg.resize((size_t)(chain)->NAA * (chain)->NAA);
 	(chain)->xaa = (triplet*)realloc((chain)->xaa,(chain)->NAA * sizeof(triplet));
 	(chain)->xaa_prev = (triplet*)realloc((chain)->xaa_prev,((chain)->Nchains + 1) * sizeof(triplet));
-	if ((chain)->erg == NULL || (chain)->xaa == NULL || (chain)->aa == NULL || (chain)->xaa_prev == NULL) {
+	if ((chain)->xaa == NULL || (chain)->aa == NULL || (chain)->xaa_prev == NULL) {
 		if ((chain)->xaa == NULL) stop("allocmem_chain: Insufficient memory (chain->xaa)");
 		if ((chain)->aa == NULL) stop("allocmem_chain: Insufficient memory (chain->aa)");
 		if ((chain)->xaa_prev == NULL) stop("allocmem_chain: Insufficient memory (chain->xaa_prev)");
-		if ((chain)->erg == NULL) stop("allocmem_chain: Insufficient memory (chain->erg)");
 	}
 }
 
@@ -1588,10 +1584,8 @@ void freemem_chain(Chain *chain)
 		free(chain->aa);
 		chain->aa = NULL;
 	    }
-	    if (chain->erg) {
-		free(chain->erg);
-		chain->erg = NULL;
-	    }
+	    chain->erg.clear();
+	    chain->erg.shrink_to_fit();
 	    if (chain->xaa) {
 		free(chain->xaa);
 		chain->xaa = NULL;
@@ -1610,10 +1604,8 @@ void freemem_chaint(Chaint *chaint)
 		free(chaint->aat);
 		chaint->aat = NULL;
 	    }
-	    if (chaint->ergt) {
-		free(chaint->ergt);
-		chaint->ergt = NULL;
-	    }
+	    chaint->ergt.clear();
+	    chaint->ergt.shrink_to_fit();
 	    if (chaint->xaat) {
 		free(chaint->xaat);
 		chaint->xaat = NULL;
@@ -1851,7 +1843,7 @@ int pdbin(Chain *chain, simulation_params *sim_params, FILE *infile)
 			}
 		}
 	}
-	tempchain->erg = (double*)realloc(tempchain->erg, tempchain->NAA * tempchain->NAA * sizeof(double));	
+	tempchain->erg.resize((size_t)tempchain->NAA * tempchain->NAA);	
 //	fprintf(stderr,"Allocating memory for xaa_prev (Nchains=%d)\n",tempchain->Nchains);
 	tempchain->xaa_prev = (triplet*)realloc(tempchain->xaa_prev, (tempchain->Nchains+1) * sizeof(triplet));	
 	for (int i = 0; i <= tempchain->Nchains; i++) {

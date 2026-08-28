@@ -201,13 +201,13 @@ void initialize_displacement(Chain *chain, Biasmap *biasmap, simulation_params *
 
 	Chain chain_init;
 	chain_init.NAA = 0;
-	chain_init.aa = NULL; chain_init.xaa = NULL; chain_init.erg = NULL; chain_init.xaa_prev = NULL;
+	chain_init.aa = NULL; chain_init.xaa = NULL; chain_init.xaa_prev = NULL;
         allocmem_chain(&chain_init,chain->NAA,chain->Nchains);
 	Chaint chaint;
-	chaint.aat = NULL; chaint.xaat = NULL; chaint.ergt = NULL; chaint.xaat_prev = NULL;
+	chaint.aat = NULL; chaint.xaat = NULL; chaint.xaat_prev = NULL;
 	Chain displacements;
 	displacements.NAA = 0;
-	displacements.aa = NULL; displacements.xaa = NULL; displacements.erg = NULL; displacements.xaa_prev = NULL;
+	displacements.aa = NULL; displacements.xaa = NULL; displacements.xaa_prev = NULL;
         allocmem_chain(&displacements,chain->NAA,chain->Nchains);
 	
 	/* calculate initialized distances */
@@ -1472,7 +1472,7 @@ void energy_gradient_wrt_parameters(Chain *chain,Biasmap *biasmap, simulation_pa
 int count_contacts(Chain *chain, Biasmap *biasmap,simulation_params *sim_params, int native)
 {
 	int i, j, contax;
-	if (native && biasmap->distb == NULL)
+	if (native && biasmap->distb.empty())
 		return -1;
 
 	contax = 0;
@@ -2145,12 +2145,9 @@ void cm_native_go(Chain *chain, Biasmap *biasmap,simulation_params *sim_params, 
 {
 
 	//allocate memory if needed
-	if (biasmap->distb == NULL) {
-		(biasmap)->distb = (double *) realloc((biasmap)->distb, chain->NAA * chain->NAA * sizeof(double));
+	if (biasmap->distb.empty()) {
+		(biasmap)->distb.resize((size_t)chain->NAA * chain->NAA);
 		(biasmap)->NAA = chain->NAA;
-		if ((biasmap)->distb == NULL) {
-			stop("cm_native_go: Insufficient memory");
-		}
 	}
 
 	//calculate contact map according to the actual contacts (1: contact, 0: no contact)
