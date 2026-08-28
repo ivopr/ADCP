@@ -44,7 +44,13 @@ Ordering within Phase 2, by risk × blast radius:
 
 1. **Done.** Leaves: `error.c`, `vector.c`, `rotation.c`, `random16.c`, `aadict.c`, `canonicalAA.c`
 2. **Done.** `params.c` — do before anything downstream depends on its idiomatic shape
-3. `peptide.c` — owns the shared structs; converting `Chain`'s arrays touches every file that reads `chain->aa[i]`, so do it once, early, before those callers are themselves converted
+3. `peptide.c` — owns the shared structs. **Split into 3a/3b/3c** (see the step 3
+   section below); doing it as one step means changing 13 files at once, which is
+   not bisectable against the `energy.cpp` precedent.
+   - **3a. Done.** `peptide.cpp`-local cleanup, no header or caller change.
+   - 3b. Tree-wide `malloc(sizeof(Chain|Chaint|Biasmap))` → `new`/`delete`, structs
+     still POD. Prerequisite, no behavior change.
+   - 3c. `Chain`/`Chaint` members → `std::vector`; the wide one.
 4. `main.c` idiomatic pass (string/RAII file wrapper — the VLA fix already landed in Phase 1)
 5. `vdw.c` (dispatch templating)
 6. `energy.c`
@@ -107,6 +113,104 @@ test hammered 12× after every group (all clean); the `docking|validation` label
 after the `params.cpp` groups specifically, since `realloc`→container conversions are the
 exact pattern flagged in the risk register below — one run got a live network fetch of the
 3Q47 target and passed `dock_fetch_target`/`dock_3q47_smoke`/`val_3q47_redock` in full.
+
+## Phase 2 progress — step 3a (peptide.cpp local cleanup) done
+
+Step 3 as originally written ("`peptide.c` — owns the shared structs") is the
+widest change in the migration: converting `Chain`/`Chaint`'s members to
+`std::vector` forces ~22 `malloc(sizeof(Chain))` sites, 9 array `realloc` sites
+and ~20 `= NULL` initializers across 13 files to change in one commit — the same
+heap-container pattern that produced the still-unexplained `energy.cpp` hang, on
+the hottest struct in the tree. So it was split; **3a is everything inside
+`peptide.cpp` that needs no header change and no caller change.**
+
+Six changes, four commits, each hammered 12× before the next:
+
+- **Deleted dead `repair()`** (197 lines, 3 `malloc`, 3 `free`). `static` and never
+  called — the live path is `initialize` → `repair_multichain` → `repair_segment`.
+  It was also the only place a later vector conversion would have been a real
+  behavior change: `repair` read `diag[i]`/`cosn[i]` at indices it never wrote,
+  where `repair_segment` zeroes its block explicitly.
+- **Fixed an `xaa_prev` leak.** `build_peptide_from_sequence` `malloc`'d over the
+  pointer `allocmem_chain` had just allocated at the identical size, leaking
+  `(Nchains+1)*sizeof(triplet)` per call. Safe to drop: `xaa_prev[1]` and
+  `xaa_prev[chainid]` are both written before use and index 0 is never read.
+- **Fixed a VLA stack overrun** in `repair_multichain`. `chain_starts`/`chain_ends`
+  were VLAs (non-standard C++, and `CMAKE_CXX_EXTENSIONS` is `OFF`) sized
+  `Nchains`, but the loop writes `chain_starts[next_chain]` *before* the check that
+  `next_chain+1 == Nchains` — a malformed PDB smashed the stack and only then
+  reported the inconsistency. Now `std::vector<int>` sized `Nchains+1`; every index
+  expression unchanged. Phase 1 step 7 fixed `main.cpp`'s VLAs and missed these.
+- **`str_without_separator`/`chain_ids` → `std::string`/`std::vector<int>`**, built
+  with `push_back`. Drops 2 `malloc`, 2 pointless shrinking `realloc`, 2 `free`
+  (one sitting ~150 lines away at the end of the function).
+- **The three amino-acid list readers → one RAII helper.**
+  `mark_fixed_aa_from_file` and `mark_constrained_aa_from_file` (×2) were
+  near-identical `fopen`/`fscanf`/`fclose` blocks whose mid-loop `stop()` skipped
+  the close. Now one `mark_aa_from_file()` holding the handle in a `unique_ptr`.
+  **Also a real fix:** the range check was only `next >= chain->NAA`, so a negative
+  index in the user-supplied list was an out-of-bounds write into `chain->aa`.
+  Verified the previous build accepts `-3` silently and the new one rejects it.
+
+**Deliberately not fixed: `aat_init`'s guards** (`src/peptide.cpp`). Both read
+`sizeof(chaint)->aat`, which parses as `sizeof((chaint)->aat)` — i.e. `sizeof(AA*)`
+== 8, a compile-time constant, not a capacity check. The conditions are therefore
+always true, so **every `fulfill()` call reallocs all four `Chaint` buffers and
+re-runs the field-copy loop, on the Monte Carlo hot path.** Left alone on purpose
+and marked with a `ponytail:` comment: `Chaint` carries no size field to check
+against, and changing hot-path allocation frequency in the same step as everything
+else would make a determinism regression unbisectable. Fix in **3c**, where
+`std::vector::resize` is the real no-op early-out for free.
+
+Validated: 13/13 `ctest` and `func_adcp_fold_determinism` **12/12** after every
+commit; ASan+UBSan clean including a 15200-atom fold through the new list-reader
+path; `docking|validation` 3/3 with a live 3Q47 fetch (`val_3q47_redock` 114s).
+The `fixed=` path has no test fixture, so it was checked by hand: stderr and every
+ATOM record byte-identical against the parent commit.
+
+### Notes for 3b and 3c — do not re-derive these
+
+- **Before converting any member, convert the struct's allocation sites first.**
+  This is the `params.cpp` lesson again. The single-object sites are `main.cpp:182,
+  240, 978, 979, 984`; `flex.cpp:585, 587, 731, 892, 894`; `nested.cpp:94, 899,
+  902, 906`; `peptide.cpp` (`pdbin`'s `tempchain`, which never escapes — make it a
+  stack `Chain`); `vdw.cpp:1281`; `cdlearn.cpp:54, 634`; `checkpoint_io.cpp:367,
+  370, 636, 639`.
+- **Highest-risk sites are the growth-loop array reallocs** of live `Chain`s:
+  `checkpoint_io.cpp:553`, `checkpoint_io.cpp:581`, `tools/cdlearn.cpp:669`. Each
+  call bitwise-relocates every previously-constructed element. Also
+  `nested.cpp:1107`, `flex.cpp:767`, `vdw.cpp:1280` (`malloc(sizeof(Chain)*28)`),
+  `cdlearn.cpp:673, 686, 721`.
+- **`AA` is POD and pointer-free** — its `vector` members are `double[3]` typedefs.
+  It needs no conversion, and **3c must not touch it**: 8 whole-`AA` assignments in
+  `metropolis.cpp` (362, 535, 693, 1094, 1227, 1364, 1511, 1775) and a `memcpy` in
+  `tools/bfactor.cpp:142` all become UB the moment `AA` gains a non-trivial member.
+- **`copybetween` is already a deep field-by-field copy**, not `*to = *from`, and
+  all 20 callers go through it — including `main.cpp`'s replica-exchange pool,
+  which never pointer-swaps. So the swap logic needs no change in 3c; only the
+  `malloc`/`free` at `main.cpp:240`/`539`. (Its error message at the `Nchains`
+  mismatch prints `to->NAA, from->NAA` — copy-paste bug, harmless, fix in 3c.)
+- **`Chain::flex_data` is never initialized** at any creation site except
+  `flex.cpp:730`, and `freemem_chain` never touches it. A real constructor in 3c
+  fixes this for free — a migration win, not a separate fix.
+- `allocmem_chain`'s `NAA*NAA*sizeof(double)` and `aat_init`'s
+  `5*NAA*NAA*sizeof(double)` are `int` products that overflow above `NAA ≈ 46k`/`20k`.
+  `std::vector` with a `size_t` product removes this.
+- **`static char line[83]` in `getaa` is not a mechanical `std::string` swap.** It
+  is cross-call parser state by design — the `do {} while (fgets(...))` loop
+  inspects the line left over from the previous call, which is how the
+  ENDMDL/END/TER sentinels and the residue-boundary return work, and the direct
+  `line[30..37]` indexing relies on the array being 83 bytes regardless of the
+  actual line length. Leave it unless you are building a `PdbReader` that owns
+  `FILE*` + the line buffer.
+
+### Testing note
+
+`tests/run_fold_test.sh` does `rm -rf "$WD"` on a fixed workdir, so **two `ctest`
+runs against the same build directory will wipe each other's scratch space** and
+produce a spurious determinism failure. Hammer sequentially, one `ctest` at a time.
+`--repeat until-fail:12` takes ~10.5 min, which exceeds some command timeouts —
+two batches of 6 is equivalent.
 
 ## Validation gates
 
