@@ -1290,6 +1290,10 @@ void vdw_cutoff_distances_calculate(simulation_params *sim_params, FILE *outfile
         Chaint* chaint = new Chaint{};
 	if (my_sim_params->seq) free(my_sim_params->seq);
 	copy_string(&(my_sim_params->seq),"ABCDEFGHIGKLMNGPQRSTGVWGYZ");
+	/* build_peptide_from_sequence below overwrites ->sequence via copy_string,
+	   which does not free its target, so the copy sim_params_copy just made
+	   would leak. Same idiom as the ->seq line above. */
+	if (my_sim_params->sequence) { free(my_sim_params->sequence); my_sim_params->sequence = NULL; }
 	build_peptide_from_sequence(chain,chaint,my_sim_params->seq, my_sim_params);
 	param_finalise(my_sim_params);
 	delete my_sim_params;

@@ -135,12 +135,18 @@ void CA_geometry(Chain *chain, Biasmap *biasmap, simulation_params *sim_params, 
 //      int aa2 = sim_params->geometry.bond2[i];
 //      fprintf(sim_params->outfile,"distance %d %d %g", sqrt(distance(chain->aa[aa1].ca,chain->aa[aa2].ca)));
 //   }
+      /* These index fixed residue numbers. The first block reads aa[16] so it
+         needs NAA > 16 -- it had no guard at all. The second reads aa[24] but
+         was guarded by NAA > 17, so it overran on anything shorter than 25
+         residues; ASan reports it on a 20-mer. */
+      if (chain->NAA>16) {
       fprintf(sim_params->outfile,"distance  1 16 %g", sqrt(distance(chain->aa[1].ca,chain->aa[16].ca)));
       fprintf(sim_params->outfile,"distance  3 14 %g", sqrt(distance(chain->aa[3].ca,chain->aa[14].ca)));
       fprintf(sim_params->outfile,"distance  5 12 %g", sqrt(distance(chain->aa[5].ca,chain->aa[12].ca)));
       fprintf(sim_params->outfile,"distance  7 10 %g", sqrt(distance(chain->aa[7].ca,chain->aa[10].ca)));
+      }
 
-      if (chain->NAA>17) {
+      if (chain->NAA>24) {
         fprintf(sim_params->outfile,"distance  18 15 %g", sqrt(distance(chain->aa[18].ca,chain->aa[15].ca)));
         fprintf(sim_params->outfile,"distance  20 13 %g", sqrt(distance(chain->aa[20].ca,chain->aa[13].ca)));
         fprintf(sim_params->outfile,"distance  22 11 %g", sqrt(distance(chain->aa[22].ca,chain->aa[11].ca)));
@@ -1011,13 +1017,13 @@ void number_of_contacts(Chain *chain,Biasmap *biasmap, simulation_params *sim_pa
 	fprintf(stderr,"Calculating number of contacts with touching distance %g\n",sqrt(sim_params->protein_model.touch2));
 
 	int i, j;
-	int *n_contacts_bb;
-	int *n_contacts_sch;
 	int n_i_bb, n_i_sch;
 	int n_j_bb, n_j_sch;
 
-	n_contacts_sch = (int *)calloc(chain->NAA,sizeof(int));
-	n_contacts_bb = (int *)calloc(chain->NAA,sizeof(int));
+	/* were calloc'd and never freed on any path; tests() runs per output
+	   snapshot, so the leak accumulated across a run */
+	std::vector<int> n_contacts_sch(chain->NAA, 0);
+	std::vector<int> n_contacts_bb(chain->NAA, 0);
 
 
 	for (i = 1; i < chain->NAA-1; i++) {
