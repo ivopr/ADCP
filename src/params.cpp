@@ -56,17 +56,10 @@ void param_initialise(simulation_params *self) {
   self->bstp = 1;
   self->intrvl = 16384;
   self->nswap_per_try = 16384;
-  self->energy_gradient = (double*)malloc(36*sizeof(double));
-  self->energy_probe_1_this = (double*)malloc(36*sizeof(double));
-  self->energy_probe_1_last = (double*)malloc(36*sizeof(double));
-  self->energy_probe_1_calc = (int*)malloc(36*sizeof(int));
-  int i;
-  for (i=0; i<36; i++) {
-    self->energy_gradient[i] = 0;
-    self->energy_probe_1_this[i] = 0;
-    self->energy_probe_1_last[i] = 0;
-    self->energy_probe_1_calc[i] = 1;
-  }
+  self->energy_gradient.assign(36, 0);
+  self->energy_probe_1_this.assign(36, 0);
+  self->energy_probe_1_last.assign(36, 0);
+  self->energy_probe_1_calc.assign(36, 1);
   /* nested sampling */
   self->NS = 0;
   self->iter = 0;
@@ -148,10 +141,10 @@ void param_finalise(simulation_params *self) {
   self->bstp = 0;
   self->intrvl = 0;
   self->nswap_per_try = 0;
-  if (self->energy_gradient) free(self->energy_gradient);
-  if (self->energy_probe_1_calc) free(self->energy_probe_1_calc);
-  if (self->energy_probe_1_this) free(self->energy_probe_1_this);
-  if (self->energy_probe_1_last) free(self->energy_probe_1_last);
+  self->energy_gradient.clear();
+  self->energy_probe_1_calc.clear();
+  self->energy_probe_1_this.clear();
+  self->energy_probe_1_last.clear();
   /* nested sampling */
   self->NS = 0;
   self->iter = 0;
@@ -790,29 +783,10 @@ void sim_params_copy(simulation_params *to, simulation_params *from) {
   copy_string(&(to->outfile_name), from->outfile_name);
   copy_string(&(to->checkpoint_filename), from->checkpoint_filename);
 
-  //double arrays
-  double* temp = 0;
-  temp = (double*)malloc(sizeof(double) * 36);
-  if (!temp) stop("Unable to allocate temp memory in sim_params_copy.");
-  to->energy_gradient = temp;
-  memcpy(to->energy_gradient, from->energy_gradient, sizeof(double) * 36);
+  // energy_gradient, energy_probe_1_this, energy_probe_1_last, energy_probe_1_calc
+  // are std::vector members, already deep-copied by the "*to = *from" above.
 
-  temp = (double*)malloc(sizeof(double) * 36);
-  if (!temp) stop("Unable to allocate temp memory in sim_params_copy.");
-  to->energy_probe_1_this = temp;
-  memcpy(to->energy_probe_1_this, from->energy_probe_1_this, sizeof(double) * 36);
-
-  temp = (double*)malloc(sizeof(double) * 36);
-  if (!temp) stop("Unable to allocate temp memory in sim_params_copy.");
-  to->energy_probe_1_last = temp;
-  memcpy(to->energy_probe_1_last, from->energy_probe_1_last, sizeof(double) * 36);
-
-  //integer arrays
-  int* temp2 = (int*)malloc(sizeof(int) * 36);
-  if (!temp2) stop("Unable to allocate temp memory2 in sim_params_copy.");
-  to->energy_probe_1_calc = temp2;
-  memcpy(to->energy_probe_1_calc, from->energy_probe_1_calc, sizeof(int) * 36);
-
+  int* temp2;
   if (from->seq != NULL && from->sequence != NULL && from->MC_lookup_table != NULL && from->MC_lookup_table_n != NULL) {
     int N = 4 * (from->NAA + strlen(from->sequence) - strlen(from->seq));
     temp2 = (int*)malloc(sizeof(int) * N);

@@ -711,8 +711,7 @@ int main(int argc, char *argv[])
 	/* NEED A LIBRARY OF SIMULATION_PARAMS AND A LIBRARY COPY TO DO THE MC-S */
 	fprintf(stderr,"Initialising simulation parameters...\n");
 	/* copy sim_params */
-	simulation_params *sim_params_sim = NULL;
-	sim_params_sim = (simulation_params*)realloc(sim_params_sim,n_proteins * sizeof(simulation_params));
+	simulation_params *sim_params_sim = new simulation_params[n_proteins];
 	for (int i=0; i<n_proteins; i++) {
 	   sim_params_copy(&((sim_params_sim)[i]),&sim_params);
 	}
@@ -912,7 +911,7 @@ int main(int argc, char *argv[])
 	free(all_chains_sim);
 	free(all_chaints);
 	free(all_biasmaps);
-	free(sim_params_sim);
+	delete[] sim_params_sim;
 	free(energy_change);
 	cd_param_finalise(&cd_params);
 

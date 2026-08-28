@@ -7,11 +7,14 @@
 #ifndef PARAMS_H_
 #define PARAMS_H_
 
+#include <stdio.h>
+#ifdef __cplusplus
+#include <vector>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdio.h>
 
 #define DEFAULT_LONG_STRING_LENGTH 1024
 #define DEFAULT_SHORT_STRING_LENGTH 256
@@ -319,10 +322,10 @@ typedef struct {
   unsigned int nswap_per_try;
 
   /* various tests */
-  double *energy_gradient;
-  double *energy_probe_1_this;
-  double *energy_probe_1_last;
-  int *energy_probe_1_calc;
+  std::vector<double> energy_gradient;
+  std::vector<double> energy_probe_1_this;
+  std::vector<double> energy_probe_1_last;
+  std::vector<int> energy_probe_1_calc;
 
   /* nested sampling */
   int NS;          /* whether NS calculation is turned on(=1) or not (0) */

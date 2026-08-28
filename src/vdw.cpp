@@ -1272,7 +1272,7 @@ void vdw_maxgamma_calc(Chain *chain, model_params *mod_params, FILE *outfile, in
 void vdw_cutoff_distances_calculate(simulation_params *sim_params, FILE *outfile, int verbose) {
 
 	/* build test peptide */
-	simulation_params *my_sim_params = (simulation_params *)malloc(sizeof(simulation_params));
+	simulation_params *my_sim_params = new simulation_params();
 	sim_params_copy(my_sim_params,sim_params);
 	my_sim_params->infile = NULL;
 	my_sim_params->outfile = NULL;
@@ -1286,7 +1286,7 @@ void vdw_cutoff_distances_calculate(simulation_params *sim_params, FILE *outfile
 	copy_string(&(my_sim_params->seq),"ABCDEFGHIGKLMNGPQRSTGVWGYZ");
 	build_peptide_from_sequence(chain,chaint,my_sim_params->seq, my_sim_params);
 	param_finalise(my_sim_params);
-	free(my_sim_params);
+	delete my_sim_params;
 
 	/* vdW cutoff for backbone atoms */
 	/* Use extended cutoff if requested. */
