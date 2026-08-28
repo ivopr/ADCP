@@ -50,11 +50,12 @@ Ordering within Phase 2, by risk × blast radius:
    - **3a. Done.** `peptide.cpp`-local cleanup, no header or caller change.
    - **3b. Done**, after adding the NS/checkpoint tests it needed (3b-0). No
      `malloc`/`realloc`/`free` of these three types remains anywhere.
-   - **3c. Partly done**: `erg`, `ergt`, `distb` are `std::vector`. `aa`/`aat` and
-     the four `triplet` members are still raw — see the progress section for what
-     blocks each.
-4. `main.c` idiomatic pass (string/RAII file wrapper — the VLA fix already landed in Phase 1)
-5. `vdw.c` (dispatch templating)
+   - **3c. Done, deliberately scoped**: `erg`, `ergt`, `distb` are `std::vector`.
+     `aa`/`aat` and the four `triplet` members stay raw pointers **by decision, not
+     omission** — see "Why 3c stops where it does" below. The leaks a `Chain`
+     destructor would have fixed were fixed by hand instead.
+4. **Done.** `main.c` idiomatic pass
+5. **Done.** `vdw.c` dispatch templating — measured 5.6% faster, bit-identical
 6. `energy.c`
 7. `probe.c`, `metropolis.c`
 8. `flex.c`, `checkpoint_io.c`
@@ -214,7 +215,7 @@ produce a spurious determinism failure. Hammer sequentially, one `ctest` at a ti
 `--repeat until-fail:12` takes ~10.5 min, which exceeds some command timeouts —
 two batches of 6 is equivalent.
 
-## Phase 2 progress — 3b done, 3c partly done
+## Phase 2 progress — steps 3, 4 and 5 done
 
 **3b-0: the riskiest code had no tests.** Nested sampling runs only under `-n`, and
 no test passed `-n`, so `nested.cpp` (1325 lines) and `checkpoint_io.cpp` (991
@@ -261,26 +262,68 @@ and made `aat_init`'s `ergt` path a genuine no-op early-out.
 `allocmem_chain`/`freemem_chain`/`freemem_chaint` were kept as shims, so their ~40
 call sites did not change.
 
-### Still to do in 3c, and why each is blocked
+### Why 3c stops where it does — a decision, not an omission
 
-- **`Chain::aa` / `Chaint::aat` (`AA*`).** `getpdb` takes `AA **paa` and reallocs
-  it through `dblalloc`, so converting `aa` means reworking that signature to
-  `std::vector<AA>&` first. `AA` itself is POD and pointer-free and **must not be
-  touched**: 8 whole-`AA` assignments in `metropolis.cpp` and a `memcpy` in
-  `tools/bfactor.cpp` become UB the moment `AA` gains a non-trivial member.
-- **`xaa` / `xaa_prev` / `xaat` / `xaat_prev` (`triplet` = `double[3][3]`).**
-  `std::vector` cannot hold a raw array type. `std::vector<std::array<std::array<
-  double,3>,3>>` indexes identically for `xaa[i][j][k]`, but does **not** decay to
-  `double(*)[3]`, and **60 sites pass `xaa[i]` straight into a `triplet`
-  parameter** (`acidate`, `casttriplet`, `transset`, …). Converting these means
-  either touching all 60 or writing a wrapper struct with a conversion operator.
-  Neither is worth it for the safety gained — these are fixed-size-per-element
-  buffers, not the ones that overflow or leak. Leaving them raw is safe: `Chain`'s
-  implicit move copies the pointer exactly as the old bitwise realloc-move did,
-  and nothing frees them from a destructor.
+`Chain::aa`/`Chaint::aat` and the four `triplet` members (`xaa`, `xaa_prev`,
+`xaat`, `xaat_prev`) remain raw pointers. Converting them was costed and declined:
 
-Because those stay raw, `aat_init`'s `sizeof(chaint)->aat` guard is still broken
-and still always true (it parses as `sizeof(AA*)` == 8). `ergt` no longer cares.
+- **`aa`/`aat`** would need `getpdb`'s `AA**` signature reworked (plus
+  `tools/bfactor.cpp`), 17 `.data()` sites and **164 pointer-arithmetic sites**
+  rewritten, 82 of them in `metropolis.cpp`'s hot Monte Carlo path.
+- **The `triplet` members** cannot go in a `std::vector` at all —`triplet` is
+  `double[3][3]`, not a valid element type. The `std::array` equivalent indexes
+  identically for `xaa[i][j][k]` but does **not** decay to `double(*)[3]`, and
+  **117 sites pass `xaa[i]` straight into a `triplet` parameter** (`acidate`,
+  `casttriplet`, `transset`, …). It would need a wrapper struct with a conversion
+  operator. Note also that `matrix` and `triplet` are the same type, and
+  `peptide.cpp` passes `xaa[0]` into a `matrix` parameter — so the wrapper could not
+  even be a distinctly-typed one.
+
+Converting **both** is the only thing that would have paid for the work, because
+only then can `Chain` have a destructor, and the destructor is what would have
+retired the manual `freemem_chain`/`freemem_chaint` protocol and the leaks. That is
+~300 mechanical edits in the file whose sibling produced the still-unexplained
+`energy.cpp` hang. **The leaks were fixed directly instead** (see below), which is
+where the actual safety value was.
+
+Leaving them raw is safe as things stand: `Chain` has no destructor, so its implicit
+move copies those pointers exactly as the old bitwise `realloc` move did, and 3b
+removed every `realloc`/`memcpy` of a `Chain`. Consequence to know about:
+`aat_init`'s `sizeof(chaint)->aat` guard is still broken and still always true (it
+parses as `sizeof(AA*)` == 8), so `aat`/`xaat` are still realloc'd on every
+`fulfill()`. `ergt` no longer cares — `resize` is a real no-op.
+
+### Steps 4 and 5
+
+**Step 4 (`main.cpp`)** was small: the dead `swapFile`/`swapname` deleted, three
+`sprintf`-into-buffer filenames to `std::string`. Deliberately unchanged, so nobody
+redoes the analysis: `checkpoint_filename[256]` stays a char buffer because it is an
+`sscanf` target, and **no `FILE*` RAII wrapper was added** — `fptr1` is already
+`fclose`d, `fptr`/`fptr_pdb` are function-`static` and process-lifetime, and
+`sim_params->infile`/`outfile` are owned by `sim_params`.
+
+**Step 5 (`vdw.cpp` dispatch) was measured before being written**, because it is a
+performance change on a hot path and the risk register calls float-accumulation
+changes blocking. Fixed fold workload, median of 5, spread under 1%:
+
+| build | time |
+|---|---|
+| function pointer (before) | 11.17 s |
+| calls devirtualized only | 10.97 s |
+| **bodies templated on the potential** | **10.54 s — 5.6% faster** |
+
+ATOM records byte-identical throughout, so the accumulation order did not change.
+Specializing the whole body is what buys most of it; merely removing the indirect
+call does not. `probe.cpp`'s `vdw_fn` is left alone — this document lists it as
+firing every MC step, but `vdw_contributions` is commented out of the test dispatch
+table and is unreachable.
+
+That work surfaced a **latent linkage bug**: `vdw_lj` and `vdw_hard_cutoff` were
+defined `inline` in `vdw.cpp` while `include/vdw.h` declares them without it.
+`probe.cpp` calls them through a function pointer and needs a real symbol, which
+existed only because `vdw.cpp` happened to take their address. Once the callers
+became templates, every use inlined, no out-of-line copy was emitted and the link
+broke. Fixed by matching the header.
 
 ### The MPI build was broken and had never been compiled
 
@@ -299,13 +342,31 @@ stub `mpi.h` (~20 symbols). **That checks syntax and types, not linking or
 behaviour** — CI's `mpi` job remains the real gate, and it should now actually get
 past the compiler.
 
-### Pre-existing leaks left for RAII, not yet fixed
+### Pre-existing leaks — fixed directly
 
-Deliberately not fixed, because a `Chain` destructor would fix them for free once
-`aa`/`xaa` are owned — revisit when finishing 3c: `flex.cpp:892`'s `chain`/`chaint`
-are never freed; `nested.cpp:122`'s early return skips its cleanup; the
-`only_output_checkpoint` exit leaves the per-element `freemem_chain` commented out;
-`probe.cpp`'s stack `Chaint` and `displacements` are never freed.
+Since 3c stops short of a `Chain` destructor, these were fixed by hand rather than
+waiting for RAII:
+
+- `flex.cpp`'s `ns_for_flex_processor` never released `chain` or `chaint`
+  (`finalize_flex` releases `flex_data`/`input_chains`/`rmsd`, not the chain).
+- `nested.cpp`'s `new_amplitude` has a `if (P == 1) { … return; }` early exit that
+  skipped the cleanup at the end of the function, once per recalibration.
+- `nested.cpp`'s `only_output_checkpoint` exit had its per-element `freemem_chain`
+  loop commented out. `cpoints` is a `std::vector<Chain>` now, so its destructor
+  releases the *element storage* — but `aa`/`xaa`/`xaa_prev` are still raw and
+  still need the explicit loop. Do not delete it thinking the vector covers it.
+- `probe.cpp`'s `initialize_displacement` released `chain_init` but not the stack
+  `Chaint` or the `displacements` chain, **and** leaked `G_to_delete`/`G2_to_delete`
+  — a fifth leak nobody had listed, found by running the path rather than reading it.
+
+**That last one is the lesson.** `initialize_displacement` runs only under test mask
+`0x2000000` and no test sets it, so ASan had never seen it. Running it by hand
+reported `10400 byte(s) leaked in 200 allocation(s)`; after the fix, nothing. The
+other mask-gated `probe.cpp` diagnostics have still never been run under ASan and
+are a reasonable place to look for more of the same.
+
+Two of the four are `#ifdef PARALLEL` and are verified only by the stub-`mpi.h`
+syntax check, never by running.
 
 ## Validation gates
 
