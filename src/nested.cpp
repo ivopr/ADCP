@@ -95,8 +95,7 @@ void new_amplitude(std::vector<Chain> &cpoints, Biasmap *biasmap, int current_st
   chaint = new Chaint{};
   double currE;
   int copies;
-  Chain temporary;
-  temporary.aa = NULL; temporary.xaa = NULL; temporary.xaa_prev = NULL;
+  Chain temporary; /* = nullptr default member initializers do the nulling */
   allocmem_chain(&temporary,cpoints[0].NAA,cpoints[0].Nchains);
 
   //calculate amplitude
@@ -119,6 +118,11 @@ void new_amplitude(std::vector<Chain> &cpoints, Biasmap *biasmap, int current_st
       amptot += sim_params->amplitude;
     }
     sim_params->amplitude = amptot / 5;
+    /* this early return used to skip the cleanup at the end of the function,
+       leaking temporary's buffers and chaint once per recalibration */
+    freemem_chain(&temporary);
+    freemem_chaint(chaint);
+    delete chaint;
     return;
   }
 
@@ -832,7 +836,6 @@ void output_NS_point(ChainHash *chainhash, Chain *cpoints, Biasmap *biasmap, sim
 	Chain temporary; //if the chain needs collecting from another processor
 
 	if (rank == 0) {
-	  temporary.aa = NULL; temporary.xaa = NULL; temporary.xaa_prev = NULL;
 	  allocmem_chain(&temporary,cpoints[0].NAA,cpoints[0].Nchains);
 	  //We need to update AA.id and AA.num, because those are not sent through MPI.
 	  for (int i=0; i< sim_params->NAA; i++) {
@@ -1053,7 +1056,9 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
       freemem_chain(temporary);
       delete temporary;
     }
-    //for (int i=0; i<current_stored; i++) {   //  freemem_chain(&cpoints[i]);   //}
+    /* cpoints is a std::vector<Chain>, so its destructor releases the element
+       storage -- but aa/xaa/xaa_prev are still raw pointers and need this. */
+    for (int i = 0; i < current_stored; i++) freemem_chain(&cpoints[i]);
     return;
   }
 

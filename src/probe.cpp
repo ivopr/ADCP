@@ -9,6 +9,8 @@
 #include<stdio.h>
 #include<math.h>
 
+#include<vector>
+
 #include"error.h"
 #include"params.h"
 #include"aadict.h"
@@ -199,15 +201,12 @@ void vdw_contributions(Chain *chain, Biasmap *biasmap, simulation_params *sim_pa
 /* the displacement of atoms and generated clashes during initialization */
 void initialize_displacement(Chain *chain, Biasmap *biasmap, simulation_params *sim_params, void *mpi_comm) {
 
+	/* Chain/Chaint carry = nullptr default member initializers, so these are
+	   already null-constructed; the old hand-nulling is gone. */
 	Chain chain_init;
-	chain_init.NAA = 0;
-	chain_init.aa = NULL; chain_init.xaa = NULL; chain_init.xaa_prev = NULL;
         allocmem_chain(&chain_init,chain->NAA,chain->Nchains);
 	Chaint chaint;
-	chaint.aat = NULL; chaint.xaat = NULL; chaint.xaat_prev = NULL;
 	Chain displacements;
-	displacements.NAA = 0;
-	displacements.aa = NULL; displacements.xaa = NULL; displacements.xaa_prev = NULL;
         allocmem_chain(&displacements,chain->NAA,chain->Nchains);
 	
 	/* calculate initialized distances */
@@ -267,8 +266,8 @@ void initialize_displacement(Chain *chain, Biasmap *biasmap, simulation_params *
 		}
 	}
 
-	int *G_to_delete = (int*)malloc(chain_init.NAA * sizeof(int));
-	int *G2_to_delete = (int*)malloc(chain_init.NAA * sizeof(int));
+	std::vector<int> G_to_delete(chain_init.NAA);
+	std::vector<int> G2_to_delete(chain_init.NAA);
 	for (int i=0; i<chain_init.NAA; i++) {
 	   G_to_delete[i] = 0;
 	   G2_to_delete[i] = 0;
@@ -418,6 +417,8 @@ void initialize_displacement(Chain *chain, Biasmap *biasmap, simulation_params *
 //
 
         freemem_chain(&chain_init);
+        freemem_chaint(&chaint);
+        freemem_chain(&displacements);
 
 }
 

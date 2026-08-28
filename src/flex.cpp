@@ -1001,8 +1001,13 @@ void ns_for_flex_processor(MPI_Comm FLEX_WORLD, int rank, Biasmap *biasmap, simu
     }
 
   }
+  /* finalize_flex releases flex_data, input_chains and rmsd -- not chain or
+     chaint themselves, which were new'd at the top of this function. */
   freemem_chaint(chaint);
+  delete chaint;
   finalize_flex(chain,&input_chains,sim_params,&rmsd);
+  freemem_chain(chain);
+  delete chain;
 
 
 }
