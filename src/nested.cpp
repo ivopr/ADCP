@@ -958,9 +958,18 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
 #ifdef PARALLEL
     collect_chains(chainhash,cpoints.data(),chaincopies.data(),sim_params,rank,P,N,&NS_WORLD);
 #else
-    do
-      copies = 1 + ((int)(rand()/(double)RAND_MAX * N)) % N;
-    while(copies == 1 && N > 1);
+    /* Draw the seed from the SURVIVING points only. find_worst has just swapped
+       the heap root out to chainhash[heaplength] and decremented, so with P == 1
+       the discarded worst point sits at index N and the live heap is 1..N-1.
+       Drawing 1..N therefore seeded the new sample from the point being
+       discarded with probability 1/N -- confirmed by instrumentation, which
+       caught a draw of copies==N whose ll equalled logLstar exactly. Nested
+       sampling's validity rests on drawing from the surviving prior mass.
+       The PARALLEL branch above already does this correctly with % (N-P); this
+       is the same expression at P == 1. The old `while (copies == 1)` guard
+       excluded the new heap root, i.e. the worst *surviving* point, which is a
+       perfectly legal draw -- it was inert here anyway. */
+    copies = 1 + ((int)(rand()/(double)RAND_MAX * (N-1))) % (N-1);
     copybetween(&chaincopies[0],&cpoints[chainhash[copies].index]);
 #endif
 
