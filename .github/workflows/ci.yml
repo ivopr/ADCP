@@ -85,6 +85,41 @@ jobs:
           UBSAN_OPTIONS: print_stacktrace=1
         run: ctest --test-dir build --output-on-failure
 
+  msan:
+    # MemorySanitizer. Regression guard for two uninitialized-value bugs ASan
+    # could not catch -- dssp2cm.cpp's n_res and ramachandran.cpp's n1[1]/n1[2]
+    # (see MIGRATION.md's tools/ section) -- confirmed here with clang, no
+    # MSan-instrumented libc++ needed since neither tool has real STL surface.
+    #
+    # Scoped to dssp2cm/rama's smoke tests only, not the whole suite: plain
+    # glibc fopen() produces a confirmed, stack-layout-dependent MSan false
+    # positive on this toolchain (verified in isolation, no ADCP code
+    # involved -- there is no MSan-instrumented libc available to avoid it),
+    # which fires inside biasmap_initialise() and would make every
+    # func_adcp_* test intermittently red for reasons unrelated to any real
+    # bug. dssp2cm/rama's smoke tests read only from stdin and never call
+    # fopen, so they are unaffected -- confirmed clean across repeated runs.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: Configure
+        env:
+          CXX: clang++
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DADCP_TOOLS=ON \
+            -DCMAKE_CXX_FLAGS="-fsanitize=memory -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory"
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -R "smoke_dssp2cm|smoke_rama"
+
   openmp:
     # cdlearn is the only OpenMP consumer. Nothing in the default matrix
     # exercises this option.

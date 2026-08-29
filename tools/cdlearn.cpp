@@ -11,7 +11,10 @@
 #include<time.h>
 #include<signal.h>
 #include<math.h>
-#include<omp.h>
+/* omp.h was included but nothing in this file calls an omp_* runtime function
+   -- only the "#pragma omp parallel for" compiler pragma is used, which needs
+   no header at all. The include just meant clang builds needed libomp-dev
+   installed for a header this file never used. */
 
 #include<vector>
 
