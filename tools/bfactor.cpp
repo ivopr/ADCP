@@ -82,8 +82,15 @@ void update(vector av, vector sq, vector x)
 void parse_input(void)
 {
 	int i;
+	/* ava/sqa (main()) are sized from the first model's NAA. getpdb()
+	   overwrites the global NAA on every call, so a later model with MORE
+	   residues than the first would index ava[i]/sqa[i] past their
+	   allocation -- refuse rather than silently average mismatched models. */
+	const int model_NAA = NAA;
 
 	while (getpdb(&aa, &NAA, &Nchains, stdin) > 0) {
+		if (NAA != model_NAA)
+			stop("bfactor: all models must have the same number of residues");
 		ii++;
 		for (i = 1; i < NAA; i++) {
 			update(ava[i].h, sqa[i].h, aa[i].h);

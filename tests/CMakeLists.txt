@@ -137,6 +137,16 @@ set_tests_properties(smoke_bfactor_empty PROPERTIES
   PASS_REGULAR_EXPRESSION "no amino acids read from input"
 )
 
+# bfactor: a later model with MORE residues than the first must be rejected,
+# not overrun ava/sqa (sized from the first model only). Regression guard for
+# the heap-buffer-overflow fixed in tools/bfactor.cpp's parse_input().
+add_test(NAME smoke_bfactor_multimodel
+  COMMAND sh -c "${TOOLS_BIN}/bfactor < ${CMAKE_CURRENT_SOURCE_DIR}/data/bfactor_multimodel.pdb")
+set_tests_properties(smoke_bfactor_multimodel PROPERTIES
+  LABELS "smoke" TIMEOUT 10
+  PASS_REGULAR_EXPRESSION "all models must have the same number of residues"
+)
+
 # ---------------------------------------------------------------------------
 # Functional — adcp folding (no docking grids required)
 # ---------------------------------------------------------------------------
@@ -257,6 +267,7 @@ option(ADCP_DOCKING_TESTS "Enable docking tests (downloads the 3Q47 target)" OFF
 set_tests_properties(
   smoke_lipa smoke_cdlearn smoke_statistics smoke_mergie smoke_cm smoke_oops
   smoke_rama smoke_rama_pdb smoke_dssp2cm smoke_bfactor smoke_bfactor_empty
+  smoke_bfactor_multimodel
   func_adcp_fold_determinism func_adcp_fold_short
   func_adcp_ns_smoke func_adcp_checkpoint_roundtrip num_ns_evidence
   PROPERTIES FAIL_REGULAR_EXPRESSION "${SANITIZER_FAIL_RE}"
