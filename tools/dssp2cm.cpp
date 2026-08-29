@@ -12,15 +12,23 @@
 int parse_dssp_header(char **seq, char **ss, int **map)
 {
 	char buf[140];
-	int n_res, n_chains;
+	/* left uninitialized, these were read below (n_res*n_res for map's
+	   calloc) even when the "TOTAL NUMBER OF RESIDUES" line is never found
+	   (e.g. empty/non-DSSP input) */
+	int n_res = 0, n_chains = 1;
+	int found_header = 0;
 
 	while (fgets(buf, sizeof(buf), stdin) != NULL) {
 		if (strncmp(buf + 18, "TOTAL NUMBER OF RESIDUES", 24) == 0) {
 			sscanf(buf, "%d%d", &n_res, &n_chains);
 			n_res += n_chains - 1;
+			found_header = 1;
 			break;
 		}
 	}
+	if (!found_header)
+		fprintf(stderr, "dssp2cm: no \"TOTAL NUMBER OF RESIDUES\" header found; "
+				"treating input as an empty structure\n");
 
 	n_res++;			/* extra space make it easier down the road */
 	*map = (int *)calloc(n_res * n_res, sizeof(int));
@@ -42,7 +50,7 @@ void parse_dssp_body(int n_res, char *seq, char *ss, int *map)
 	char buf[140], aa, t, tt = '@', p1, p2, pp1 = ' ', pp2 = ' ';
 	/* k = 0: on empty input the loop below never runs and never assigns k,
 	   leaving the seq[++k] terminator writing at an indeterminate index. */
-	int i, j, k = 0, cont = -1, c;
+	int i, j, k = 0, last_k = 0, cont = -1, c;
 	char ibuf[5] = "    ";
 	char jbuf[5] = "    ";
 
@@ -62,6 +70,16 @@ void parse_dssp_body(int n_res, char *seq, char *ss, int *map)
 	        if (sscanf(ibuf, "%d", &i) != 1 ||
 	            sscanf(jbuf, "%d", &j) != 1)
 			continue;
+		/* k/i/j come straight from the file and index seq/ss/map, sized off the
+		   header's residue count -- a malformed or truncated header lets a body
+		   record's index run past the allocation. i/j==0 is the legitimate "no
+		   contact" sentinel (see the if(i)/if(j) guards below), so only reject
+		   values that would actually be out of range. */
+		if (k < 0 || k >= n_res || i < 0 || i >= n_res || j < 0 || j >= n_res) {
+			fprintf(stderr, "dssp2cm: residue index %d/%d/%d out of range (0..%d), skipping record\n",
+				k, i, j, n_res - 1);
+			continue;
+		}
 		//fprintf(stderr,"%5d        %c  %c      %c%c%4d%4d\n",
 		//	   k, aa, t, p1, p2, i, j);
 
@@ -80,6 +98,8 @@ void parse_dssp_body(int n_res, char *seq, char *ss, int *map)
 			t = ' '; /* reset type at chain breaks */
 
 		//fprintf(stderr," res %d (%c) ss %c\n",k,aa,t);
+		last_k = k; /* the terminator write below must not use a k that got
+		               rejected and skipped by the range check above */
 		ss[k] = t;
 		seq[k] = aa;
 		//fprintf(stderr,"%c\n",aa);
@@ -154,8 +174,8 @@ void parse_dssp_body(int n_res, char *seq, char *ss, int *map)
 		/* finally its secodary structure */
 		map[k * n_res + k] = t;
 	}
-	seq[++k] = '\0';
-	ss[k] = '\0';
+	seq[++last_k] = '\0';
+	ss[last_k] = '\0';
 }
 
 void print_map(int n, char *seq, int *map)
@@ -245,11 +265,17 @@ void print_contacts(int n, char *seq, char *ss, int *map)
 		str[9] = ' ';
 		str[10] = '\0';
 
-		for (j = i + 3, k = 8; j < n; j++)
+		/* str[] reserves 2 extra slots each side (8-9 forward, 1-2 backward)
+		   beyond the fixed +-1/+-2 neighbours at 3/4/6/7. Without a bound, a
+		   residue with >=3 contacts on one side overwrote str[0] or the str[10]
+		   terminator, and >=4 wrote outside the array entirely. Capping k stops
+		   at the array's real capacity instead -- extra contacts beyond that are
+		   dropped, not overflowed. */
+		for (j = i + 3, k = 8; j < n && k < 10; j++)
 			if (map[i * n + j])
 				str[k++] = seq[j];
 
-		for (j = i - 3, k = 2; j > 0; j--)
+		for (j = i - 3, k = 2; j > 0 && k >= 0; j--)
 			if (map[i * n + j])
 				str[k--] = seq[j];
 
