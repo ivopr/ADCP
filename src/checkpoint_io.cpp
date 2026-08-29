@@ -334,6 +334,15 @@ void read_checkpoint_entry(Chain *cpoints, simulation_params *sim_params){
 	    if ((k = fscanf(sim_params->checkpoint_file, "%x %d %d\n",&(cpoints->aa[aaloop].etc),&(cpoints->aa[aaloop].num),&(cpoints->aa[aaloop].chainid))) != 3) {
 		stop("read_checkpoint_entry: Could not read etc and NAA and chainid.\n");
 	    }
+	    /* chainid comes straight from the file and is used to index xaa_prev,
+	       which allocmem_chain sized at Nchains+1 -- and also by three sites in
+	       peptide.cpp. Validate it here, at the read, rather than at any one
+	       consumer. The existing Nchains consistency check runs only after the
+	       whole read loop, i.e. after the out-of-bounds write has happened. */
+	    if (cpoints->aa[aaloop].chainid < 0 || cpoints->aa[aaloop].chainid > cpoints->Nchains) {
+		fprintf(stderr,"chainid = %d, Nchains = %d\n",cpoints->aa[aaloop].chainid,cpoints->Nchains);
+		stop("read_checkpoint_entry: chain id out of range for the declared chain count.\n");
+	    }
 	}
 	/* read in the xaa (CA-CA) vector for multiple chain starts */
 	for (int chainid = 0; chainid <= cpoints->aa[sim_params->NAA-1].chainid; chainid++) {
