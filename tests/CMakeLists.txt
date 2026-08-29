@@ -179,6 +179,34 @@ set_tests_properties(num_ns_evidence PROPERTIES
   PASS_REGULAR_EXPRESSION "PASS: nested sampling recovers the analytic evidence"
 )
 
+# P>1 companion: drives the actual cross-rank collect_chains()/
+# return_and_reheap_chains()/mpi_send_chain()/mpi_rec_chain() -- unblocked in
+# MIGRATION.md's "Phase 2 progress -- MPI unblocked" -- under a real mpirun,
+# against the same closed-form evidence. Only buildable/runnable once MPI is
+# actually configured; adcp_core_mpi (the PARALLEL-compiled core) only exists
+# under ADCP_MPI.
+if(ADCP_MPI)
+  add_executable(ns_evidence_mpi_test ns_evidence_mpi_test.cpp)
+  target_compile_definitions(ns_evidence_mpi_test PRIVATE PARALLEL)
+  target_link_libraries(ns_evidence_mpi_test PRIVATE adcp_core_mpi MPI::MPI_CXX)
+
+  set(NS_MPI_RANKS 4)
+  # --oversubscribe: OpenMPI's mpirun otherwise refuses to start more ranks
+  # than it detects cores, which is a real risk on CI runners with fewer than
+  # 4 vCPUs. No-op when there are enough cores (verified locally).
+  add_test(NAME num_ns_evidence_mpi
+    COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${NS_MPI_RANKS} ${MPIEXEC_PREFLAGS}
+            --oversubscribe $<TARGET_FILE:ns_evidence_mpi_test> ${MPIEXEC_POSTFLAGS}
+  )
+  set_tests_properties(num_ns_evidence_mpi PROPERTIES
+    LABELS "functional" TIMEOUT 120
+    # Harmless when not running as root; needed when CI/containers do.
+    ENVIRONMENT "OMPI_ALLOW_RUN_AS_ROOT=1;OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1"
+    PASS_REGULAR_EXPRESSION "PASS: nested sampling \\(MPI, P=${NS_MPI_RANKS}\\) recovers the analytic evidence"
+    FAIL_REGULAR_EXPRESSION "${SANITIZER_FAIL_RE}"
+  )
+endif()
+
 # ---------------------------------------------------------------------------
 # Functional — nested sampling and checkpointing
 # ---------------------------------------------------------------------------
