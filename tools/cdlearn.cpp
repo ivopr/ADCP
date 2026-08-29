@@ -215,9 +215,13 @@ char *read_options(int argc, char *argv[], simulation_params *sim_params, cdlear
 	  sim_params->sequence=NULL;
 	  sim_params->seq=NULL;
 	} else {
-	  sim_params->sequence = (char *)realloc(sim_params->sequence,strlen(retval+1));
+	  /* was strlen(retval+1), i.e. strlen(retval)-1, while the strcpy below
+	     writes strlen(retval)+1 bytes -- a 2-byte heap overflow, twice.
+	     Reachable from any bare argument whose freopen failed, e.g. a typo'd
+	     filename; glibc's fortify aborts on it. */
+	  sim_params->sequence = (char *)realloc(sim_params->sequence,strlen(retval)+1);
 	  strcpy(sim_params->sequence,retval);
-	  sim_params->seq = (char *)realloc(sim_params->seq,strlen(retval+1));
+	  sim_params->seq = (char *)realloc(sim_params->seq,strlen(retval)+1);
 	  strcpy(sim_params->seq,retval);
 	}
 	return retval;

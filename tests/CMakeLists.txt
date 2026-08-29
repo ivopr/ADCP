@@ -68,10 +68,15 @@ set_tests_properties(smoke_statistics PROPERTIES
   PASS_REGULAR_EXPRESSION "Count = 0"
 )
 
-# mergie: no MPI output to merge -> must fail rather than emit garbage
+# mergie: no files to merge -> must print usage and fail, not emit garbage.
+# This used to be WILL_FAIL with no output check, so it passed on any non-zero
+# exit -- including the (size_t)-8 malloc that argc-2 == -1 used to produce.
+# WILL_FAIL also inverts FAIL_REGULAR_EXPRESSION, which would have re-masked
+# sanitizer output here, so assert the message instead.
 add_test(NAME smoke_mergie COMMAND ${TOOLS_BIN}/mergie)
 set_tests_properties(smoke_mergie PROPERTIES
-  LABELS "smoke" TIMEOUT 5 WILL_FAIL TRUE
+  LABELS "smoke" TIMEOUT 5
+  PASS_REGULAR_EXPRESSION "Usage:.*FORMAT FILE"
 )
 
 # cm: contact map -> residue letter followed by a 0/1 row

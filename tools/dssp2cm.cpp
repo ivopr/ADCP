@@ -277,5 +277,9 @@ int main(int argc, char *argv[])
 	else
 		print_map(n_res,seq,map);
 
+	free(map);
+	free(ss);
+	free(seq);
+
 	return 0;
 }

@@ -14,6 +14,14 @@ int main(int argc, char *argv[])
 
 	FILE **f;
 
+	/* argv[1] is NULL when argc == 1, and files would be -1, making the
+	   malloc below a (size_t)-8 request. It "worked" only because that
+	   allocation fails; under ASan it is an outright error. */
+	if (argc < 3) {
+		fprintf(stderr, "Usage: %s FORMAT FILE [FILE...]\n", argv[0]);
+		exit(EXIT_FAILURE);
+	}
+
 	format = argv[1];	/* first argument is format */
 	files = argc - 2;	/* the rest are file names */
 
