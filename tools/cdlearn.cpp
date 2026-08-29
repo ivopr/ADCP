@@ -729,6 +729,13 @@ int main(int argc, char *argv[])
 	simulation_params *sim_params_sim = new simulation_params[n_proteins];
 	for (int i=0; i<n_proteins; i++) {
 	   sim_params_copy(&((sim_params_sim)[i]),&sim_params);
+	   /* sim_params_copy clones the single shared sim_params, whose seq/
+	      sequence/NAA reflect whichever protein was read last (or nothing,
+	      if this loop never ran before). Each protein needs its OWN --
+	      matches main.cpp's update_sim_params_from_chain call after every
+	      chain read. Without this, move()'s MC lookup table either had no
+	      sequence at all, or (worse) a different protein's sequence. */
+	   update_sim_params_from_chain(&(all_chains[i]),&(sim_params_sim[i]));
 	}
 	param_finalise(&sim_params);
 

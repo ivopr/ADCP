@@ -236,6 +236,55 @@ if(ADCP_MPI)
 endif()
 
 # ---------------------------------------------------------------------------
+# Functional — cdlearn's OpenMP path
+# ---------------------------------------------------------------------------
+#
+# cdlearn's "#pragma omp parallel for" loop over proteins (tools/cdlearn.cpp)
+# has had zero coverage in every build: ADCP_OPENMP defaults off, and
+# smoke_cdlearn (no args) dies at "No list file given" long before reaching
+# it. This test drives it for real with two proteins, so the loop actually
+# parallelizes across more than one iteration.
+#
+# What this does NOT do: assert determinism. move() (src/metropolis.cpp)
+# calls the global, non-thread-safe rand() ~28 times per call, and every
+# OpenMP thread calls it concurrently -- a genuine data race on rand()'s
+# internal state (glibc doesn't crash on it in practice, it just produces a
+# racy, non-reproducible interleaving). Fixing that would mean threading a
+# per-thread RNG state through move() and everything it calls -- code shared
+# by adcp's serial path, nested sampling, and MPI -- which is far larger and
+# riskier than this coverage gap justifies on its own (this project already
+# has one still-unexplained latent determinism bug from a much smaller
+# codegen change; see MIGRATION.md's "MECHANISM RESOLVED" section). A
+# decision, not an omission: this test only asserts the parallel path runs a
+# real iteration to completion without crashing or hanging.
+if(ADCP_OPENMP)
+  # cdlearn builds its output filename as "out." + the exact -L argument, with
+  # no fopen NULL-check -- an absolute -L path makes that concatenation an
+  # unwritable path, leaving a NULL FILE* that segfaults on the first write.
+  # Passing a plain relative name (matching WORKING_DIRECTORY below) avoids
+  # tripping that latent bug rather than fixing it here, out of this item's
+  # scope (documenting + covering the OpenMP path, not auditing cdlearn.cpp
+  # further).
+  file(COPY
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/cdlearn_openmp_protA.pdb
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/cdlearn_openmp_protA.icm
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/cdlearn_openmp_protB.pdb
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/cdlearn_openmp_protB.icm
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/cdlearn_openmp_list.txt
+    DESTINATION ${TEST_WORK}
+  )
+  add_test(NAME func_cdlearn_openmp
+    COMMAND ${TOOLS_BIN}/cdlearn -L cdlearn_openmp_list.txt -l V -i 1
+  )
+  set_tests_properties(func_cdlearn_openmp PROPERTIES
+    LABELS "functional" TIMEOUT 60
+    WORKING_DIRECTORY ${TEST_WORK}
+    PASS_REGULAR_EXPRESSION "FINISHED!"
+    FAIL_REGULAR_EXPRESSION "${SANITIZER_FAIL_RE}"
+  )
+endif()
+
+# ---------------------------------------------------------------------------
 # Functional — nested sampling and checkpointing
 # ---------------------------------------------------------------------------
 #

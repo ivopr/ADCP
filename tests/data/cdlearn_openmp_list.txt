@@ -1,0 +1,2 @@
+cdlearn_openmp_protA
+cdlearn_openmp_protB
