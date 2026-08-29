@@ -26,6 +26,22 @@ file(MAKE_DIRECTORY ${TEST_WORK})
 file(COPY ${RAMAPROB} DESTINATION ${TEST_WORK})
 
 # ---------------------------------------------------------------------------
+# Sanitizer output must never be masked.
+# ---------------------------------------------------------------------------
+# CTest's PASS_REGULAR_EXPRESSION *overrides the exit code*: if the expected
+# string is printed, the test passes even when the process then aborts. Every
+# smoke test below uses one, so an ASan/UBSan failure in a tools/ binary was
+# invisible -- dssp2cm leaks on the very input smoke_dssp2cm feeds it, and the
+# test reported PASS. FAIL_REGULAR_EXPRESSION is evaluated independently, so
+# applying it to every test restores the sanitizer build as a real gate without
+# disturbing the pass patterns.
+#
+# The PASS_REGULAR_EXPRESSIONs stay: several smoke tests pass *because* the
+# binary calls stop()/exit(EXIT_FAILURE), and the pattern is what distinguishes
+# "failed correctly" from "crashed".
+set(SANITIZER_FAIL_RE "AddressSanitizer|LeakSanitizer|UndefinedBehaviorSanitizer|runtime error:")
+
+# ---------------------------------------------------------------------------
 # Smoke — tool binaries. Each asserts on real output, not just exit status.
 # ---------------------------------------------------------------------------
 
@@ -186,6 +202,15 @@ set_tests_properties(func_adcp_checkpoint_roundtrip PROPERTIES
 
 option(ADCP_DOCKING_TESTS "Enable docking tests (downloads the 3Q47 target)" OFF)
 
+# Applies to every test defined above; see SANITIZER_FAIL_RE.
+set_tests_properties(
+  smoke_lipa smoke_cdlearn smoke_statistics smoke_mergie smoke_cm smoke_oops
+  smoke_rama smoke_rama_pdb smoke_dssp2cm smoke_bfactor smoke_bfactor_empty
+  func_adcp_fold_determinism func_adcp_fold_short
+  func_adcp_ns_smoke func_adcp_checkpoint_roundtrip
+  PROPERTIES FAIL_REGULAR_EXPRESSION "${SANITIZER_FAIL_RE}"
+)
+
 if(ADCP_DOCKING_TESTS)
   set(TARGET_CACHE ${CMAKE_CURRENT_BINARY_DIR}/target)
   set(STAGE ${TARGET_CACHE}/stage)
@@ -224,5 +249,9 @@ if(ADCP_DOCKING_TESTS)
     SKIP_RETURN_CODE 77
     FIXTURES_REQUIRED dock_target
     PASS_REGULAR_EXPRESSION "PASS: redocked to"
+  )
+
+  set_tests_properties(dock_fetch_target dock_3q47_smoke val_3q47_redock
+    PROPERTIES FAIL_REGULAR_EXPRESSION "${SANITIZER_FAIL_RE}"
   )
 endif()
