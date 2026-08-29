@@ -1482,7 +1482,11 @@ void normalizedVector(float *a, float *b, float *v) {
 	for (i = 0; i<3; i++) {
 		v[i] = b[i] - a[i];
 	}
-	n = 1. / sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+	/* The (double) cast is load-bearing. These are floats, and in C++ sqrt()
+	   binds to the float overload, rounding the root to single precision;
+	   C had only double sqrt(double). Dropping the cast silently changes
+	   every docking run past 200k steps. See docs/compares/1.md. */
+	n = 1. / sqrt((double)(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]));
 	for (i = 0; i<3; i++) v[i] = v[i] * n;
 }
 
@@ -1553,10 +1557,12 @@ float scoreSideChain(int nbRot, int nbAtoms, double *charges, int *atypes,  doub
 		/* printf("V3 %f %f %f %f\n", v3[0], v3[1], v3[2], v3[0]*v3[0]+ v3[1]*v3[1]+ v3[2]*v3[2]); */
 		vectorProduct(v3, v1, v2); /* Y vector*/
 								   /* printf("V2 %f %f %f %f\n", v2[0], v2[1], v2[2], v2[0]*v2[0]+ v2[1]*v2[1]+ v2[2]*v2[2]); */
-		n = 1. / sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2]);
+		/* (double) is load-bearing -- see normalizedVector(). Do not remove. */
+		n = 1. / sqrt((double)(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2]));
 		for (i = 0; i < 3; i++) v2[i] = v2[i] * n;
 		vectorProduct(v1, v2, v3); /* Z vector*/
-		n = 1. / sqrt(v3[0] * v3[0] + v3[1] * v3[1] + v3[2] * v3[2]);
+		/* (double) is load-bearing -- see normalizedVector(). Do not remove. */
+		n = 1. / sqrt((double)(v3[0] * v3[0] + v3[1] * v3[1] + v3[2] * v3[2]));
 		for (i = 0; i < 3; i++) v3[i] = v3[i] * n;
 		/* printf("V3 %f %f %f %f\n", v3[0], v3[1], v3[2], v3[0]*v3[0]+ v3[1]*v3[1]+ v3[2]*v3[2]); */
 		/* xform matrix */
@@ -1716,10 +1722,12 @@ double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atype
 		/* printf("V3 %f %f %f %f\n", v3[0], v3[1], v3[2], v3[0]*v3[0]+ v3[1]*v3[1]+ v3[2]*v3[2]); */
 		vectorProduct(v3, v1, v2); /* Y vector*/
 								   /* printf("V2 %f %f %f %f\n", v2[0], v2[1], v2[2], v2[0]*v2[0]+ v2[1]*v2[1]+ v2[2]*v2[2]); */
-		n = 1. / sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2]);
+		/* (double) is load-bearing -- see normalizedVector(). Do not remove. */
+		n = 1. / sqrt((double)(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2]));
 		for (i = 0; i < 3; i++) v2[i] = v2[i] * n;
 		vectorProduct(v1, v2, v3); /* Z vector*/
-		n = 1. / sqrt(v3[0] * v3[0] + v3[1] * v3[1] + v3[2] * v3[2]);
+		/* (double) is load-bearing -- see normalizedVector(). Do not remove. */
+		n = 1. / sqrt((double)(v3[0] * v3[0] + v3[1] * v3[1] + v3[2] * v3[2]));
 		for (i = 0; i < 3; i++) v3[i] = v3[i] * n;
 		/* printf("V3 %f %f %f %f\n", v3[0], v3[1], v3[2], v3[0]*v3[0]+ v3[1]*v3[1]+ v3[2]*v3[2]); */
 		/* xform matrix */
