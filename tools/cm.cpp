@@ -62,12 +62,24 @@ int parse_input(void)
 		npos = atoi(cpos);
 		if (npos != pos) {
 			num++;
+			/* bound checked before the write below, not after -- num is an index
+			   into ca[2730]/aa[2730], so the last valid value is 2729 */
+			if (num >= (int)(sizeof(ca) / sizeof(vector))) {
+				fprintf(stderr, "This file is too big! (%d)\n", num);
+				/* num residues (indices 0..num-1) are already populated and valid --
+				   not num+1, since this one (index num) was never written */
+				return num;
+			}
 			if (npos != pos + 1 && pos != -999) {
 				ca[num][0] = num * 1e10;
 				ca[num][1] = num * 1e10;
 				ca[num][2] = num * 1e10;
 				aa[num] = '!';
 				num++;
+				if (num >= (int)(sizeof(ca) / sizeof(vector))) {
+					fprintf(stderr, "This file is too big! (%d)\n", num);
+					return num;
+				}
 			}
 		}
 		pos = npos;
@@ -76,12 +88,6 @@ int parse_input(void)
 		ca[num][1] = yy;
 		ca[num][2] = zz;
 		aa[num] = aa321(line + 17);
-
-		/* fprintf(stderr, "%d ", pos); */
-		if (num > sizeof(ca) / sizeof(vector)) {
-			fprintf(stderr, "This file is too big! (%d)\n", num);
-			break;
-		}
 	}
 	/* fputc('\n', stderr); */
 	return num + 1;
@@ -120,6 +126,9 @@ void write_contacts(int num)
 				s[j] = '!';
 
 		}
+		s[num] = '\0'; /* the byte malloc(num+1) reserved for this was never
+				  otherwise written -- heap-buffer-overflow read in
+				  printf("%s") off uninitialized memory */
 		printf("%s\n", s);
 	}
 	free(s);
