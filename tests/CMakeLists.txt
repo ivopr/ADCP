@@ -53,11 +53,29 @@ set_tests_properties(smoke_lipa PROPERTIES
   PASS_REGULAR_EXPRESSION "MODEL.*ENDMDL"
 )
 
-# cdlearn: prints its amino-acid alphabet and count
+# cdlearn: prints its amino-acid alphabet and count.
+# Needs ramaprob.data in the working directory: cdlearn now calls
+# ramaprob_initialise() (previously missing entirely -- ramaprob/alaprob/
+# glyprob stayed NULL and any real CD-learning iteration segfaulted the
+# first time ramabias() dereferenced them), matching what main.cpp already
+# does before any peptide is built.
 add_test(NAME smoke_cdlearn COMMAND ${TOOLS_BIN}/cdlearn)
 set_tests_properties(smoke_cdlearn PROPERTIES
   LABELS "smoke" TIMEOUT 30
+  WORKING_DIRECTORY ${TEST_WORK}
   PASS_REGULAR_EXPRESSION "ABCDEFGHIGKLMNGPQRSTGVWGYZ 26"
+)
+
+# cdlearn: a list-file token longer than the 1024-byte buffer must be
+# rejected, not overflow it. Regression guard for the unbounded
+# fscanf(list_file, "%s", ...) fixed in tools/cdlearn.cpp.
+add_test(NAME smoke_cdlearn_longtoken
+  COMMAND ${TOOLS_BIN}/cdlearn -L ${CMAKE_CURRENT_SOURCE_DIR}/data/cdlearn_longtoken.txt -l V
+)
+set_tests_properties(smoke_cdlearn_longtoken PROPERTIES
+  LABELS "smoke" TIMEOUT 10
+  WORKING_DIRECTORY ${TEST_WORK}
+  PASS_REGULAR_EXPRESSION "PDB base name from list file is too long"
 )
 
 # statistics: reports an empty sample rather than dividing by zero
@@ -265,7 +283,8 @@ option(ADCP_DOCKING_TESTS "Enable docking tests (downloads the 3Q47 target)" OFF
 
 # Applies to every test defined above; see SANITIZER_FAIL_RE.
 set_tests_properties(
-  smoke_lipa smoke_cdlearn smoke_statistics smoke_mergie smoke_cm smoke_oops
+  smoke_lipa smoke_cdlearn smoke_cdlearn_longtoken smoke_statistics smoke_mergie
+  smoke_cm smoke_oops
   smoke_rama smoke_rama_pdb smoke_dssp2cm smoke_bfactor smoke_bfactor_empty
   smoke_bfactor_multimodel
   func_adcp_fold_determinism func_adcp_fold_short

@@ -627,6 +627,11 @@ int main(int argc, char *argv[])
 
 	/* INITIALISE PROTEIN MODEL WITHIN MAIN SIMULATION PARAMETERS */
 	model_param_read(sim_params.prm,&(sim_params.protein_model),&(sim_params.flex_params));
+	/* main.cpp calls this before energy_matrix_calculate() is ever reachable;
+	   cdlearn.cpp didn't, so ramaprob/alaprob/glyprob stayed NULL and any real
+	   CD-learning iteration segfaulted the first time ramabias() dereferenced
+	   them -- never hit before because no test/fixture reached this far. */
+	ramaprob_initialise();
 	initialize_sidechain_properties(&(sim_params.protein_model));
 	vdw_cutoff_distances_calculate(&sim_params, stderr, 0);
 	peptide_init();
@@ -656,10 +661,13 @@ int main(int argc, char *argv[])
 	int n_proteins = 0;
 	char next_pdb_filename[DEFAULT_LONG_STRING_LENGTH];
 	char pdb_filename[DEFAULT_LONG_STRING_LENGTH];
-	while (fscanf(list_file, "%s", next_pdb_filename)!=EOF) {
+	/* the ".pdb" concatenation below (now snprintf, was strcpy/strcat) has its
+	   own overflow check, so this only needs to bound next_pdb_filename itself */
+	while (fscanf(list_file, "%1023s", next_pdb_filename)!=EOF) {
 
-	    strcpy(pdb_filename,next_pdb_filename);
-	    strcat(pdb_filename,".pdb");
+	    if (snprintf(pdb_filename, sizeof(pdb_filename), "%s.pdb", next_pdb_filename)
+	        >= (int)sizeof(pdb_filename))
+		stop("cdlearn: PDB base name from list file is too long.");
 	    fprintf(stderr,"Reading PDB from %s\n",pdb_filename);
 	    if(NULL == freopen(pdb_filename, "r", stdin)){
 		stop("Error, PDB file cannot be opened\n");
@@ -783,7 +791,10 @@ int main(int argc, char *argv[])
 	/* CD LEARN ITERATIONS */
 	fprintf(stderr,"CD learning iterations...\n");
 	char next_restart_filename[DEFAULT_LONG_STRING_LENGTH];
-	char index[10];
+	/* "_" + a 32-bit int (up to 11 digits with sign) + NUL = 13 bytes max;
+	   iter+iter_start (iter_start is argv-controlled via -I) could overflow
+	   the old 10-byte buffer */
+	char index[16];
 	if (cd_params.restart_filename==NULL) {
 		copy_string(&(cd_params.restart_filename),"cdlearn.restart");
 	}
@@ -792,7 +803,7 @@ int main(int argc, char *argv[])
 	    /* print restart file */
 	    if (iter%100==0) {
 		strcpy(next_restart_filename,cd_params.restart_filename);
-		sprintf(index,"_%d",iter+cd_params.iter_start);
+		snprintf(index,sizeof(index),"_%d",iter+cd_params.iter_start);
 		strcat(next_restart_filename,index);
 		cd_learn_write_restart_file(&cd_params,next_restart_filename);
 		fprintf(stderr,"Printing restart file into %s\n",next_restart_filename);
