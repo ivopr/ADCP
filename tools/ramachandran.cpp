@@ -162,7 +162,10 @@ int main(int argc, char *argv[])
 	if (b.etc & CA_) {
 		printf("Id   phi    psi    tau  omega    chi    chi2  solid    eta"
 		       "  CA-CA  CB-CB  BA^AB  NA^AC\n");
-		goto start;
+		/* same reset as the "start:" block below (chain-break case) -- there is
+		   no previous residue yet, so every derived quantity is NaN */
+		omega = phi = sigma = n1[0] = n1[1] = n1[2] = chi = chi2 = NaN;
+		baab = naac = caca = cbcb = NaN;
 	} else {
 		fprintf(stderr, "No amino acids recognized\n");
 		return EXIT_SUCCESS;
@@ -226,8 +229,7 @@ int main(int argc, char *argv[])
 			if (status_a == EOF)
 				break;
 
-		      start:
-			omega = phi = sigma = n1[0] = chi = chi2 = NaN;
+			omega = phi = sigma = n1[0] = n1[1] = n1[2] = chi = chi2 = NaN;
 			//fprintf(stderr,"(2) %g\n",phi);
 			baab = naac = caca = cbcb = NaN;
 		}
