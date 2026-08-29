@@ -65,7 +65,8 @@ Ordering within Phase 2, by risk × blast radius:
    buffer overflows fixed. The MPI half is **blocked**: see the CMake finding below.
 9. **Partly done.** `nested.c` — dead FAST branch removed and a real nested-sampling
    bug fixed. MPI half blocked the same way.
-10. `tools/*`
+10. **Done.** `tools/*` — three bugs fixed, all sanitizer-reproduced. This step
+    also found that the test suite's ASan gate was being masked; see below.
 11. **Done, ahead of schedule.** Cleanup: drop `LANGUAGES C` / `CMAKE_C_STANDARD*` once `find src tools -name '*.c'` is empty — `CMakeLists.txt` has been `LANGUAGES CXX` only since Phase 1 finished, no C sources ever remained afterward.
 
 ## Phase 2 progress — steps 1 and 2 (params.cpp) done
@@ -645,6 +646,95 @@ Not done, and worth naming: `checkpoint_io.cpp`'s loop bound
 The `sprintf` into `malloc(1010)` sites from argv-controlled paths. `nested.cpp`'s
 `fclose(fptr)` with no NULL check and two unchecked `fopen`s. And everything gated
 behind getting a real MPI.
+
+## Phase 2 progress — step 10 (tools/) done, and the ASan gate was blind
+
+### The test suite was hiding sanitizer failures
+
+**CTest's `PASS_REGULAR_EXPRESSION` overrides the exit code.** If the expected
+string is printed, the test passes even when the process then aborts. All 11
+`smoke_*` tests use one — so **an ASan or UBSan failure in any `tools/` binary was
+invisible to the suite.**
+
+Not hypothetical: `dssp2cm` leaks under ASan on `/dev/null`, the exact input
+`smoke_dssp2cm` feeds it, and the test reported PASS. **Every "ASan suite clean"
+claim in this document has therefore been partly blind for `tools/`.** What still
+stands: the `func_*` tests (their shell scripts assert and exit non-zero), and every
+`src/` finding that was reproduced by running a binary directly — which is how all
+of them were actually found.
+
+Fixed by applying `FAIL_REGULAR_EXPRESSION` for sanitizer output to every test. It is
+evaluated independently of the pass pattern, so it needs no restructuring and is a
+no-op in the normal build. The `PASS_REGULAR_EXPRESSION`s stay: several smoke tests
+pass *because* the binary calls `stop()`/`exit(EXIT_FAILURE)`, and the pattern is
+what separates "failed correctly" from "crashed".
+
+**`WILL_FAIL` inverts `FAIL_REGULAR_EXPRESSION` too**, which would have re-masked
+`smoke_mergie`. That test had no output assertion at all — it passed on any non-zero
+exit, and was in fact passing because a `malloc((size_t)-8)` failed. It now asserts
+the usage message.
+
+### Three bugs, all reproduced under a sanitizer
+
+Found by running each tool directly under ASan on its own fixture, not by trusting
+ctest:
+
+- **`dssp2cm`** — `parse_dssp_header`'s three `calloc`s for `map`/`seq`/`ss` were
+  never freed. The leak `smoke_dssp2cm` was silently passing over.
+- **`cdlearn`** — `realloc(..., strlen(retval+1))` on two adjacent lines where
+  `strlen(retval)+1` is meant. `strlen(retval+1)` is `strlen(retval)-1`, and the
+  `strcpy` on the next line writes `strlen(retval)+1` bytes: **a 2-byte heap
+  overflow, twice**, reachable from a mistyped filename. glibc's fortify catches it
+  first — `*** buffer overflow detected ***`.
+- **`mergie`** — with no arguments `argv[1]` is `NULL` and `files = argc-2 = -1`, so
+  `malloc(files * sizeof(FILE*))` requests `(size_t)-8`. ASan:
+  `allocation-size-too-big 0xfffffffffffffff8`. Added the missing `argc` check.
+
+### The checkpoint `chainid` overflow (leftover from step 8)
+
+`read_checkpoint_entry` used the last residue's `chainid` — read straight from the
+file — as the bound of a loop writing into `xaa_prev`, which holds only `Nchains+1`
+triplets. The consistency check that would catch a mismatch runs *after* the whole
+read loop.
+
+Demonstrated by generating a real checkpoint and changing **one character** (last
+residue's `chainid` 1 → 5, header still `Nchains=1`):
+`heap-buffer-overflow, WRITE of size 8 in read_checkpoint_entry`. The write lands
+because the energy matrix follows in the file, so `fscanf` keeps finding numbers.
+
+Fixed **at the read, not at the loop** — `chainid` is validated against
+`cpoints->Nchains` right after the `fscanf` that produces it. That also covers the
+three sites in `peptide.cpp` that index `xaa_prev` with the same field, which a guard
+on the loop alone would have left exposed.
+
+### Found by reading, NOT fixed — unverified, do not patch on suspicion
+
+The `tools/` survey flagged these; no sanitizer reproduced them, so they are recorded
+rather than changed. Each needs a crafted input to confirm:
+
+- `cm.cpp` — the "file too big" bound check runs *after* the write and uses `>` not
+  `>=`, so a PDB with ≥2731 residues writes `ca[2730]`/`ca[2731]` first; and `s[num]`
+  is allocated but never NUL-terminated before `printf("%s")`.
+- `bfactor.cpp` — `getpdb` rewrites `NAA` per model, but `ava`/`sqa` are sized once
+  from the first model. A multi-model PDB whose later model is longer overruns both.
+  The loop that would trigger it has no test coverage (the fixture is single-model).
+- `dssp2cm.cpp` — `k`/`i`/`j` come from the file and index `map`/`seq`/`ss` with no
+  bounds check; `print_contacts`' `char str[11]` overruns in both directions on ≥3
+  contacts. Also `n_res` is read **uninitialised** on the `/dev/null` path — an MSan
+  finding, and MSan is not installed.
+- `cdlearn.cpp` — `fscanf("%s")` with no field width into `char[1024]` from a `-L`
+  list file; `char index[10]` fed a `sprintf("_%d")` from `-I`.
+- `ramachandran.cpp` — `n1[1]`/`n1[2]` read uninitialised at the `angle()` call; only
+  `n1[0]` is reset. MSan territory again.
+- `cdlearn`'s OpenMP region calls `rand()`, which is not thread-safe, so `-s SEED`
+  does not make a threaded run reproducible. The region has **zero coverage in every
+  build** — `ADCP_OPENMP` defaults OFF and `smoke_cdlearn` dies at
+  `stop("No list file given")` long before reaching it.
+
+`ramachandran.cpp`'s `goto` (MIGRATION.md's Phase 2 item) is still at line 165. It is
+a genuine two-entry point — jumped into for the first record, reached normally on a
+chain break — and `smoke_rama_pdb`'s regex only checks the header line, so it is a
+weak oracle. If it is ever restructured, diff the full stdout against the fixture.
 
 ## Validation gates
 
