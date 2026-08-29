@@ -102,9 +102,11 @@ jobs:
         run: ctest --test-dir build --output-on-failure -j4
 
   mpi:
-    # Build only: no test exercises the PARALLEL path. adcp_mpi was never
-    # compiled once during the C++ migration, so this leg is the first thing
-    # that will actually check it.
+    # adcp_core_mpi (compiled with PARALLEL, see MIGRATION.md's "Phase 2
+    # progress -- MPI unblocked") builds and runs for real now: num_ns_evidence_mpi
+    # drives collect_chains()/return_and_reheap_chains()/mpi_send_chain()/
+    # mpi_rec_chain() under mpirun -np 4 against a closed-form evidence. This
+    # leg is the regression guard for that -- previously it only built.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -117,6 +119,9 @@ jobs:
 
       - name: Build
         run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j4
 
   docking:
     # Exercises the AutoDock grid path against the published 3Q47 target.
