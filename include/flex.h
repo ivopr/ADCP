@@ -8,12 +8,18 @@
 #ifndef FLEX_H_
 #define FLEX_H_
 
+#ifdef PARALLEL
+/* outside the extern "C" block on purpose, same reason as peptide.h's
+   <vector>: OpenMPI's mpi.h pulls in C++ STL headers, which cannot compile
+   with C linkage. */
+#include<mpi.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #ifdef PARALLEL
-#include<mpi.h>
 void ns_for_flex_processor(MPI_Comm FLEX_WORLD,int rank,Biasmap *biasmap,simulation_params* sim_params);
 int check_finished(simulation_params *sim_params);
 #endif
