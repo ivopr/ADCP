@@ -16,6 +16,13 @@ Goal: migrate the whole tree to idiomatic modern C++17, incrementally, file-by-f
 
 ## Phase 1 — whole-tree rename to `.cpp`, compile clean, no behavior change
 
+> **"No behavior change" turned out to be false, and stayed false for 60 commits.**
+> `5660a33` silently reduced five vector normalisations in `energy.cpp` from double to
+> single precision, because `sqrt` on a `float` expression binds to `double sqrt(double)`
+> in C but to the `float` overload in C++. It changed every docking run past 200,000
+> steps. See "Measured against pristine upstream" below. A rename is not automatically
+> behaviour-preserving in this language pair — **verify it, do not assert it.**
+
 Rename every `.c` in `src/` and `tools/` to `.cpp`, bottom-up by include-dependency order, fixing only what's needed to compile as standard C++ (mainly explicit casts on `malloc`/`void*`, which C++ requires and C doesn't):
 
 1. `error.c`, `vector.c` — no local deps, prove the toolchain
@@ -436,7 +443,10 @@ lines that no test reaches.
   `secondary_radius_of_gyration` additionally has zero coverage — it needs
   `srgy_param`/`hphobic_srgy_param` nonzero.
 - **The three `ADenergyNoClash` VLAs**, coupled to `metropolis.cpp`'s matching VLA on
-  the same call, and the whole `tc`/`View3` region.
+  the same call, and the whole `tc`/`View3` region. (One exception has since been made
+  here: the five `sqrt((double)…)` casts that restore the C precision semantics. They are
+  a correctness fix, not a conversion — **do not remove them**, see "Measured against
+  pristine upstream".)
 - **The ten file-scope setup allocations stay raw pointers.** The plan called for
   `std::vector`, but they are already freed at `main.cpp:1099-1107`, and
   `Xpts`/`Ypts`/`Zpts` are read from `metropolis.cpp`'s `transmove` and
@@ -527,6 +537,11 @@ on the 3Q47 redock rather than assumed:
 | | val_3q47_redock | dock_3q47_smoke | RMSD | top targetE |
 |---|---|---|---|---|
 | shipped (inert) | 130 s | 8.6 s | **0.72 Å** | **-28.95** |
+
+Note: those RMSD/targetE figures were measured while the `sqrt` precision defect
+described under "Measured against pristine upstream" was present. Post-fix the same
+run gives 0.66 Å / -28.5508. The conclusion (`mod` is inert, the change is not worth
+shipping) is unaffected — both arms were measured on the same defective build.
 | `maxStep = 30` | 156 s | 19.3 s | 0.80 Å | -28.34 |
 
 **+20% on the validation run, 2.25× on the smoke test, for no quality gain** — the
@@ -589,6 +604,50 @@ likelihood. The PARALLEL branch already did it right with `% (N-P)`.
 before  40.058829 31.225769 10.764044 7.463047 6.393763
 after   40.058829 688.128472 81.995422 10.222738 7.086147
 ```
+
+### The evidence estimate is now checked against a closed-form answer
+
+Everything else in the suite asserts that ADCP does not crash, is reproducible, or lands
+in a plausible range. Nothing checked that nested sampling computes the **right number** —
+the peptide likelihood has no closed form to check against, so there was nothing to
+compare to.
+
+`tests/ns_evidence_test.cpp` (ctest `num_ns_evidence`, label `functional`) closes that.
+It links `adcp_core` and drives the real `find_worst()` / `update_NS_parameters()` /
+`alpha = exp(-1/N)` bookkeeping against a problem that does have one:
+
+    prior       x ~ Uniform(0,1)
+    likelihood  L(x) = exp(-x/tau)
+    evidence    Z = tau * (1 - exp(-1/tau))
+
+`L` is monotone in `x`, so `{L > L*}` is exactly `{x < x*}` and a constrained sample is
+`Uniform(0, x*)` drawn **exactly**. That is deliberate: removing MCMC quality from the
+measurement leaves the bookkeeping as the only thing under test. Measured, N=100,
+3000 iterations, four fixed seeds: errors of -0.02 to +0.14 nats against
+`log Z = -1.6161986619`, all inside 3 sqrt(H/N), mean inside 2 sigma.
+
+Three properties make it a better gate than anything else here:
+
+- **It asserts a value, not self-consistency.** The first test in the repo that does.
+- **It is libc-independent.** It uses its own `std::mt19937`, not `rand()`, so unlike
+  every other test it is portable enough to carry an exact expected number — the reason
+  `run_fold_test.sh` and `run_ns_test.sh` deliberately store none.
+- **It guards this section's fix, and proves the guard is not vacuous.** Both draw
+  expressions are evaluated from the same uniform and counted: the shipped
+  `% (N-1)` selects the discarded point at index `N` **0** times, the pre-`35fb3fb`
+  `% N` would have selected it **122** times in 12000 draws — 1.02%, matching the
+  predicted `1/N`. A guard that cannot fail is not a guard, so the test asserts both
+  halves. It also asserts the layout invariant the fix rests on: after `find_worst`,
+  `chainhash[N].ll == logLstar` and no survivor shares that index.
+
+Mutation-tested, since a test that has only ever passed proves nothing. Scaling
+`log_DeltaX` by 1.02 in `update_NS_parameters`, and taking `logLstar` from the heap root
+instead of `chainhash[N-P+1]` in `find_worst`, are both caught.
+
+**Known limit:** exact constrained sampling means the seed cannot influence the evidence
+here, so the numerical half does not detect a reintroduced seed bug — the draw counters
+do. Detecting it numerically would need a finite-step MCMC model, which trades a sharp
+deterministic check for a noisy statistical one. Not worth it.
 
 ### …which exposed that the NS test's own assertion was wrong
 
@@ -742,6 +801,13 @@ weak oracle. If it is ever restructured, diff the full stdout against the fixtur
 - **Any change touching `energy.cpp`, `vdw.cpp`, `metropolis.cpp`, `probe.cpp`, or `main.cpp`'s swap logic**: also configure `-DADCP_DOCKING_TESTS=ON` and run both `docking` and `validation` labels locally. CI now runs both (see below), so this is a fast local pre-check rather than the only gate. `val_3q47_redock` takes **~2 minutes** — measured at 117s, 120s and 140s. An earlier draft of this document claimed ~30 min and used that to justify leaving it out of CI; that number was wrong.
 - **`func_adcp_fold_determinism`**: run after every `energy.c`/`vdw.c` change without exception, **12×, not once**. It's the only automated determinism signal, and template-vs-function-pointer codegen changes can alter floating-point accumulation order in Monte Carlo sums (IEEE 754 non-associativity) — a determinism regression here is a blocking failure to investigate, not acceptable drift. **And per "MECHANISM RESOLVED" below, the `5660a33` hang is a latent bug that unrelated codegen changes can resurface, so the 12× hammer applies to every change in any file, not only container conversions.**
 
+- **Any commit claiming "no behaviour change", including a pure rename**: prove it against
+  the parent with a bit-level probe, at a workload that actually reaches the changed code.
+  For docking that means **≥ 250,000 steps** — the swap machinery in `simulate()` is gated
+  behind `swapMutateSteps` (200000), so anything shorter exercises none of it. A 10,000-step
+  comparison reported a clean match across all 16 seeds while `5660a33`'s precision defect
+  was live. The cheap oracle: seed 4242, `-r 1x250000`, redock options, ~8 s per build.
+
 ## FIXED REGRESSION — `energy.cpp`, introduced by `5660a33` (Phase 1 step 6)
 
 **Status: symptom gone. Mechanism now IDENTIFIED as indirect, and the underlying bug
@@ -807,6 +873,13 @@ Two lessons worth keeping:
   green test run is not evidence that a diff is cast-only — read the diff.**
 
 ### MECHANISM RESOLVED — `tc` was a red herring; the real bug is still latent
+
+> **The `sqrt` precision defect found later in this same commit is NOT this bug.** That one
+> lives in `scoreSideChain`/`scoreSideChainNoClash`, which — as this section itself proves —
+> are never called on the folding path. Fixing it changed no fold output: the fold ATOM md5
+> is `6a438d0a673006235fccd2b1b7007ba3` before and after. **The hang below remains
+> unexplained and still latent.** Two independent defects entered the tree in `5660a33`;
+> only one is now understood.
 
 Re-measured from scratch at `5660a33`, in a throwaway worktree, Release build.
 Three facts, each measured:
@@ -905,12 +978,74 @@ present in the pre-migration C. Fixed in `8392e34`; output byte-identical.
 Two real bugs within minutes of the sanitizer leg first existing is the argument for having
 built it in Phase 1, as this document originally recommended.
 
+## Measured against pristine upstream — the whole migration, end to end
+
+Every claim above compares a commit against its parent. HEAD has also been measured
+against `1c1a330` ("added license stuff", 2025-10-28) — the last upstream commit,
+before any of this work. Two behavioural changes were found; **one was a defect and is
+now fixed, so exactly one intended difference remains.**
+
+1. Nested sampling — `35fb3fb`, deliberate, documented above.
+2. **Docking past 200,000 steps — `5660a33`, unintended. Root-caused and FIXED.**
+   `sqrt` applied to a `float` expression binds to `double sqrt(double)` in C but to
+   the **`float` overload** in C++, so five vector normalisations in `energy.cpp`
+   silently dropped from double to single precision. One extra rounding at ~1.2e-7
+   relative, amplified by the MC search into a different trajectory once the swap
+   machinery engages at `swapMutateSteps`. The five sites now cast to `double`, with a
+   comment saying why — **do not remove those casts.** No other math call in `src/`
+   takes a `float` argument, so the blast radius was exactly those five lines.
+
+   After the fix, docking is bit-identical to pristine at every budget tested,
+   including all 16 seeds at the full 2.5M steps, and the redock returns to
+   targetE -28.5508 / RMSD 0.66 Å.
+
+   **Generalise this.** Any `<math.h>` function applied to a `float` expression changes
+   meaning between C and C++, silently, with no warning — `-Wdouble-promotion` warns
+   about the opposite direction and does not catch it. Every Phase 1 "rename only"
+   commit is suspect on the same grounds. This one was found only because a bit-level
+   comparison against pristine upstream was run at a step count large enough to reach
+   the affected code; the 10,000-step comparison that preceded it reported a clean
+   match.
+
+`5660a33` is also the commit blamed for the still-latent fold hang above — but the two are
+**separate defects that happened to arrive together**, and it is important not to conflate
+them. The `sqrt` bug lives in `scoreSideChain`/`scoreSideChainNoClash`, which never execute
+on the folding path; fixing it left the fold ATOM md5 unchanged at
+`6a438d0a673006235fccd2b1b7007ba3`. The hang is still unexplained, still latent, and the
+12× hammer still applies.
+
+Verification of the fix, all on one machine, all reproducible:
+
+| check | result |
+|---|---|
+| seed 4242, 250k steps | `-13.6251` — pristine value |
+| docking, 16 seeds × 10,000 steps | 0/16 differ from pristine (targetE + ATOM md5) |
+| docking, 16 seeds × 2,500,000 steps | 0/16 differ from pristine (targetE + ATOM md5) |
+| full redock, top-ranked | targetE -28.5508, RMSD 0.66 Å |
+| fold md5 / final energy | `6a438d0a…07ba3` / 5.936278 — unchanged |
+| NS energy sequence, checkpoint roundtrip | unchanged |
+| `ctest build` | 15/15 |
+| `ctest build-asan` (ASan+UBSan) | 15/15 |
+| `ctest build-dock -L "docking\|validation"` | 3/3 |
+
+The 0.66 Å figure restores what [README.md](README.md) and
+[tests/CMakeLists.txt](tests/CMakeLists.txt) always documented; the 0.72 Å recorded in the
+`transopt` section above was measured while the defect was live.
+
+A full-length pristine docking baseline exists after all: the segfaulting binary
+completes under `-fsanitize=address -fsanitize-recover=address` with no source
+change, because the one-past write lands in an ASan redzone. Proof that it touches
+no live data, the three transparency controls, the tables, the `-fcommon` build
+recipe, and the finding that the `swapChains` crash threshold is far below the
+200,000 steps `7e2192d` reports: [docs/compares/1.md](docs/compares/1.md).
+
 ## Risk register
 
 | Risk | Where | Mitigation |
 |---|---|---|
 | Converting a stack VLA to a heap container relocates any out-of-bounds access, turning a benign latent read into garbage data | `energy.cpp`'s `tc` (already bit us, see above); any remaining VLA→container change | Build the ASan/UBSan leg first; hammer `func_adcp_fold_determinism` 12× rather than once, since these failures are intermittent |
 | `std::vector` reallocation growth differs from `realloc`, could unmask a latent buffer over/under-read previously hidden in slack space | any `realloc`→`push_back` conversion (`params.c`, `flex.c`) | ASan/UBSan CI leg (Phase 1); full functional+docking+validation run after each |
+| **A `<math.h>` function applied to a `float` expression silently changes precision between C and C++** — `sqrt`, `pow`, `fabs`, `exp`, … resolve to the `float` overload in C++, where C had only the `double` one. No warning by default; `-Wdouble-promotion` warns about the opposite direction and does not catch it | any `.c`→`.cpp` rename touching float math; hit `energy.cpp` in `5660a33` | Grep every converted file for math calls whose arguments are `float`, and cast to `double` explicitly. Verified done for `src/`: after the fix, `sqrt`/`fabs`/`pow`/`exp`/`log`/`sin`/`cos`/`acos`/`atan2` have **no** remaining `float`-argument call site |
 | Template/inlining changes float accumulation order | `vdw.c`, `energy.c` dispatch conversion | `func_adcp_fold_determinism` after every change, treat any diff as blocking |
 | `std::vector`/`std::string` throw `bad_alloc` on OOM vs. C's `NULL`-check-then-`stop()` | any container conversion | Accepted as-is: both are fatal-on-OOM in practice; document as the one sanctioned exception to "no exceptions," don't add `try`/`catch` anywhere else |
 | RAII MPI/file guards don't run on the `stop()`→`exit()` abnormal path (`exit()` skips stack unwinding) | `main.c`, `error.c` | Not a regression — current code has the same gap. Don't oversell RAII as fixing abnormal-exit cleanup in commit messages |
