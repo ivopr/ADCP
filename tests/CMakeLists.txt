@@ -162,6 +162,24 @@ set_tests_properties(func_adcp_fold_short PROPERTIES
 )
 
 # ---------------------------------------------------------------------------
+# Numerical — nested sampling against a closed-form evidence
+# ---------------------------------------------------------------------------
+#
+# The only test in the suite that checks a computed VALUE against an
+# independently known answer rather than against itself. It links adcp_core and
+# drives the real find_worst()/update_NS_parameters() bookkeeping on a problem
+# with an analytic Z. Uses its own RNG, not rand(), so it is libc-independent.
+
+add_executable(ns_evidence_test ns_evidence_test.cpp)
+target_link_libraries(ns_evidence_test PRIVATE adcp_core)
+
+add_test(NAME num_ns_evidence COMMAND ns_evidence_test)
+set_tests_properties(num_ns_evidence PROPERTIES
+  LABELS "functional" TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "PASS: nested sampling recovers the analytic evidence"
+)
+
+# ---------------------------------------------------------------------------
 # Functional — nested sampling and checkpointing
 # ---------------------------------------------------------------------------
 #
@@ -212,7 +230,7 @@ set_tests_properties(
   smoke_lipa smoke_cdlearn smoke_statistics smoke_mergie smoke_cm smoke_oops
   smoke_rama smoke_rama_pdb smoke_dssp2cm smoke_bfactor smoke_bfactor_empty
   func_adcp_fold_determinism func_adcp_fold_short
-  func_adcp_ns_smoke func_adcp_checkpoint_roundtrip
+  func_adcp_ns_smoke func_adcp_checkpoint_roundtrip num_ns_evidence
   PROPERTIES FAIL_REGULAR_EXPRESSION "${SANITIZER_FAIL_RE}"
 )
 

@@ -94,16 +94,16 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DADCP_MPI=ON -DADCP_OPENMP=ON
 ctest --test-dir build --output-on-failure
 ```
 
-That runs the 12 tests that need nothing but the source tree. Add
+That runs the 16 tests that need nothing but the source tree. Add
 `-DADCP_DOCKING_TESTS=ON` at configure time for the 3 that also exercise
-docking, for 15 total.
+docking, for 19 total.
 
 Tests are grouped by label:
 
 | Label | Tests | Time | Network |
 |---|---|---|---|
-| smoke | 10 | <1 s | no — tool binaries vs a committed PDB |
-| functional | 2 | ~2 min | no — folding: determinism + energy |
+| smoke | 11 | <1 s | no — tool binaries vs a committed PDB |
+| functional | 5 | ~2 min | no — folding, nested sampling, checkpointing, and the analytic-evidence check |
 | docking | 2 | ~20 s | first run — 3Q47 grid path |
 | validation | 2 | ~2 min | first run — full redocking vs the crystal pose |
 
