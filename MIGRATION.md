@@ -45,7 +45,7 @@ Apply per category:
 - **3 `goto` sites** — none are cleanup patterns (verified: no `free`/`fclose` at either label):
   - `energy.c:291`, `energy.c:2876` — conditional-skip patterns, restructure as `if`/loop-flag.
   - `tools/ramachandran.c:165` — forward jump to reuse an already-read record; extract the loop body into a local lambda called once before the loop and once inside it. `smoke_rama_pdb` guards a related historical bug in this exact file — diff its output before/after.
-- **MPI/OpenMP**: no `extern "C"` needed, both headers are C++-safe as-is. Verify empirically via the new CI legs, no code change expected.
+- **MPI/OpenMP**: no `extern "C"` needed, both headers are C++-safe as-is. Verify empirically via the new CI legs, no code change expected. **This held for OpenMP but not for MPI** — see "Phase 2 progress — MPI unblocked" below: `flex.h` had `#include <mpi.h>` *inside* an `extern "C"` block, which does not compile once `mpi.h` pulls in C++ STL headers. Not caught earlier because nothing had compiled `flex.h` under real `PARALLEL` until then.
 
 Ordering within Phase 2, by risk × blast radius:
 
@@ -68,10 +68,11 @@ Ordering within Phase 2, by risk × blast radius:
    purpose; see the step 6 section below.
 7. **Done.** `probe.c` — all 32 diagnostic mask bits swept under ASan, three real
    bugs fixed. `metropolis.c` — dead code only; the per-move path is untouched.
-8. **Partly done.** `flex.c`, `checkpoint_io.c` — dead code and two reproduced
-   buffer overflows fixed. The MPI half is **blocked**: see the CMake finding below.
-9. **Partly done.** `nested.c` — dead FAST branch removed and a real nested-sampling
-   bug fixed. MPI half blocked the same way.
+8. **Done.** `flex.c`, `checkpoint_io.c` — dead code and two reproduced
+   buffer overflows fixed. The MPI half, once blocked on installing MPI, is now
+   unblocked — see "Phase 2 progress — MPI unblocked" below.
+9. **Done.** `nested.c` — dead FAST branch removed and a real nested-sampling
+   bug fixed. MPI half unblocked the same way.
 10. **Done.** `tools/*` — three bugs fixed, all sanitizer-reproduced. This step
     also found that the test suite's ASan gate was being masked; see below.
 11. **Done, ahead of schedule.** Cleanup: drop `LANGUAGES C` / `CMAKE_C_STANDARD*` once `find src tools -name '*.c'` is empty — `CMakeLists.txt` has been `LANGUAGES CXX` only since Phase 1 finished, no C sources ever remained afterward.
@@ -766,34 +767,309 @@ Fixed **at the read, not at the loop** — `chainid` is validated against
 three sites in `peptide.cpp` that index `xaa_prev` with the same field, which a guard
 on the loop alone would have left exposed.
 
-### Found by reading, NOT fixed — unverified, do not patch on suspicion
+### Found by reading, then confirmed and fixed — the tools/ survey closed out
 
-The `tools/` survey flagged these; no sanitizer reproduced them, so they are recorded
-rather than changed. Each needs a crafted input to confirm:
+The prior section flagged five suspects across five files with no sanitizer
+reproduction; per this document's own rule ("do not patch on suspicion"), all five
+were re-investigated with crafted inputs before touching any code. All **nine**
+distinct findings across those five files reproduced, and are now fixed. A tenth,
+more serious bug was found incidentally while building a repro for one of them.
 
-- `cm.cpp` — the "file too big" bound check runs *after* the write and uses `>` not
-  `>=`, so a PDB with ≥2731 residues writes `ca[2730]`/`ca[2731]` first; and `s[num]`
-  is allocated but never NUL-terminated before `printf("%s")`.
-- `bfactor.cpp` — `getpdb` rewrites `NAA` per model, but `ava`/`sqa` are sized once
-  from the first model. A multi-model PDB whose later model is longer overruns both.
-  The loop that would trigger it has no test coverage (the fixture is single-model).
-- `dssp2cm.cpp` — `k`/`i`/`j` come from the file and index `map`/`seq`/`ss` with no
-  bounds check; `print_contacts`' `char str[11]` overruns in both directions on ≥3
-  contacts. Also `n_res` is read **uninitialised** on the `/dev/null` path — an MSan
-  finding, and MSan is not installed.
-- `cdlearn.cpp` — `fscanf("%s")` with no field width into `char[1024]` from a `-L`
-  list file; `char index[10]` fed a `sprintf("_%d")` from `-I`.
-- `ramachandran.cpp` — `n1[1]`/`n1[2]` read uninitialised at the `angle()` call; only
-  `n1[0]` is reset. MSan territory again.
-- `cdlearn`'s OpenMP region calls `rand()`, which is not thread-safe, so `-s SEED`
-  does not make a threaded run reproducible. The region has **zero coverage in every
-  build** — `ADCP_OPENMP` defaults OFF and `smoke_cdlearn` dies at
-  `stop("No list file given")` long before reaching it.
+**Sanitizer environment note, before the findings:** ASan's completeness turned out
+to depend on the compiler. `cm.cpp`'s `s[num]` finding (below) did **not** reproduce
+under `-DCMAKE_CXX_COMPILER` left at its default (`/usr/bin/c++`, i.e. g++) with a
+bare `printf("%s", s)` — GCC's libsanitizer doesn't intercept the internal scan
+inside `printf`'s `%s` handling as completely as LLVM's compiler-rt does. Confirmed
+by three independent checks: (1) an isolated `malloc(n+1)`/`printf("%s")` pattern
+compiled with `clang++ -fsanitize=address` catches it immediately, at `-O0` and
+`-O2` alike (at `-O2`, the compiler folds `printf("%s\n", s)` into `puts(s)`, which
+clang's ASan still catches); (2) adding an explicit `strlen(s)` call ahead of the
+`printf` makes **g++'s** ASan catch it too, at the exact same address; (3) after the
+fix, that same explicit `strlen(s)` probe is clean. So the bug was real and CI's
+`sanitizers` job (which also builds with the default `c++` / g++) would **not**
+have caught it — worth remembering for any future `printf("%s", ...)`-shaped
+finding: a clean run there is not proof the string is not over-read.
 
-`ramachandran.cpp`'s `goto` (MIGRATION.md's Phase 2 item) is still at line 165. It is
-a genuine two-entry point — jumped into for the first record, reached normally on a
-chain break — and `smoke_rama_pdb`'s regex only checks the header line, so it is a
-weak oracle. If it is ever restructured, diff the full stdout against the fixture.
+**1. `cm.cpp`, `write_contacts` — `s[num]` never written before `printf("%s")`.**
+`s = malloc(num+1)` but the fill loop only ever touches `s[0..num-1]`; the reserved
+terminator byte was read straight off the allocator. Reproduced on the *existing*
+`smoke_cm` fixture with no crafted input at all (see the sanitizer note above for why
+this needed an explicit `strlen` probe to show up under the CI toolchain). Fixed:
+`s[num] = '\0';` before the print.
+
+**2. `cm.cpp`, `parse_input` — bound check ran after the write, and used `>` not
+`>=`.** A ≥2731-residue PDB wrote `ca[2730]` (one past the last valid index, 2729)
+before the too-big check ever ran. Reproduced with a synthetic 2735-residue PDB
+(sequential `ATOM ... CA` records, generated, not committed — 2700+ lines is not
+worth carrying in the repo); UBSan: `index 2730 out of bounds for type 'double
+[2730][3]'` at the write. Fixed by checking `num >= 2730` immediately after each of
+the two `num++` sites, before the corresponding write — which surfaced a second,
+self-inflicted bug during the fix: an early `return num;` at the new check must
+return `num`, not the old `num + 1`, since index `num` itself was never populated.
+Verified: `ctest`-fixture output unchanged; the 2735-residue input now prints 2730
+rows and a clean "This file is too big!" notice instead of crashing.
+
+**3. `bfactor.cpp`, `parse_input` — `ava`/`sqa` sized from the first model only.**
+`getpdb()` overwrites the global `NAA` on every call; `ava`/`sqa` are allocated once,
+before the multi-model loop, from whichever `NAA` the *first* model reported. A later
+model with more residues overruns both. Reproduced with a 2-model PDB (model 2 has
+2 extra residues cloned from the fixture's last one) — real
+`heap-buffer-overflow` in `subtract()` (called from `update()`) under ASan. Fixed by
+rejecting the mismatch outright (`stop("bfactor: all models must have the same
+number of residues")`) rather than attempting a numerically-dubious resize-and-
+continue — averaging B-factors across models of different length isn't a
+well-defined operation this tool was ever meant to support. Committed as
+`smoke_bfactor_multimodel` (`tests/data/bfactor_multimodel.pdb`).
+
+**4. `dssp2cm.cpp`, `parse_dssp_body` — `k`/`i`/`j` unchecked against `n_res`.**
+All three come straight from a DSSP body record's fixed-width columns and index
+`seq`/`ss`/`map`, which are sized off the header's residue count. Reproduced with a
+3-line synthetic DSSP file whose one body record declares `k=99` against a
+header-declared size of 4: `heap-buffer-overflow` in `parse_dssp_body` at the
+`ss[k] = t` write. Fixed with a range check right after both `sscanf`s (`i`/`j` may
+legitimately be `0`, the "no contact" sentinel — only genuinely out-of-range values
+are rejected), skipping the malformed record. **That fix needed a second fix**: the
+function's final terminator write (`seq[++k] = '\0'`) used the same `k`, so a
+rejected record left a stale out-of-range value sitting there for when the input
+ended. Added a separate `last_k`, updated only when a record is accepted.
+
+**5. `dssp2cm.cpp`, `print_contacts` — `char str[11]` overrun on ≥4 contacts one
+side.** The buffer reserves exactly 2 extra slots each direction (indices 8-9
+forward, 1-2 backward) beyond the fixed ±1/±2 neighbours; nothing bounded the loops
+that fill them. Reproduced with a 7-line synthetic DSSP giving one residue four
+beta-sheet contacts on its forward side: UBSan, `index 11 out of bounds for type
+'char [11]'`. Fixed by capping the fill loops at the buffer's real capacity
+(`k < 10` forward, `k >= 0` backward) — extra contacts beyond that are now dropped
+instead of overflowing, and as a side effect the terminator at `str[10]` can no
+longer be silently overwritten by a 3rd forward contact either.
+
+**6. `dssp2cm.cpp`, `parse_dssp_header` — `n_res`/`n_chains` uninitialised when the
+header line is missing.** ASan doesn't catch use-of-uninitialized-value; confirmed
+with MSan (`clang++ -fsanitize=memory` — no MSan-instrumented libc++ needed, this
+tool has no STL surface) on the *existing* `smoke_dssp2cm` (`/dev/null`) input:
+`MemorySanitizer: use-of-uninitialized-value` at the `calloc(n_res * n_res, ...)`
+call. Fixed: `n_res = 0, n_chains = 1` at declaration, plus a stderr warning when the
+header search comes up empty, so the empty-structure fallback is now deliberate
+rather than accidental.
+
+**7. `cdlearn.cpp` — `fscanf(list_file, "%s", ...)` with no field width into
+`char[1024]`.** Reproduced with a `-L` list file containing one 2000-byte token:
+ASan `stack-buffer-overflow` inside `scanf_common`. Fixed with `%1023s` (matches the
+buffer-size-1 idiom already used at the 12 `%256[^,]`→`%255[^,]` sites from
+`1e82869`), plus a second, related fix: the subsequent `strcpy`+`strcat` onto
+`pdb_filename` (also 1024 bytes, `next_pdb_filename` + `".pdb"`) could still overflow
+even with a correctly-bounded `next_pdb_filename` — replaced with a bounds-checked
+`snprintf` that `stop()`s with a clear message instead. Committed as
+`smoke_cdlearn_longtoken` (`tests/data/cdlearn_longtoken.txt`).
+
+**8. `cdlearn.cpp` — `sprintf(index, "_%d", iter+iter_start)` into `char[10]`,
+`iter_start` from `-I` on argv.** This was the one MIGRATION.md previously called the
+most expensive to reproduce — it needed a minimal but *real* PDB + `.icm` contact
+map + non-empty learn string, none of which exist anywhere in the repo, to reach the
+vulnerable line. Built one: reused `tests/data/peptide12.pdb`, a hand-built
+all-zeros `.icm` (the contact-map format is `(NAA-1)²` whitespace-separated
+numbers/symbols — trivial once read from `biasmap_initialise()`), a one-line list
+file, `-l V` (any single valid learn-string character suffices), `-I 100000000`.
+The restart-file `sprintf` fires on the very first loop iteration (`iter==0`, since
+`iter % 100 == 0`), so no real iteration count was needed. Reproduced first try:
+ASan `stack-buffer-overflow`, `WRITE of size 11` into `index[10]`. Fixed: widened to
+`char index[16]` (an `int` is at most 11 digits + sign + `_` + NUL = 13) and switched
+to `snprintf`. Not committed as a permanent fixture — the full pipeline is more
+setup than a single test file justifies; the recipe above is reproducible from
+scratch in a couple of minutes if needed again.
+
+**9. `ramachandran.cpp` — `n1[1]`/`n1[2]` uninitialised on the first `angle()`
+call.** Only `n1[0]` is reset at the `start:` label; the first residue pair's
+`eta = angle(n1, n2)` reads `n1` before line 202 ever writes it. Confirmed with MSan
+on the *existing* `smoke_rama_pdb` fixture: `use-of-uninitialized-value` inside
+`angle()` (`vector.cpp:308`), called from `ramachandran.cpp:195`. Fixed: reset
+`n1[1]`/`n1[2]` to `NaN` alongside `n1[0]` — consistent with every other "no previous
+residue" placeholder on that line, and the post-fix output for the first row is
+`nan` for `eta` exactly like `phi`/`chi`/`chi2` already were.
+
+**10. Found incidentally, not one of the original five: `cdlearn.cpp` never calls
+`ramaprob_initialise()`.** Building finding 8's repro pipeline reached
+`energy_matrix_calculate()` for the first time in this tool's history (matches this
+document's own repeated note that nothing has ever tested `cdlearn` past its early
+`stop()`s) and immediately segfaulted: `ramaprob`/`alaprob`/`glyprob` are only
+`malloc`'d inside `ramaprob_initialise()`, which `main.cpp` calls before any energy
+calculation but `cdlearn.cpp` never calls at all — a guaranteed NULL-pointer read in
+`ramabias()` on **any** real CD-learning iteration, in every build, forever. Fixed by
+adding the same `ramaprob_initialise()` call `main.cpp` makes, in the same relative
+position (right after `model_param_read`, before `initialize_sidechain_properties`).
+This does mean `cdlearn` now genuinely requires `ramaprob.data` in its working
+directory like `adcp` always has — `smoke_cdlearn` needed `WORKING_DIRECTORY
+${TEST_WORK}` added (that directory already gets `ramaprob.data` copied into it for
+the `func_adcp_*` tests) to keep passing.
+
+**All three now closed out:**
+
+**`ramachandran.cpp`'s `goto` is gone.** The `start:` label's body (two statements:
+reset every derived angle to `NaN`) was reached two ways — the `goto start` for the
+very first residue pair, and normally as the `else` branch's tail on a later chain
+break. Both reached the identical code, so the goto was replaced by duplicating those
+two statements in place of it and deleting the now-unreferenced label — the standard,
+behavior-preserving fix for a "skip straight to this block" goto, not worth a helper
+function for two lines used in exactly two places. Verified exactly as this document
+said it should be: full stdout of `rama < tests/data/peptide12.pdb` is byte-identical
+before and after (`cmp`, not just `smoke_rama_pdb`'s header-line regex).
+
+**An `msan` CI job exists now**, but scoped down from a whole-suite run after two real
+findings during setup:
+- `tools/cdlearn.cpp` had `#include<omp.h>` unconditionally, for a header nothing in
+  the file actually uses (only the `#pragma omp parallel for` compiler pragma appears,
+  no `omp_*` runtime call anywhere) — g++ ships its own `omp.h` so this was invisible
+  there, but clang has none without `libomp-dev`, which isn't installed. Deleted the
+  dead include; this also makes the existing `build-and-test` clang leg's cdlearn
+  build not silently depend on that package.
+- Plain glibc `fopen()` produces a confirmed, stack-layout-dependent MSan false
+  positive on this toolchain — reproduced in complete isolation (a five-line program
+  outside this repo, `fopen("/etc/hostname", "r")` via the same RAII pattern
+  `biasmap_initialise` uses) — because there is no MSan-instrumented libc available
+  here. It fires inside `main.cpp`'s startup `fopen`, which every `func_adcp_*` test
+  reaches, and would make them intermittently red for reasons with nothing to do with
+  the code under test. `dssp2cm`/`rama`'s smoke tests read only from stdin and never
+  call `fopen`, so the job runs the whole tree but scopes `ctest` to just
+  `smoke_dssp2cm`/`smoke_rama.*` — confirmed clean across repeated local runs. This is
+  a documented, evidence-based scope decision, not an oversight: a broader MSan leg
+  would need an MSan-instrumented libc to be reliable, which is a bigger undertaking
+  than this gap justifies on its own.
+
+**`cdlearn`'s OpenMP path has real coverage now** (`func_cdlearn_openmp`, two
+proteins, `-DADCP_OPENMP=ON` only) — and building it surfaced a second real,
+previously-unknown bug on the way: `sim_params_copy` at the per-protein setup loop
+(before this fix, [tools/cdlearn.cpp:729-732](tools/cdlearn.cpp#L729)) cloned the
+*single*, shared `sim_params` into every `sim_params_sim[j]` slot, but nothing had
+ever set that shared struct's `seq`/`sequence`/`NAA` from an actually-read protein —
+`main.cpp` always calls `update_sim_params_from_chain()` after every chain read;
+`cdlearn.cpp`'s protein-loading loop never did. Every real CD-learning iteration
+therefore either crashed (`"sequence is not present in sim_params for MC lookup
+table calculation"`, on the very first `move()` call) or — had the shared struct
+happened to hold a stale value from some other run — silently used the *wrong*
+protein's sequence for every slot but one. Fixed by calling
+`update_sim_params_from_chain(&(all_chains[i]), &(sim_params_sim[i]))` for each
+protein individually, right after its own `sim_params_copy`. Confirmed: the same
+minimal PDB+`.icm`+learn-string pipeline built for finding #8 above now runs a
+complete, real CD-learning iteration end to end (`FINISHED!`) instead of stopping
+at that error. Per the earlier decision, **this does not fix `rand()`'s
+thread-safety** — `move()` (`src/metropolis.cpp`) calls the global, non-thread-safe
+`rand()` ~28 times, and every OpenMP thread calls it concurrently. Attempted to
+confirm the race directly with ThreadSanitizer; TSan itself failed to initialize in
+this sandboxed environment (`FATAL: ThreadSanitizer: unexpected memory mapping`,
+a known TSan/container limitation unrelated to this codebase) — the race stands on
+the same first-principles reasoning this document already gave it (shared mutable
+global state, concurrent unsynchronized access), just not independently confirmed by
+a sanitizer. `func_cdlearn_openmp` only asserts the parallel path completes without
+crashing or hanging, run 5× locally with no flakiness — it deliberately does not
+assert determinism, since there is none to assert.
+
+**Full regression, every configuration this pass could plausibly affect:** default
+build 18/18, ASan+UBSan 18/18, the new `msan` job's actual scope (`smoke_dssp2cm`/
+`smoke_rama*`) 3/3 clean across repeated runs, `-DADCP_MPI=ON` 19/19,
+`-DADCP_OPENMP=ON` 19/19 (18 plus the new `func_cdlearn_openmp`). None of these
+changes touch any previously-tested behavior.
+
+## Phase 2 progress — MPI unblocked
+
+Steps 8 and 9 above were "partly done" for one reason: `src/CMakeLists.txt` made
+`PARALLEL` `PRIVATE` to `adcp_mpi`'s `main.cpp` only. `adcp_core` — `nested.cpp`,
+`checkpoint_io.cpp`, `flex.cpp`, `probe.cpp` — was compiled **once, without
+`PARALLEL`**, and that same non-PARALLEL library was linked into both `adcp` and
+`adcp_mpi`. So `adcp_mpi` really was an MPI `main` wired to a serial
+`nestedsampling()`; `mpi_send_chain`/`mpi_rec_chain` had never been emitted into
+any object file, in any configuration, in this project's history — confirmed by
+`nm` on the pre-fix binary before starting this work.
+
+**The fix, exactly as this document already prescribed:** a second static library.
+`src/CMakeLists.txt` now hoists the source list into `ADCP_CORE_SOURCES` and, only
+when `ADCP_MPI` is on, builds `adcp_core_mpi` from those same sources with
+`PARALLEL` defined and linked against `MPI::MPI_CXX`; `adcp_mpi` links against
+`adcp_core_mpi` instead of the serial `adcp_core`. `adcp`'s build, the install
+target, and every non-MPI target are untouched — verified by a clean rebuild of the
+default configuration and `ctest` still 16/16.
+
+**Installing `libopenmpi-dev` and building `-DADCP_MPI=ON` for real (not the
+syntax-only stub) found one real bug immediately**, the way the sanitizer leg did
+in Phase 1: [include/flex.h:16](include/flex.h#L16) had `#include <mpi.h>` *inside*
+its `extern "C" { ... }` block. OpenMPI's `mpi.h` pulls in C++ STL headers
+(`<map>`, `<utility>`, …), and giving those C linkage doesn't compile — hundreds of
+"template with C linkage" errors from libstdc++, none of them at the actual fault
+line. Fixed the same way [include/peptide.h:12](include/peptide.h#L12) already
+fixes the identical problem for `<vector>`: move the `#include <mpi.h>` outside the
+`extern "C"` block, with a comment pointing at the precedent. None of the other
+PARALLEL-guarded headers have the same bug — `nested.h`, `checkpoint_io.h`,
+`probe.h`, `random16.h` all leave `#include <mpi.h>` to their `.cpp` files, at file
+scope, outside any `extern "C"`.
+
+After that one-line fix, the whole tree — including `nested.cpp`'s and
+`checkpoint_io.cpp`'s `mpi_send_chain`/`mpi_rec_chain`, `setup_communicators`, and
+`flex.cpp`'s `ns_for_flex_processor` — compiles clean against the real headers.
+Confirmed with `nm`: `adcp_core_mpi`/`adcp_mpi` now contain `mpi_send_chain`/
+`mpi_rec_chain`; `adcp_core`/`adcp` (the serial targets) contain neither.
+
+**Runtime, not just compile-time:** ran `mpirun -np 2 adcp_mpi` on the same fold
+workload as `run_fold_test.sh`. Real replica-exchange swaps occurred between the
+two ranks (`swap N : rank 0 : ... <=> ...` / matching `rank 1` lines, genuine
+`MPI_Send`/`MPI_Recv` traffic), and both ranks printed "successfully finished."
+This exercises `main.cpp`'s swap logic, which — worth being precise about — was
+already compiled under `PARALLEL` before this fix (`PARALLEL` was always `PRIVATE`
+to `adcp_mpi`'s `main.cpp`); what this run actually confirms is that MPI works
+end-to-end on this machine and that the newly-added `adcp_core_mpi` link doesn't
+break anything `adcp_mpi` was already doing.
+
+A second `mpirun -np 2 adcp_mpi -n` run (mirroring `run_ns_test.sh`'s fixture and
+`-r 2x10`) also completed without crashing, and its single, non-duplicated stream
+of `totalE` lines matching the documented serial NS sequence is *consistent with*
+the collaborative `P > 1` path in `nested.cpp` running rather than two independent
+per-rank simulations — but that alone wasn't verified with the same rigor as the MC
+swap test. **Getting real signal there needed a deliberate multi-rank test**, and
+now there is one.
+
+### `tests/ns_evidence_mpi_test.cpp` — the P>1 companion to the closed-form NS test
+
+`tests/ns_evidence_test.cpp` already checks `find_worst()`/`update_NS_parameters()`
+against a closed-form evidence, but hardcodes `P=1` and never touches a network. The
+new test drives the actual cross-rank functions instead — `collect_chains()`,
+`return_and_reheap_chains()`, and through them `mpi_send_chain()`/`mpi_rec_chain()`
+— under a real `mpirun`, against the same problem (`x ~ Uniform(0,1)`,
+`L(x) = exp(-x/tau)`, closed-form `Z`).
+
+The trick that makes this cheap: since a constrained sample is drawn exactly
+(`Uniform(0, x*)`, no MCMC needed), a `Chain` with nothing but `.ll` set — allocated
+via `allocmem_chain(&c, 1, 1)`, skipping `build_peptide_from_sequence`,
+`biasmap_initialise`, and `aat_init` entirely — is everything
+`collect_chains`/`return_and_reheap_chains`/`mpi_send_chain`/`mpi_rec_chain` touch
+for this problem; none of them interpret a Chain's geometry, they just move
+whatever is there. The initial population is built identically on every rank from
+one shared RNG seed, then each rank keeps only the points `store_chain`'s real
+round-robin scheme would have given it (point `i` belongs to processor
+`(i-1) % P` at local index `(i-1) / P`) — that reproduces `nestedsampling()`'s
+exact chainhash/cpoints shape without needing our own initial-population broadcast.
+
+Registered as `num_ns_evidence_mpi`, `mpirun -np 4`, only built/run when
+`ADCP_MPI` is on. **Passes**: two seeds, both within 3σ of the analytic evidence
+(2.05σ and 0.75σ), plus a per-draw invariant (`ll > logLstar` after every
+constrained sample — violated only if `logLstar` desynced across ranks, which is
+exactly the failure mode a `mpi_send_chain`/`mpi_rec_chain` bug would produce).
+Manually re-run at `-np 1, 2, 3, 5, 7` (including counts that don't divide `N=100`
+evenly) — all pass, all in well under a second. Full `ctest` under
+`-DADCP_MPI=ON` is 17/17; the default build is unaffected (16/16, unchanged) since
+the new target only exists inside `if(ADCP_MPI)`.
+
+This closes the gap the previous paragraph left open: the NS/FLEX cross-rank
+chain-exchange machinery is now verified, not just compiled-and-not-crashing.
+
+**Now done:** [.github/workflows/ci.yml](.github/workflows/ci.yml)'s `mpi` job runs
+`ctest --test-dir build --output-on-failure` after the build, so `num_ns_evidence_mpi`
+(and the rest of the non-docking suite) runs on every push/PR, not just when a
+developer configures `-DADCP_MPI=ON` locally. One thing this needed: OpenMPI's
+`mpirun` refuses to start more ranks than it detects cores unless told
+`--oversubscribe`, and `num_ns_evidence_mpi` is fixed at `-np 4`
+([tests/CMakeLists.txt](tests/CMakeLists.txt)) — a real risk on CI runners with
+fewer than 4 vCPUs, unrelated to whether the code works. Added `--oversubscribe`
+to that test's `mpirun` invocation; confirmed locally it's a no-op when cores
+are plentiful (same pass, same output) and prevents the hard failure when
+they're not.
 
 ## Validation gates
 
@@ -940,7 +1216,7 @@ now has five jobs:
 | `build-and-test` (gcc, clang) | **Sets `CXX`, not `CC`.** The project is `LANGUAGES CXX`, so `CC` selected nothing; both legs had been building with the default g++, and clang coverage had decayed to zero as the tree converted. Also runs the determinism test with `--repeat until-fail:12`. |
 | `sanitizers` | ASan+UBSan with `-fno-sanitize-recover=all` (without it UBSan prints and continues, and the job goes green with real findings). |
 | `openmp` | `-DADCP_OPENMP=ON`; `cdlearn` is the only consumer and nothing else exercises it. |
-| `mpi` | `-DADCP_MPI=ON`, build only — no test covers the `PARALLEL` path. `adcp_mpi` was never compiled once during the entire migration. |
+| `mpi` | `-DADCP_MPI=ON`, then `ctest`. Since "Phase 2 progress — MPI unblocked" (below), this actually builds `nested.cpp`/`checkpoint_io.cpp`/`flex.cpp` with `PARALLEL` too, not just `main.cpp` — previously `adcp_mpi` linked those from the always-serial `adcp_core`. `num_ns_evidence_mpi` (`mpirun -np 4`, `--oversubscribe` for CI runners with fewer cores) is this leg's regression guard for the whole PARALLEL path. |
 | `docking` | Now `-L "docking|validation"`, not just `-L docking`. |
 
 The `No COMMON symbols` step is kept but is now **vacuous**: g++ emits no COMMON symbols for
