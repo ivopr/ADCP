@@ -1072,11 +1072,110 @@ to that test's `mpirun` invocation; confirmed locally it's a no-op when cores
 are plentiful (same pass, same output) and prevents the hard failure when
 they're not.
 
+## Phase 2 progress — Chain::aa/aat/triplet* done, reconsidered and completed
+
+"Why 3c stops where it does" (above) costed this at ~300 mechanical edits (164
+pointer-arithmetic sites for `aa`/`aat`, 82 in `metropolis.cpp`'s hot path; 117
+sites passing `xaa[i]` into a `triplet`/`matrix` parameter) and declined it,
+fixing the leaks it would have closed by hand instead. Revisited and done, in
+four commits, because the actual site count came in far under that estimate —
+worth recording exactly why, since the original estimate was reasonable given
+what was known at the time.
+
+**Step 1 — `xaa`/`xaa_prev`/`xaat`/`xaat_prev` → `std::vector<TripletBox>`.**
+`TripletBox` (`include/rotation.h`, next to the `triplet`/`matrix` typedefs it
+replaces — confirmed the same underlying `double[3][3]` type, so one wrapper
+covers both) is a trivially-copyable struct with `operator[]` and an
+`operator Row*()` conversion, so vector elements still implicitly decay into
+any function taking a `triplet`/`matrix` parameter exactly as the raw array
+elements did. This is the sub-problem "3c stops where it does" flagged as
+having *no pointer arithmetic anywhere* — confirmed true — so it needed only 9
+fixup sites tree-wide, all hand-nulling boilerplate (`temporary->xaa = NULL`
+→ `.clear()`).
+
+**Step 2 — `Chain::aa` then `Chaint::aat` → `std::vector<AA>`, two atomic
+commits.** This is the part the original estimate was about, and it *did*
+have real pointer arithmetic — but converting the type and rebuilding to let
+the compiler enumerate every broken site (rather than grepping and
+classifying by hand first) found 67 distinct sites for `aa`, 39 for `aat`,
+not "164... 82 in metropolis.cpp." Every single one was one of three
+mechanical shapes: `.data()` where a bare `AA*` was expected,
+`.data() + i` / `&chain->aa[i]` replacing real arithmetic, or `.clear()`
+replacing a hand-nulled `= NULL`. The gap between the original estimate and
+the actual count is explained by what the estimate was counting: MIGRATION.md's
+"164 pointer-arithmetic sites" appears to have counted `chain->aa[` *index*
+occurrences generally, not sites requiring rewriting — plain `chain->aa[i]`
+indexing needs no change at all under `std::vector::operator[]`, and turned
+out to be the overwhelming majority. Only actual arithmetic (`chain->aa + i`)
+or bare-pointer decay (`chain->aa` passed where `AA*` is expected) breaks.
+One genuinely non-mechanical fix: `pdbin()`'s `tempchain->aa` used to come
+straight out of `getpdb()`'s `AA**` growth-realloc. `getpdb()`/`dblalloc()`
+are left alone — shared with `tools/bfactor.cpp`'s free-standing `AA*` (not a
+`Chain` member, out of scope), and restructuring PDB-parsing code for its own
+sake is exactly the risk this migration has repeatedly declined elsewhere
+(see the `getaa` cross-call parser state note above). `pdbin()` now scratches
+into a local `AA*`/`int` pair exactly as before, then
+`tempchain->aa.assign(scratch, scratch+n)`.
+
+`aat_init`'s documented "always true" guard (`sizeof(chaint)->aat`, parsing
+as `sizeof(chaint->aat)` — `sizeof(AA*)` == 8 before this conversion, a
+compile-time constant never equal to `chain->NAA * sizeof(AA)`) is deleted
+rather than fixed, because there was nothing to fix: the guard being always
+true meant its body — the realloc/copy loop — already ran unconditionally on
+every call. Deleting it is behavior-preserving by construction; what it buys
+is that `resize()`'s own no-op-when-unchanged check now actually skips work
+where `realloc` could not reliably promise to.
+
+**Step 3 — the Chain destructor question, resolved differently than
+anticipated.** The premise for wanting one was "only then can `Chain` have a
+destructor, and the destructor is what would have retired the manual
+`freemem_chain`/`freemem_chaint` protocol and the leaks." After Steps 1 and
+2, `Chaint` has *zero* raw-pointer members left — `xaat`, `xaat_prev`, `aat`,
+`ergt` are all `std::vector`. `Chain` has exactly one: `flex_data`. This
+means the C++ language's implicit, compiler-generated destructor for both
+structs **already** correctly destroys every container member, with no
+explicit destructor code required — that is simply what happens when every
+member is self-managing. **No explicit destructor was added.** Writing an
+empty `~Chain(){}`/`~Chaint(){}` would add code that does nothing beyond what
+already happens automatically — exactly the "unrequested abstraction" this
+project's own conventions warn against.
+
+`flex_data` was deliberately left out of any destructor, for the same reason
+"3c stops where it does" originally gave for stopping short: its lifecycle is
+owned by `initialize_flex`/`finalize_flex` (`src/flex.cpp`, malloc/free pair
+at lines ~633-691), entirely separate from `freemem_chain`, which the
+document already noted "never touches it." `Chain` objects are bitwise-copied
+in many places (`copybetween`, `main.cpp`'s replica-exchange pool) without
+deep-copying `flex_data` — adding destructor-driven cleanup here would
+conflict with `finalize_flex`'s existing ownership and risk a double-free
+across those copy sites. Bringing `flex_data` under RAII is a separate,
+larger, and riskier problem than this conversion, unrelated to `aa`/`aat`/
+`triplet`, and stays out of scope.
+
+**Consequence: the leaks this would have closed were already closed by hand**
+(per "Pre-existing leaks — fixed directly," above), and now the container
+members can never leak by construction, with zero additional code. The
+`freemem_chain`/`freemem_chaint` call sites (~40, tree-wide) are not removed —
+they're harmless (an early, eager release of vector memory ahead of the
+object's actual destruction, not a correctness requirement) and retiring them
+is optional tidiness with real surface area and no payoff beyond cosmetics.
+Left alone, matching this migration's standing preference for leaving working
+code alone once the actual objective is met.
+
+**Validated, all three code-changing steps (xaa/xaat, Chain::aa, Chaint::aat),
+each independently:** default build, `-DADCP_MPI=ON`, `-DADCP_OPENMP=ON`, and
+clang all compile clean; 19/19 default `ctest`, 20/20 under `-DADCP_MPI=ON`
+(includes `num_ns_evidence_mpi`), 19/19 under ASan+UBSan,
+`func_adcp_fold_determinism` 12/12 sequential per commit. Docking regression
+per commit: seed 4242, `-r 1x250000`, redock options — ATOM records
+bit-identical (md5 `e81c2bbb82304c77af25a7e57ac03ff3`) and target energy
+unchanged (`-13.6251`) against each commit's own parent's pristine binary.
+
 ## Validation gates
 
 - **Every file conversion**: build gcc+clang, run default `ctest` (smoke + functional, ~13 tests, seconds).
 - **Any change touching `energy.cpp`, `vdw.cpp`, `metropolis.cpp`, `probe.cpp`, or `main.cpp`'s swap logic**: also configure `-DADCP_DOCKING_TESTS=ON` and run both `docking` and `validation` labels locally. CI now runs both (see below), so this is a fast local pre-check rather than the only gate. `val_3q47_redock` takes **~2 minutes** — measured at 117s, 120s and 140s. An earlier draft of this document claimed ~30 min and used that to justify leaving it out of CI; that number was wrong.
-- **`func_adcp_fold_determinism`**: run after every `energy.c`/`vdw.c` change without exception, **12×, not once**. It's the only automated determinism signal, and template-vs-function-pointer codegen changes can alter floating-point accumulation order in Monte Carlo sums (IEEE 754 non-associativity) — a determinism regression here is a blocking failure to investigate, not acceptable drift. **And per "MECHANISM RESOLVED" below, the `5660a33` hang is a latent bug that unrelated codegen changes can resurface, so the 12× hammer applies to every change in any file, not only container conversions.**
+- **`func_adcp_fold_determinism`**: run after every `energy.c`/`vdw.c` change without exception, **12×, not once**. It's the only automated determinism signal, and template-vs-function-pointer codegen changes can alter floating-point accumulation order in Monte Carlo sums (IEEE 754 non-associativity) — a determinism regression here is a blocking failure to investigate, not acceptable drift. **Scope: this is the per-file rule again.** An earlier revision made the 12× hammer mandatory for every change in any file, on the belief that the `5660a33` hang was a latent bug any codegen change could resurface. It is neither latent nor unexplained — see "ROOT CAUSE FOUND" below: it was uninitialised `model_params` fields, fixed at HEAD by `9cad378`. Keep `--repeat until-fail:12` in CI, where it is free.
 
 - **Any commit claiming "no behaviour change", including a pure rename**: prove it against
   the parent with a bit-level probe, at a workload that actually reaches the changed code.
