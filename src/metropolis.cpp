@@ -274,11 +274,18 @@ void transmutate(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, d
 		chaint->aat[j].id = chain->aa[j].id;
 		chaint->aat[j].chainid = chain->aa[j].chainid;
 		chaint->aat[j].SCRot = chain->aa[j].SCRot;
+		/* chi1/chi2 were never copied here, so the full-struct commit below
+		   (chain->aa[i] = chaint->aat[i]) silently overwrote a residue's valid
+		   side-chain dihedral with aat_init()'s uninitialized scratch memory --
+		   confirmed live via MSan on every external=5,Opt=1 docking run
+		   (crankshaft()'s chain->aa[i].chi1 read). See MIGRATION.md. */
+		chaint->aat[j].chi1 = chain->aa[j].chi1;
+		chaint->aat[j].chi2 = chain->aa[j].chi2;
 		for(int i = 0; i < 3; i++){
-			chaint->aat[j].h[i] = chain->aa[j].h[i];	
-			chaint->aat[j].n[i] =  chain->aa[j].n[i];		
-			chaint->aat[j].ca[i] = chain->aa[j].ca[i];		
-			chaint->aat[j].c[i] = chain->aa[j].c[i];		
+			chaint->aat[j].h[i] = chain->aa[j].h[i];
+			chaint->aat[j].n[i] =  chain->aa[j].n[i];
+			chaint->aat[j].ca[i] = chain->aa[j].ca[i];
+			chaint->aat[j].c[i] = chain->aa[j].c[i];
 			chaint->aat[j].o[i] = chain->aa[j].o[i];
 			chaint->aat[j].cb[i] = chain->aa[j].cb[i];
 			chaint->aat[j].g[i] = chain->aa[j].g[i];
@@ -289,7 +296,7 @@ void transmutate(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, d
 		}
 		//chaint->aat[j] = chain->aa[j];
 	}
-	
+
 
 	casttriplet(chaint->xaat[0], chain->xaa[0]);
 	for (int i = 1; i <= chain->NAA - 1; i++) {
@@ -382,6 +389,8 @@ static int transmove(Chain * chain, Chaint *chaint, Biasmap *biasmap, double amp
 		chaint->aat[j].id = chain->aa[j].id;
 		chaint->aat[j].chainid = chain->aa[j].chainid;
 		chaint->aat[j].SCRot = chain->aa[j].SCRot;
+		chaint->aat[j].chi1 = chain->aa[j].chi1;
+		chaint->aat[j].chi2 = chain->aa[j].chi2;
 		for(i = 0; i < 3; i++){
 
 
@@ -550,11 +559,13 @@ int transopt(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, doubl
 		chaint->aat[j].id = chain->aa[j].id;
 		chaint->aat[j].chainid = chain->aa[j].chainid;
 		chaint->aat[j].SCRot = chain->aa[j].SCRot;
+		chaint->aat[j].chi1 = chain->aa[j].chi1;
+		chaint->aat[j].chi2 = chain->aa[j].chi2;
 		for(i = 0; i < 3; i++){
-			chaint->aat[j].h[i] = chain->aa[j].h[i];	
-			chaint->aat[j].n[i] =  chain->aa[j].n[i];		
-			chaint->aat[j].ca[i] = chain->aa[j].ca[i];		
-			chaint->aat[j].c[i] = chain->aa[j].c[i];		
+			chaint->aat[j].h[i] = chain->aa[j].h[i];
+			chaint->aat[j].n[i] =  chain->aa[j].n[i];
+			chaint->aat[j].ca[i] = chain->aa[j].ca[i];
+			chaint->aat[j].c[i] = chain->aa[j].c[i];
 			chaint->aat[j].o[i] = chain->aa[j].o[i];
 			chaint->aat[j].cb[i] = chain->aa[j].cb[i];
 			chaint->aat[j].g[i] = chain->aa[j].g[i];

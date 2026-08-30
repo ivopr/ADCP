@@ -832,6 +832,8 @@ void aat_init(Chain * chain, Chaint * chaint){
 	  (chaint)->aat[i].num = chain->aa[i].num;
 	  (chaint)->aat[i].chainid = chain->aa[i].chainid;
 	  (chaint)->aat[i].SCRot = chain->aa[i].SCRot;
+	  (chaint)->aat[i].chi1 = chain->aa[i].chi1;
+	  (chaint)->aat[i].chi2 = chain->aa[i].chi2;
     }
   }	
   if(sizeof(chaint)->xaat_prev != (chain->Nchains+1) * sizeof(triplet)){
