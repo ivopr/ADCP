@@ -179,7 +179,18 @@ static double calculateRMSD(Chain *chain, Chain *chain2)
 void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params *sim_params)
 {
 	unsigned int i, j, k = sim_params->intrvl;
-	double temp;
+	/* Confirmed read-before-write via MSan+origin-tracking: allowed()'s
+	   `*currE -= internalloss + externalloss;` (metropolis.cpp) reads this
+	   before simulate() ever writes it. Provably inert at every reproduction
+	   tried (its result is never read back by anything that branches, and a
+	   sentinel-value test with temp seeded to two very different literals
+	   produced identical output) -- fixed anyway, as defense in depth, the
+	   same way the chi1/chi2 fix was kept even though it self-corrects at
+	   real search budgets. See MIGRATION.md. Seeded to totenergy(chain),
+	   matching *currE's contract as a running energy total, and matching
+	   this function's own dead code at the totenergy(chain) assignment
+	   further down for the non-opt==1 path. */
+	double temp = totenergy(chain);
 	Chain *chain2 = new Chain{};
 	allocmem_chain(chain2,chain->NAA,chain->Nchains);
 

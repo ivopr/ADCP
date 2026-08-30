@@ -1454,7 +1454,93 @@ below the self-correction point, alongside the nested-sampling point-seeding fix
 identical bug and is not being touched — it is frozen upstream, kept only as the
 comparison baseline in `docs/compares/`.
 
-## Measured against pristine upstream — the whole migration, end to end
+## CONFIRMED — the seed-10 divergence mechanism, and a separate defense-in-depth fix
+
+`docs/compares/2.md`/`3.md` established that pristine and current HEAD produce a
+stable-but-different docking result at seed 10 past ~20,000–25,000 steps under the
+redocking option set, proved it was undefined behavior via an isolation experiment
+(resizing pristine's `swapChains` array, with nothing else touched, flips pristine's
+value to match current HEAD's), but never identified *which* variable was actually
+being corrupted or read. This session pinned it down directly, with sanitizer
+evidence, rather than by inference.
+
+**The mechanism, confirmed by UBSan on a from-scratch pristine build
+(`-fsanitize=undefined -fno-sanitize-recover=all`).** Pristine's pool-initialization
+loop (`main.c`, inside `simulate()`'s `opt==1` block):
+
+```c
+int swapLength = 10;
+...
+Chain* swapChains[swapLength];          // 10 slots, indices 0-9
+...
+for (int i = 0; i < swapLength + 1; i++) {   // 11 iterations, i = 0..10
+    swapChains[i] = (Chain *)malloc(sizeof(Chain));
+    ...
+}
+```
+
+fires `runtime error: index 10 out of bounds for type 'Chain *[*]'` at the `malloc`
+assignment line, on **every single run**, unconditionally, before a single Monte
+Carlo step happens — not gated behind `swapMutateSteps` (200,000) the way the
+*read* of that slot is. This is `7e2192d`'s already-documented `swapChains`
+off-by-one, but the previously-recorded explanation ("that slot is never touched
+below step 200,000... something else in the frame is read before it's written")
+was incomplete: the corrupting *write* happens at startup regardless of step count,
+storing a valid 8-byte heap pointer one slot past the array's bounds into whatever
+stack memory the compiler placed next — which is exactly why resizing the array
+(shifting what's adjacent) changes the observable result. Confirmed empirically:
+current HEAD, built with the identical ASan+UBSan flags and run against the
+identical seed-10 reproduction, is completely clean (0 errors) — `7e2192d`'s fix
+(sizing both `swapChains` and `swapEnergy` to `swapLength + 1`) already closes this
+for good. **No current-HEAD code change was needed for this mechanism; this section
+records the confirmed explanation, not a new fix.**
+
+**A separate, real, but confirmed-inert bug found along the way, fixed anyway.**
+Static analysis (cataloguing every local in `simulate()`) flagged `double temp;`
+(`src/main.cpp:182`, no initializer) as the leading candidate before the mechanism
+above was confirmed: its address is passed as `currE` into `move()` on every step,
+and `allowed()` (`src/metropolis.cpp:252`) does `*currE -= internalloss +
+externalloss;` — a read of `*currE` before `simulate()` ever writes it. Two
+independent checks ruled this out as the seed-10 cause: (1) origin-tracking MSan
+(`-fsanitize-memory-track-origins=2`) reproductions at both the original 25,000-step
+budget and a step count narrowed to the exact divergence boundary (22,090 clean,
+22,095 diverges) found zero reports anywhere near `temp`/`simulate()`, on either
+binary; (2) a binary built with `temp` seeded to two wildly different sentinel
+literals (`0.0`, `1e6`) produced identical output (`-11.9092`) in both cases,
+matching unfixed HEAD exactly — `*currE`'s post-write value is never read again by
+`allowed()`, `move()`, or `simulate()` (the only conditional read of `*currE`,
+`metropolis.cpp:229`, is gated by `sim_params->NS`, which is always `0` for this
+docking option set). `temp` is real, confirmed UB — but provably cannot reach a
+branch in this configuration.
+
+**Fixed anyway, as defense in depth**, matching the `chi1`/`chi2` precedent (fixed
+even though it self-corrects at real budgets): `double temp = totenergy(chain);` at
+`src/main.cpp:182`, seeding it to match `*currE`'s contract as a running energy
+total — the same literal a commented-out fossil at `main.cpp:601` already used in a
+different branch of this function, evidence a past author knew this was the right
+value.
+
+**Verification.**
+
+| check | before | after |
+|---|---|---|
+| `ctest --test-dir build` | — | 19/19 |
+| `func_adcp_fold_determinism --repeat until-fail:12` | — | 12/12; fold ATOM md5 unchanged (`6a438d0a673006235fccd2b1b7007ba3`) — fold never reaches the `opt==1` path |
+| `ctest --test-dir build-dock -L "docking\|validation"` | — | 3/3 |
+| `dock_3q47_smoke` (seed 4242, 250,000 steps) | extE -18.718639, final energy 1.655320 | **unchanged** |
+| `val_3q47_redock` (16 seeds × 2,500,000 steps) | targetE -28.5508, RMSD 0.66 Å | **unchanged** |
+| ATOM records, seed 4242, 250,000 steps | md5 `e81c2bbb82304c77af25a7e57ac03ff3` | **bit-identical** |
+| seed 10, 25,000 steps, redocking options | `-11.9092` | **unchanged** — confirms `temp` really is inert, not coincidentally equal at one budget |
+| `ctest --test-dir build-asan` (ASan+UBSan) | — | 19/19 |
+| origin-tracking MSan, seed 10, 25,000 steps | 2 known `fopen`-adjacent false positives | same 2, no new reports |
+
+Unlike `chi1`/`chi2`, fixing `temp` changes **nothing observable at any budget
+tested**, including the exact seed-10/25,000-step reproduction where it was found —
+consistent with the causal-inertness finding above, not a gap in validation.
+
+**Pristine was not touched.** It still has both the `swapChains` off-by-one and a
+bare `double temp;` in the identical relative position — frozen, as always, as the
+comparison baseline.
 
 Every claim above compares a commit against its parent. HEAD has also been measured
 against `1c1a330` ("added license stuff", 2025-10-28) — the last upstream commit,
