@@ -561,7 +561,9 @@ int read_in_after_flex(Chain *chain,Biasmap *biasmap,Chain *input_chains,simulat
 
   FILE *fptr2;
   char rmsd_filename[DEFAULT_LONG_STRING_LENGTH];
-  sprintf(rmsd_filename,"%srmsd", sim_params->flex_params.output_path.c_str());
+  if (snprintf(rmsd_filename, sizeof(rmsd_filename), "%srmsd",
+               sim_params->flex_params.output_path.c_str()) >= (int)sizeof(rmsd_filename))
+    stop("FLEX output path is too long to build the rmsd filename.");
   fptr2 = fopen(rmsd_filename,"r");
 
   double *rmsd_temp = (double*)malloc(sizeof(double)*sim_params->flex_params.size_of_filename_to_read_in);
@@ -830,7 +832,10 @@ void ns_for_flex_processor(MPI_Comm FLEX_WORLD, int rank, Biasmap *biasmap, simu
     int k = system(cmd);
     if (k != 0) stop("system returned non-0 exit status.");
 
-    sprintf(cmd,"%sremove_flex.sh %s",sim_params->flex_params.flex_dir.c_str(),sim_params->flex_params.output_path.c_str());
+    if (snprintf(cmd, sizeof(cmd), "%sremove_flex.sh %s",
+                 sim_params->flex_params.flex_dir.c_str(),
+                 sim_params->flex_params.output_path.c_str()) >= (int)sizeof(cmd))
+      stop("FLEX dir/output path is too long to build the remove_flex.sh command.");
     k = system(cmd);
     if (k != 0) stop("system returned non-0 exit status.");
 
