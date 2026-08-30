@@ -1254,6 +1254,98 @@ present in the pre-migration C. Fixed in `8392e34`; output byte-identical.
 Two real bugs within minutes of the sanitizer leg first existing is the argument for having
 built it in Phase 1, as this document originally recommended.
 
+## FIXED — `chi1`/`chi2` uninitialized-value bug (MSan), pre-existing since pristine
+
+Found by a manual MemorySanitizer build of `adcp` (not the CI `msan` job — that one is
+scoped to two stdin-only tools, see "CI hardening" above, precisely because it cannot run
+this binary without a known, unrelated `fopen()`-interceptor false positive). Full
+derivation in [docs/compares/2.md](docs/compares/2.md). Summary here, plus the fix.
+
+**The bug.** `crankshaft()` reads `chain->aa[i].chi1` uninitialized
+([src/metropolis.cpp:727](src/metropolis.cpp#L727)) on every docking run using
+`external=5` combined with `Opt=1` — i.e. essentially every production docking
+configuration (`tests/run_dock_test.sh`'s own comment: this option set matches
+`scripts/runADCP.py`'s production usage). Present, byte-identical, in true pristine C
+too (`metropolis.c:732`, same call chain `crankshaft → move → simulate → main`) — this
+predates the C++ migration by 12 commits and is neither introduced nor previously fixed
+by it.
+
+**Root cause.** `crankshaft()`/`crankshaftcyclic()` are innocent — both are self-healing,
+always overwriting `chaint->aat[i].chi1`/`.chi2` themselves (freshly sampled or copied
+from `chain->aa[i]`) before ever reading them back; they're just where MSan happens to
+catch the *symptom*. The actual writers are three near-identical functions, all
+docking-only (`external_potential_type == 5` gate at the top of each, so folding never
+reaches them): `transmutate()`, `transmove()`, `transopt()` in
+[src/metropolis.cpp](src/metropolis.cpp). Each manually copies a subset of `AA` fields
+from `chain->aa[j]` into a scratch `chaint->aat[j]` (`id`/`etc`/`num`/`chainid`/`SCRot`
+plus coordinates) — omitting `chi1`/`chi2` — with a suggestive commented-out
+`//chaint->aat[j] = chain->aa[j];` (a full-struct copy) sitting right next to the
+incomplete list in all three, showing someone deliberately narrowed the copy at some
+point and missed two fields. Each function later commits the proposed move with a
+**full struct assignment**, `chain->aa[i] = chaint->aat[i]` — since `AA`
+([include/peptide.h:46-67](include/peptide.h#L46-L67)) is a plain C struct with no
+user-defined copy assignment, this copies *every* member, silently overwriting
+`chain->aa[i]`'s previously-valid dihedral angles (correctly set once per residue by
+`initialise_sidechain_dihedral_angles()` during `build_peptide_from_sequence()`, which
+is exhaustive and untouched by this bug) with whatever garbage sat in `chaint->aat`.
+That garbage originates in `aat_init()` ([src/peptide.cpp:823-838](src/peptide.cpp#L823-L838)),
+the sole allocator of `chaint->aat` (raw `AA*`, grown via `realloc`), which has the
+identical omission and a separately-documented, already-known "always true" guard bug
+that makes it re-run on every call.
+
+Checked and ruled out as a fourth site: `rotate_cyclic()` has the same bare copy, but
+always rebuilds geometry via `acidate()` before committing, and `acidate()`
+unconditionally sets `chi1`/`chi2` (computed or the `DBL_MAX` sentinel) — never garbage.
+
+Checked and confirmed **not required**: `src/flex.cpp`'s `initialize_flex()` and
+`src/nested.cpp`'s nested-sampling `chaincopies` setup have the same anti-pattern shape,
+but every consumer of those arrays is preceded by `copybetween()` or
+`mpi_send_chain`/`mpi_rec_chain`, both of which correctly copy `chi1`/`chi2` before
+first use. Left untouched — bundling an NS/MPI-path change with effectively zero test
+coverage into the fix for a confirmed, well-tested bug is the wrong trade.
+
+**The fix.** Five lines total: `chi1`/`chi2` added to the copy loops in `transmutate()`,
+`transmove()`, `transopt()` (`src/metropolis.cpp`), plus the same two lines in
+`aat_init()` (`src/peptide.cpp`) as defense in depth. No shared-helper refactor — this
+repo's history (`c1c488d`, the tools/ batch, the `sqrt`-precision fix) consistently
+ships narrow single-purpose diffs and treats refactors as separate, deliberately-scoped
+commits; `transopt()`'s own existing comment ([src/metropolis.cpp:582-597](src/metropolis.cpp#L582-L597))
+already declines a similar temptation for the same reason.
+
+**Verification.**
+
+| check | before | after |
+|---|---|---|
+| MSan, seed 10, `external=5,Opt=1`, 25,000 steps | `use-of-uninitialized-value` at `crankshaft`, `metropolis.cpp:727` | 0 occurrences (seeds 10 and 11) — only the known `fopen` false positive remains |
+| same run, completion | died partway through (MSan's continue-past-error support is best-effort) | "successfully finished," full output |
+| `ctest --test-dir build` | — | 18/18 |
+| `func_adcp_fold_determinism --repeat until-fail:12` | — | 12/12, byte-identical before/after (fold never reaches these functions) |
+| `ctest --test-dir build-dock -L "docking\|validation"` | — | 3/3 |
+| `dock_3q47_smoke` (seed 4242, 250,000 steps) | extE -18.718639, final energy 1.655320 | **unchanged** |
+| `val_3q47_redock` (16 seeds × 2,500,000 steps) | targetE -28.5508, RMSD 0.66 Å | **unchanged** |
+
+**The interesting nuance, worth stating precisely rather than assuming.** The fix
+*does* change output at the budget where the bug was found (seed 10, 25,000 steps:
+`-15.3654` unfixed/pristine-matching vs `-11.9092` fixed) — but at both budgets this
+repo's own test suite actually checks (250,000 steps single-seed; the full 2,500,000-step
+16-seed production ensemble), the result is bit-for-bit unchanged. The likely reason:
+`crankshaft()` resamples `chi1` with probability 1/4 on every subsequent step regardless
+of what it inherited, so a one-time corruption from the initial `transmutate()` call
+gets naturally overwritten within the first few thousand steps of any real search — the
+corruption is real and MSan-detectable, but self-correcting at the timescales this
+project's own validated protocol runs at. That does **not** make the fix optional: the
+corrupted value's exact bit pattern is genuinely undefined behavior (uninitialized
+`realloc`'d memory), not guaranteed to self-correct the same way under a different
+compiler, allocator, or build flags, and it does measurably affect shorter/intermediate
+runs — which is exactly why an uninitialized-memory sanitizer, not a numerical
+regression test, is what caught it.
+
+**This is a third deliberate, documented divergence from pristine** for docking budgets
+below the self-correction point, alongside the nested-sampling point-seeding fix
+(`35fb3fb`) and the `sqrt`-precision fix (`5660a33`'s fix) above. Pristine has the
+identical bug and is not being touched — it is frozen upstream, kept only as the
+comparison baseline in `docs/compares/`.
+
 ## Measured against pristine upstream — the whole migration, end to end
 
 Every claim above compares a commit against its parent. HEAD has also been measured
