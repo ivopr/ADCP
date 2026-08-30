@@ -815,18 +815,24 @@ void amidorient(triplet x, AA *a, AA *b)
 	eulerset(x, alpha, beta, gamma);
 }
 
-/* NOTE: the guard below is still the broken `sizeof(chaint)->aat`, which parses
-   as sizeof(AA*) == 8 and is therefore always true, so the aat/xaat reallocs run
-   on every call. Those two are still raw pointers (see the triplet note in
-   peptide.h), so the guard still cannot be written correctly here. ergt no
-   longer cares: resize() is a genuine no-op when the size already matches. */
+/* aat/xaat/xaat_prev/ergt are all std::vector now, and the old guard
+   (`sizeof(chaint)->aat`, parsing as sizeof(AA*) == 8, always true) is gone --
+   this body runs unconditionally on every call, exactly as the broken guard
+   already made it do. resize() is a genuine no-op when the size already
+   matches, so that's no longer a cost either. */
 void aat_init(Chain * chain, Chaint * chaint){
-  if(sizeof(chaint)->aat != chain->NAA * sizeof(AA)){
-    (chaint)->aat = (AA *) realloc((chaint)->aat, chain->NAA * sizeof(AA));
-    (chaint)->xaat.resize(chain->NAA);
-    (chaint)->ergt.resize(5 * (size_t)chain->NAA * chain->NAA);
-    int i;	
-    for (i = 1; i < chain->NAA; i++) {
+  /* No guard here any more -- the old one (sizeof(chaint)->aat, parsing as
+     sizeof(chaint->aat) == sizeof(AA*) == 8, a compile-time constant) was
+     always true, so this body already ran unconditionally on every call.
+     Deleting the guard changes nothing behaviorally; what it buys is that
+     resize()/the copy loop are now honestly unconditional in the source,
+     and resize() itself is a real no-op when the size already matches,
+     where realloc was not. */
+  (chaint)->aat.resize(chain->NAA);
+  (chaint)->xaat.resize(chain->NAA);
+  (chaint)->ergt.resize(5 * (size_t)chain->NAA * chain->NAA);
+  int i;
+  for (i = 1; i < chain->NAA; i++) {
 	  (chaint)->aat[i].id = chain->aa[i].id;
 	  (chaint)->aat[i].etc = chain->aa[i].etc;
 	  (chaint)->aat[i].num = chain->aa[i].num;
@@ -834,8 +840,7 @@ void aat_init(Chain * chain, Chaint * chaint){
 	  (chaint)->aat[i].SCRot = chain->aa[i].SCRot;
 	  (chaint)->aat[i].chi1 = chain->aa[i].chi1;
 	  (chaint)->aat[i].chi2 = chain->aa[i].chi2;
-    }
-  }	
+  }
   /* resize() is a real no-op when the size already matches, unlike the old
      guard above it (sizeof(chaint)->xaat_prev parses as
      sizeof(chaint->xaat_prev) == sizeof(triplet*), a compile-time constant --
@@ -1596,10 +1601,8 @@ void freemem_chain(Chain *chain)
 void freemem_chaint(Chaint *chaint)
 {
 	if(chaint){
-	    if (chaint->aat) {
-		free(chaint->aat);
-		chaint->aat = NULL;
-	    }
+	    chaint->aat.clear();
+	    chaint->aat.shrink_to_fit();
 	    chaint->ergt.clear();
 	    chaint->ergt.shrink_to_fit();
 	    chaint->xaat.clear();

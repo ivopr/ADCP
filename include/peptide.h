@@ -90,7 +90,7 @@ typedef struct _Chain {
 typedef struct _Chaint {
 	std::vector<TripletBox> xaat;
 	std::vector<TripletBox> xaat_prev; //previous xaa for chain start only
-	AA *aat = nullptr;
+	std::vector<AA> aat;
 	std::vector<double> ergt;
 } Chaint;
 

@@ -1234,7 +1234,7 @@ double sbond_energy(int start, int end, Chain *chain,  Chaint *chaint, Biasmap *
   vector *cyspos = (vector*)malloc(number_of_cys*sizeof(vector));
   for(i = 0; i < number_of_cys; i++){
 	if(cyslist[i] <= end && cyslist[i] >= start){
-	  a = chaint->aat + cyslist[i];  
+	  a = chaint->aat.data() + cyslist[i];  
 	}
 	else{
 	  a = chain->aa.data() + cyslist[i];  
@@ -1260,7 +1260,7 @@ double sbond_energy(int start, int end, Chain *chain,  Chaint *chaint, Biasmap *
 	
 	
 	if(cyslist[i] <= end && cyslist[i] >= start){
-		a = chaint->aat + cyslist[i];  
+		a = chaint->aat.data() + cyslist[i];  
 	}
 	else{
 	  a = chain->aa.data() + cyslist[i];  
@@ -1278,7 +1278,7 @@ double sbond_energy(int start, int end, Chain *chain,  Chaint *chaint, Biasmap *
 	  if(nearestj == -1) done = 1;
 	  else{
 		if(cyslist[nearestj] <= end && cyslist[nearestj] >= start){
-		  b = chaint->aat + cyslist[nearestj];  
+		  b = chaint->aat.data() + cyslist[nearestj];  
 	    }
 	    else{
 		  b = chain->aa.data() + cyslist[nearestj];  
@@ -2014,7 +2014,7 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 
 	for (i = 1; i <= chain->NAA-1; i++){
 		if (chaint!=NULL && indMoved(i, start, (end-1)%(chain->NAA-1)+1 )) {
-			a = chaint->aat + i;
+			a = chaint->aat.data() + i;
 		}
 		else {
 			a = chain->aa.data() + i;
@@ -2082,11 +2082,11 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 				i = end - j + start;
 
 			if (chaint!=NULL)
-				a = chaint->aat + (1 + (i-1)%(chain->NAA-1));
+				a = chaint->aat.data() + (1 + (i-1)%(chain->NAA-1));
 			else
 				a = chain->aa.data() + (1 + (i-1)%(chain->NAA-1));
 			//if (chaint!=NULL)
-			//	a = chaint->aat + i;
+			//	a = chaint->aat.data() + i;
 			//else
 			//	a = chain->aa.data() + i;
 
@@ -2645,8 +2645,8 @@ double global_energy(int start, int end, Chain *chain, Chaint *chaint, Biasmap *
   for (int i = 1; i < chain->NAA; i++){
 	vector com;
 	if( i <= end && i >= start){ /* changed peptide section */
-		add(com, ((chaint->aat) + i)->ca, ((chaint->aat) + i)->n);
-		add(com, com, ((chaint->aat) + i)->c);
+		add(com, (chaint->aat.data() + i)->ca, (chaint->aat.data() + i)->n);
+		add(com, com, (chaint->aat.data() + i)->c);
 	} else {
 		add(com, (chain->aa.data() + i)->ca, (chain->aa.data() + i)->n);
 		add(com, com, (chain->aa.data() + i)->c);
@@ -2664,7 +2664,7 @@ double global_energy(int start, int end, Chain *chain, Chaint *chaint, Biasmap *
 		//fprintf(stderr,"external energy3 %g\n", ee);
 	}
 	else if(i <= end && i >= start){ /* changed peptide section */
-		ee = external((chaint->aat) + i, mod_params, mol_com);
+		ee = external(chaint->aat.data() + i, mod_params, mol_com);
 		//chaint->Ergt(0, i) = ee;
 		//fprintf(stderr,"external energy3 %g\n", ee);
 	} else {

@@ -83,36 +83,36 @@ static int allowed(Chain *chain, Chaint *chaint, Biasmap* biasmap, int start, in
 	for (i = start; i <= end; i++){
 		for (j = 1; j < chain->NAA; j++) {
 			if (j == reModNum(i, chain->NAA-1)){
-				q = energy1(chaint->aat + j, &(sim_params->protein_model));
+				q = energy1(chaint->aat.data() + j, &(sim_params->protein_model));
 				if ( ( j==1 || j==chain->NAA-1)){
 					if (sim_params->protein_model.external_potential_type2 != 4)
 						q += 0;
 					else if (j==1 && indMoved(2,start,reModNum(end,chain->NAA-1)) && linked)
-						q += ramabias(chaint->aat + chain->NAA - 1, chaint->aat + 1, chaint->aat + 2);
+						q += ramabias(chaint->aat.data() + chain->NAA - 1, chaint->aat.data() + 1, chaint->aat.data() + 2);
 					else if (j==1 && linked)
-						q += ramabias(chaint->aat + chain->NAA - 1, chaint->aat + 1, chain->aa.data() + 2);	
+						q += ramabias(chaint->aat.data() + chain->NAA - 1, chaint->aat.data() + 1, chain->aa.data() + 2);	
 					else if (j==1)
-						q += ramabias(chain->aa.data() + chain->NAA - 1, chaint->aat + 1, chaint->aat + 2);	
+						q += ramabias(chain->aa.data() + chain->NAA - 1, chaint->aat.data() + 1, chaint->aat.data() + 2);	
 					else if (j==chain->NAA-1 && indMoved(chain->NAA-1,start,reModNum(end,chain->NAA-1)) && linked)
-						q += ramabias(chaint->aat + j - 1, chaint->aat + j, chaint->aat +1);
+						q += ramabias(chaint->aat.data() + j - 1, chaint->aat.data() + j, chaint->aat.data() +1);
 					else if (j==chain->NAA-1 && linked)
-						q += ramabias(chain->aa.data() + j - 1, chaint->aat + j, chaint->aat +1);
+						q += ramabias(chain->aa.data() + j - 1, chaint->aat.data() + j, chaint->aat.data() +1);
 					else
-						q += ramabias(chaint->aat + j - 1, chaint->aat + j, chain->aa.data() +1);
+						q += ramabias(chaint->aat.data() + j - 1, chaint->aat.data() + j, chain->aa.data() +1);
 				} else if (i == start)
-					q += ramabias(chain->aa.data() + reModNum(i-1, chain->NAA-1), chaint->aat + reModNum(i, chain->NAA-1), chaint->aat + reModNum(i+1, chain->NAA-1));
+					q += ramabias(chain->aa.data() + reModNum(i-1, chain->NAA-1), chaint->aat.data() + reModNum(i, chain->NAA-1), chaint->aat.data() + reModNum(i+1, chain->NAA-1));
 				else if (i == end)
-					q += ramabias(chaint->aat + reModNum(i-1, chain->NAA-1), chaint->aat + reModNum(i, chain->NAA-1), chain->aa.data() + reModNum(i+1, chain->NAA-1));
+					q += ramabias(chaint->aat.data() + reModNum(i-1, chain->NAA-1), chaint->aat.data() + reModNum(i, chain->NAA-1), chain->aa.data() + reModNum(i+1, chain->NAA-1));
 				else
-					q += ramabias(chaint->aat + reModNum(i-1, chain->NAA-1), chaint->aat + reModNum(i, chain->NAA-1), chaint->aat + reModNum(i+1, chain->NAA-1));
+					q += ramabias(chaint->aat.data() + reModNum(i-1, chain->NAA-1), chaint->aat.data() + reModNum(i, chain->NAA-1), chaint->aat.data() + reModNum(i+1, chain->NAA-1));
 			} 
 			else if (indMoved(j,start,reModNum(end,chain->NAA-1))){
 				if ((reModNum(i, chain->NAA-1) == 1 && j == chain->NAA-1 && sim_params->protein_model.external_potential_type2 == 4)) {
-					q = energy2cyclic(biasmap,chaint->aat + 1, chaint->aat + chain->NAA - 1, &(sim_params->protein_model));
+					q = energy2cyclic(biasmap,chaint->aat.data() + 1, chaint->aat.data() + chain->NAA - 1, &(sim_params->protein_model));
 					chaint->Ergt(j, reModNum(i, chain->NAA-1)) = q;
 				} else if(j > reModNum(i, chain->NAA-1)) {
 					//fprintf(stderr,"MC move q = %d %d, loss = %d %d haha %d %d,",i,j,start,end,indMoved(j,start,reModNum(end,chain->NAA-1)),linked);
-					q = energy2(biasmap,(chaint->aat) + reModNum(i, chain->NAA-1), (chaint->aat) + j, &(sim_params->protein_model));
+					q = energy2(biasmap,chaint->aat.data() + reModNum(i, chain->NAA-1), chaint->aat.data() + j, &(sim_params->protein_model));
 					if (j < start && linked) {
 						//fprintf(stderr,"aaa move q = %d %d, loss = %d %d haha %d %d,\n",i,j,start,end,indMoved(j,start,reModNum(end,chain->NAA-1)),linked);
 						chaint->Ergt(j + chain->NAA-1, reModNum(i, chain->NAA-1)) = q;
@@ -121,17 +121,17 @@ static int allowed(Chain *chain, Chaint *chaint, Biasmap* biasmap, int start, in
 						chaint->Ergt(j, reModNum(i, chain->NAA-1)) = q;
 					}
 				} else {
-					//q = energy2(biasmap,(chaint->aat) + reModNum(i, chain->NAA-1), (chaint->aat) + j, &(sim_params->protein_model));
+					//q = energy2(biasmap,chaint->aat.data() + reModNum(i, chain->NAA-1), chaint->aat.data() + j, &(sim_params->protein_model));
 					//chaint->Ergt(reModNum(i, chain->NAA-1), j) = chaint->Ergt(j, reModNum(i, chain->NAA-1));
 					continue;
 				}
 			} else {
 				if (j == 1 && i == chain->NAA-1 && sim_params->protein_model.external_potential_type2 == 4)
-					q = energy2cyclic(biasmap,chain->aa.data() + 1, chaint->aat + chain->NAA - 1, &(sim_params->protein_model));
+					q = energy2cyclic(biasmap,chain->aa.data() + 1, chaint->aat.data() + chain->NAA - 1, &(sim_params->protein_model));
 				else if (i == 1 && j == chain->NAA-1 && sim_params->protein_model.external_potential_type2 == 4)
-					q = energy2cyclic(biasmap,chaint->aat + 1, chain->aa.data() + chain->NAA - 1, &(sim_params->protein_model));
+					q = energy2cyclic(biasmap,chaint->aat.data() + 1, chain->aa.data() + chain->NAA - 1, &(sim_params->protein_model));
 				else
-					q = energy2(biasmap,chaint->aat + reModNum(i, chain->NAA-1), chain->aa.data() + j, &(sim_params->protein_model));
+					q = energy2(biasmap,chaint->aat.data() + reModNum(i, chain->NAA-1), chain->aa.data() + j, &(sim_params->protein_model));
 			}
 
 			chaint->Ergt(i, j) = q;
@@ -172,11 +172,11 @@ static int allowed(Chain *chain, Chaint *chaint, Biasmap* biasmap, int start, in
 	/*special cyclic*/  // needs attention !!! sign might be wrong...!!!GARY HACK
 	if (sim_params->protein_model.external_potential_type2 == 4) {
 		if (linked)
-			cyclicBondEnergy = cyclic_energy((chaint->aat) + 1, (chaint->aat) + chain->NAA - 1, 0);
+			cyclicBondEnergy = cyclic_energy(chaint->aat.data() + 1, chaint->aat.data() + chain->NAA - 1, 0);
 		else if (start == 1)
-			cyclicBondEnergy = cyclic_energy((chaint->aat) + 1, chain->aa.data() + chain->NAA - 1, 0);
+			cyclicBondEnergy = cyclic_energy(chaint->aat.data() + 1, chain->aa.data() + chain->NAA - 1, 0);
 		else if (end == chain->NAA-1)
-			cyclicBondEnergy = cyclic_energy(chain->aa.data() + 1, (chaint->aat) + chain->NAA - 1, 0);
+			cyclicBondEnergy = cyclic_energy(chain->aa.data() + 1, chaint->aat.data() + chain->NAA - 1, 0);
 		else
 			cyclicBondEnergy = cyclic_energy(chain->aa.data() + 1, chain->aa.data() + chain->NAA - 1, 0);
 		externalloss += chain->Erg(1, 0) - cyclicBondEnergy;
@@ -680,7 +680,7 @@ int transopt(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, doubl
 		}
 
 		//for (int i = 1; i <= chain->NAA -1; i++) {
-		//	fprintf(stderr, " %d", (chaint->aat + i)->SCRot);
+		//	fprintf(stderr, " %d", (chaint->aat.data() + i)->SCRot);
 		//}
 		//fprintf(stderr," transopt %g %g %g %g %g %d!!!\n", currExtE, extE ,movement[0] ,movement[1], movement[2], noImprovStep);
 	}
@@ -1034,13 +1034,13 @@ static int crankshaft(Chain * chain, Chaint *chaint, Biasmap *biasmap, double am
 	/* build trial amino acid CAs using the CA-CA vectors */
 	if (pivot_around_end != 1) { // start rotation from the start site
 		for (int i = start; i < end - 1; i++){ //moving residues start+1 to end-1
-			carbonate_f(chaint->aat + i + 1, chaint->aat + i, chaint->xaat[i]);
+			carbonate_f(chaint->aat.data() + i + 1, chaint->aat.data() + i, chaint->xaat[i]);
 		}
 		if (pivot_around_start == 1) end --;
 	}
 	else { //pivot around end
 		for (int i = end - 1; i > start; i--){ //moving residues end-1 to start+1
-			carbonate_b(chaint->aat + i, chaint->aat + i + 1, chaint->xaat[i]);
+			carbonate_b(chaint->aat.data() + i, chaint->aat.data() + i + 1, chaint->xaat[i]);
 		}
 		start ++;
 	}
@@ -1065,11 +1065,11 @@ static int crankshaft(Chain * chain, Chaint *chaint, Biasmap *biasmap, double am
 			//use this chain's xaa_prev for the the direction of the N-terminal NH
 			//fprintf(stderr,"acidate %d with xaat_prev1 %g %g %g %g %g %g %g %g %g\n",i,chaint->xaat_prev[chain->aa[i].chainid][0][0],chaint->xaat_prev[chain->aa[i].chainid][0][1],chaint->xaat_prev[chain->aa[i].chainid][0][2],chaint->xaat_prev[chain->aa[i].chainid][1][0],chaint->xaat_prev[chain->aa[i].chainid][1][1],chaint->xaat_prev[chain->aa[i].chainid][1][2],chaint->xaat_prev[chain->aa[i].chainid][2][0],chaint->xaat_prev[chain->aa[i].chainid][2][1],chaint->xaat_prev[chain->aa[i].chainid][2][2]);
 			//fprintf(stderr,"acidate %d with xaat2 %g %g %g %g %g %g %g %g %g\n",i,chaint->xaat[i][0][0],chaint->xaat[i][0][1],chaint->xaat[i][0][2],chaint->xaat[i][1][0],chaint->xaat[i][1][1],chaint->xaat[i][1][2],chaint->xaat[i][2][0],chaint->xaat[i][2][1],chaint->xaat[i][2][2]);
-			acidate(chaint->aat + i, chaint->xaat_prev[chain->aa[i].chainid], chaint->xaat[i], sim_params);
+			acidate(chaint->aat.data() + i, chaint->xaat_prev[chain->aa[i].chainid], chaint->xaat[i], sim_params);
 		} else {
 			//fprintf(stderr,"acidate %d with xaat1 %g %g %g %g %g %g %g %g %g\n",i,chaint->xaat[i-1][0][0],chaint->xaat[i-1][0][1],chaint->xaat[i-1][0][2],chaint->xaat[i-1][1][0],chaint->xaat[i-1][1][1],chaint->xaat[i-1][1][2],chaint->xaat[i-1][2][0],chaint->xaat[i-1][2][1],chaint->xaat[i-1][2][2]);
 			//fprintf(stderr,"acidate %d with xaat2 %g %g %g %g %g %g %g %g %g\n",i,chaint->xaat[i][0][0],chaint->xaat[i][0][1],chaint->xaat[i][0][2],chaint->xaat[i][1][0],chaint->xaat[i][1][1],chaint->xaat[i][1][2],chaint->xaat[i][2][0],chaint->xaat[i][2][1],chaint->xaat[i][2][2]);
-			acidate(chaint->aat + i, chaint->xaat[i - 1], chaint->xaat[i], sim_params);
+			acidate(chaint->aat.data() + i, chaint->xaat[i - 1], chaint->xaat[i], sim_params);
 		}
 	}
 
@@ -1214,13 +1214,13 @@ static int crankshaftcyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, dou
 	/* build trial amino acid CAs using the CA-CA vectors */
 
 	for (int i = start; i < end-1; i++){ //moving residues start+1 to end-1
-		carbonate_f(chaint->aat + reModNum(i + 1, chain->NAA-1), chaint->aat + reModNum(i, chain->NAA-1), chaint->xaat[reModNum(i, chain->NAA-1)]);
+		carbonate_f(chaint->aat.data() + reModNum(i + 1, chain->NAA-1), chaint->aat.data() + reModNum(i, chain->NAA-1), chaint->xaat[reModNum(i, chain->NAA-1)]);
 	}
 
 	//building the peptide bonds of the amino acids
 	//by now start and end have been adjusted if pivoting
 	for (int i = start; i <= end; i++) {
-		acidate(chaint->aat + reModNum(i, chain->NAA-1), chaint->xaat[reModNum(i - 1, chain->NAA-1)], chaint->xaat[reModNum(i, chain->NAA-1)], sim_params);
+		acidate(chaint->aat.data() + reModNum(i, chain->NAA-1), chaint->xaat[reModNum(i - 1, chain->NAA-1)], chaint->xaat[reModNum(i, chain->NAA-1)], sim_params);
 	}
 	
         /* testing if move is allowed */
@@ -1281,7 +1281,7 @@ int rotate_cyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, 
 			chaint->xaat[j][i][0] = chain->xaa[j+direction][i][0];
 			chaint->xaat[j][i][1] = chain->xaa[j+direction][i][1];
 			chaint->xaat[j][i][2] = chain->xaa[j+direction][i][2];
-			(chaint->aat + j)->ca[i] = (chain->aa.data() + j + direction)->ca[i];
+			(chaint->aat.data() + j)->ca[i] = (chain->aa.data() + j + direction)->ca[i];
 		}
 	}
 
@@ -1298,10 +1298,10 @@ int rotate_cyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, 
 			chaint->xaat[1][i][0] = chain->xaa[2][i][0];
 			chaint->xaat[1][i][1] = chain->xaa[2][i][1];
 			chaint->xaat[1][i][2] = chain->xaa[2][i][2];
-			(chaint->aat + start)->ca[i] = (chain->aa.data() + 2)->ca[i];
+			(chaint->aat.data() + start)->ca[i] = (chain->aa.data() + 2)->ca[i];
 		}
 		for (int i = start; i < end; i++){ //moving residues start+1 to end-1
-			carbonate_f(chaint->aat + i + 1, chaint->aat + i, chaint->xaat[i]);
+			carbonate_f(chaint->aat.data() + i + 1, chaint->aat.data() + i, chaint->xaat[i]);
 		}
 	} else {
 		for(int i = 0; i < 3; i++){
@@ -1314,10 +1314,10 @@ int rotate_cyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, 
 			chaint->xaat[1][i][0] = chain->xaa[end][i][0];
 			chaint->xaat[1][i][1] = chain->xaa[end][i][1];
 			chaint->xaat[1][i][2] = chain->xaa[end][i][2];
-			(chaint->aat + end)->ca[i] = (chain->aa.data() + end -1)->ca[i];
+			(chaint->aat.data() + end)->ca[i] = (chain->aa.data() + end -1)->ca[i];
 		}
 		for (int i = end - 1; i > start; i--){ //moving residues end-1 to start+1
-			carbonate_b(chaint->aat + i, chaint->aat + i + 1, chaint->xaat[i]);
+			carbonate_b(chaint->aat.data() + i, chaint->aat.data() + i + 1, chaint->xaat[i]);
 		}
 	}
 
@@ -1340,11 +1340,11 @@ int rotate_cyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, 
 			//use this chain's xaa_prev for the the direction of the N-terminal NH
 			//fprintf(stderr,"acidate %d with xaat_prev1 %g %g %g %g %g %g %g %g %g\n",i,chaint->xaat_prev[chain->aa[i].chainid][0][0],chaint->xaat_prev[chain->aa[i].chainid][0][1],chaint->xaat_prev[chain->aa[i].chainid][0][2],chaint->xaat_prev[chain->aa[i].chainid][1][0],chaint->xaat_prev[chain->aa[i].chainid][1][1],chaint->xaat_prev[chain->aa[i].chainid][1][2],chaint->xaat_prev[chain->aa[i].chainid][2][0],chaint->xaat_prev[chain->aa[i].chainid][2][1],chaint->xaat_prev[chain->aa[i].chainid][2][2]);
 			//fprintf(stderr,"acidate %d with xaat2 %g %g %g %g %g %g %g %g %g\n",i,chaint->xaat[i][0][0],chaint->xaat[i][0][1],chaint->xaat[i][0][2],chaint->xaat[i][1][0],chaint->xaat[i][1][1],chaint->xaat[i][1][2],chaint->xaat[i][2][0],chaint->xaat[i][2][1],chaint->xaat[i][2][2]);
-			acidate(chaint->aat + i, chaint->xaat_prev[chain->aa[i].chainid], chaint->xaat[i], sim_params);
+			acidate(chaint->aat.data() + i, chaint->xaat_prev[chain->aa[i].chainid], chaint->xaat[i], sim_params);
 		} else {
 			//fprintf(stderr,"acidate %d with xaat1 %g %g %g %g %g %g %g %g %g\n",i,chaint->xaat[i-1][0][0],chaint->xaat[i-1][0][1],chaint->xaat[i-1][0][2],chaint->xaat[i-1][1][0],chaint->xaat[i-1][1][1],chaint->xaat[i-1][1][2],chaint->xaat[i-1][2][0],chaint->xaat[i-1][2][1],chaint->xaat[i-1][2][2]);
 			//fprintf(stderr,"acidate %d with xaat2 %g %g %g %g %g %g %g %g %g\n",i,chaint->xaat[i][0][0],chaint->xaat[i][0][1],chaint->xaat[i][0][2],chaint->xaat[i][1][0],chaint->xaat[i][1][1],chaint->xaat[i][1][2],chaint->xaat[i][2][0],chaint->xaat[i][2][1],chaint->xaat[i][2][2]);
-			acidate(chaint->aat + i, chaint->xaat[i - 1], chaint->xaat[i], sim_params);
+			acidate(chaint->aat.data() + i, chaint->xaat[i - 1], chaint->xaat[i], sim_params);
 		}
 	}
 
