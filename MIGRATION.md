@@ -700,12 +700,13 @@ confirmed on one seed is not confirmed.**
 
 ### Still outstanding here
 
-Not done, and worth naming: `checkpoint_io.cpp`'s loop bound
-`cpoints->aa[NAA-1].chainid` is a value read *from the file* used to index
-`xaa_prev`, and the consistency check that would catch it runs *after* the read loop.
-The `sprintf` into `malloc(1010)` sites from argv-controlled paths. `nested.cpp`'s
-`fclose(fptr)` with no NULL check and two unchecked `fopen`s. And everything gated
-behind getting a real MPI.
+Not done, and worth naming: the `sprintf` into `malloc(1010)` sites from
+argv-controlled paths. `nested.cpp`'s `fclose(fptr)` with no NULL check and two
+unchecked `fopen`s. And everything gated behind getting a real MPI.
+
+(`checkpoint_io.cpp`'s `cpoints->aa[NAA-1].chainid` loop bound, flagged as
+outstanding right here in an earlier draft of this section, was fixed later the
+same day — see "The checkpoint `chainid` overflow (leftover from step 8)" below.)
 
 ## Phase 2 progress — step 10 (tools/) done, and the ASan gate was blind
 
