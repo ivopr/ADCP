@@ -1424,6 +1424,14 @@ already declines a similar temptation for the same reason.
 | `dock_3q47_smoke` (seed 4242, 250,000 steps) | extE -18.718639, final energy 1.655320 | **unchanged** |
 | `val_3q47_redock` (16 seeds × 2,500,000 steps) | targetE -28.5508, RMSD 0.66 Å | **unchanged** |
 
+**Independently re-confirmed later, from a from-scratch MSan build, as part of a
+full pristine-vs-HEAD re-comparison**: [docs/compares/3.md](docs/compares/3.md)
+reran this exact MSan reproduction (seed 10 only, not 11) against a fresh build of
+both pristine and current HEAD and got the same result — pristine still reports
+`crankshaft`/`metropolis.c:732`, current HEAD does not, only the two known
+`fopen`-adjacent false positives remain. Confirms the fix by the same tool that
+found it, not by re-reading this section.
+
 **The interesting nuance, worth stating precisely rather than assuming.** The fix
 *does* change output at the budget where the bug was found (seed 10, 25,000 steps:
 `-15.3654` unfixed/pristine-matching vs `-11.9092` fixed) — but at both budgets this
@@ -1452,6 +1460,16 @@ Every claim above compares a commit against its parent. HEAD has also been measu
 against `1c1a330` ("added license stuff", 2025-10-28) — the last upstream commit,
 before any of this work. Two behavioural changes were found; **one was a defect and is
 now fixed, so exactly one intended difference remains.**
+
+This whole exercise has since been re-run twice more, independently, as HEAD moved
+further: [docs/compares/2.md](docs/compares/2.md) (with its tutorial,
+[docs/compares/2-protocol.md](docs/compares/2-protocol.md)) and
+[docs/compares/3.md](docs/compares/3.md) (tutorial:
+[docs/compares/3-protocol.md](docs/compares/3-protocol.md)). Both re-derive every
+number below from scratch rather than trusting this section, and both found the same
+two behavioural changes and nothing new — see those documents for the full
+measurement detail, including crash-rate maps, timing, memory, and a tools/ sweep
+this section doesn't cover.
 
 1. Nested sampling — `35fb3fb`, deliberate, documented above.
 2. **Docking past 200,000 steps — `5660a33`, unintended. Root-caused and FIXED.**
