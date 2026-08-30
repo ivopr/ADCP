@@ -317,6 +317,17 @@ set_tests_properties(func_adcp_checkpoint_roundtrip PROPERTIES
   PASS_REGULAR_EXPRESSION "PASS: .* checkpoints written"
 )
 
+# -o overflow guard: nestedsampling()'s output-file init sprintf'd an
+# unbounded -o value into a fixed 1010-byte buffer. See run_checkpoint_longname_test.sh.
+add_test(NAME func_adcp_checkpoint_longname
+  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_checkpoint_longname_test.sh
+          ${SRC_BIN} ${TEST_WORK}/ckpt_longname ${RAMAPROB} ${SNAPSHOTS}
+)
+set_tests_properties(func_adcp_checkpoint_longname PROPERTIES
+  LABELS "functional" TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "PASS: overlong -o rejected"
+)
+
 # ---------------------------------------------------------------------------
 # Docking — the AutoDock grid path (opt-in: needs the published 3Q47 target)
 # ---------------------------------------------------------------------------
@@ -337,7 +348,8 @@ set_tests_properties(
   smoke_rama smoke_rama_pdb smoke_dssp2cm smoke_bfactor smoke_bfactor_empty
   smoke_bfactor_multimodel
   func_adcp_fold_determinism func_adcp_fold_short
-  func_adcp_ns_smoke func_adcp_checkpoint_roundtrip num_ns_evidence
+  func_adcp_ns_smoke func_adcp_checkpoint_roundtrip func_adcp_checkpoint_longname
+  num_ns_evidence
   PROPERTIES FAIL_REGULAR_EXPRESSION "${SANITIZER_FAIL_RE}"
 )
 

@@ -351,7 +351,12 @@ void deal_with_flex(int N, int finished,int rank, simulation_params *sim_params,
     //strcpy(filename,sim_params->flex_params.output_path);
     strcpy(filename,"finished");
     FILE *fptr = fopen(filename,"w");
-    fclose(fptr);
+    /* This marks a run that already finished successfully -- don't stop() on
+       failure here, just warn. The real results are already written. */
+    if (fptr)
+      fclose(fptr);
+    else
+      fprintf(stderr, "Warning: could not create '%s' marker file.\n", filename);
 
   }
 
@@ -375,11 +380,16 @@ void check_to_output_checkpoint_file(Chain* cpoints, int current_stored, int N, 
     }
     if (rank == 0) {
       if( sim_params->iter % sim_params->num_NS_per_checkpoint == 0 ){
-        char *out = (char*)malloc(sizeof(char)*1010);
+        const size_t out_size = 1010;
+        char *out = (char*)malloc(sizeof(char)*out_size);
         if(sim_params->outfile_name != NULL){
-          sprintf(out,"%s_%d",sim_params->outfile_name,sim_params->checkpoint_counter);
+          if (snprintf(out, out_size, "%s_%d", sim_params->outfile_name,
+                       sim_params->checkpoint_counter) >= (int)out_size)
+            stop("Output filename (-o) is too long to build a checkpoint output name.");
           if (sim_params->outfile) fclose(sim_params->outfile);
           sim_params->outfile = fopen(out, "w");
+          if (!sim_params->outfile)
+            stop("Error, checkpoint output file cannot be opened.");
         }
         free(out);
       }
@@ -825,11 +835,16 @@ void nestedsampling(int thinning, int maxiter, simulation_params *sim_params){
     }
 
     //initialise the new output file
-    char *out = (char*)malloc(sizeof(char)*1010);
+    const size_t out_size = 1010;
+    char *out = (char*)malloc(sizeof(char)*out_size);
     if(sim_params->outfile_name != NULL){
-      sprintf(out,"%s_%d",sim_params->outfile_name,sim_params->checkpoint_counter);
+      if (snprintf(out, out_size, "%s_%d", sim_params->outfile_name,
+                   sim_params->checkpoint_counter) >= (int)out_size)
+        stop("Output filename (-o) is too long to build a checkpoint output name.");
       if (sim_params->outfile) fclose(sim_params->outfile);
       sim_params->outfile = fopen(out, "w");
+      if (!sim_params->outfile)
+        stop("Error, checkpoint output file cannot be opened.");
     }
     free(out);
   }

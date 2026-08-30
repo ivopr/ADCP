@@ -35,13 +35,17 @@
    to be read in (action="r") or written (action="w" or "a"). */
 void open_next_checkpoint_file(simulation_params *sim_params,char *action){
 
-  char *checkpoint_name = (char*)malloc(sizeof(char)*1010);
+  const size_t checkpoint_name_size = 1010;
+  char *checkpoint_name = (char*)malloc(sizeof(char)*checkpoint_name_size);
 
   if(!sim_params->outfile_name)
      stop("Cannot open checkpoint file. Output name was not given.");
 
   //put together the name of the checkpoint file
-  sprintf(checkpoint_name,"%s_%d",sim_params->checkpoint_filename,sim_params->checkpoint_counter);
+  if (snprintf(checkpoint_name, checkpoint_name_size, "%s_%d",
+               sim_params->checkpoint_filename, sim_params->checkpoint_counter)
+      >= (int)checkpoint_name_size)
+    stop("Checkpoint filename (-C) is too long.");
   fprintf(stderr, "Checkpoint file: %s\n",checkpoint_name);
 
   //try to open it
