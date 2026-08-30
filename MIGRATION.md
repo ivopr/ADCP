@@ -1547,15 +1547,20 @@ against `1c1a330` ("added license stuff", 2025-10-28) — the last upstream comm
 before any of this work. Two behavioural changes were found; **one was a defect and is
 now fixed, so exactly one intended difference remains.**
 
-This whole exercise has since been re-run twice more, independently, as HEAD moved
-further: [docs/compares/2.md](docs/compares/2.md) (with its tutorial,
-[docs/compares/2-protocol.md](docs/compares/2-protocol.md)) and
+This whole exercise has since been re-run three times more, independently, as HEAD
+moved further: [docs/compares/2.md](docs/compares/2.md) (tutorial:
+[docs/compares/2-protocol.md](docs/compares/2-protocol.md)),
 [docs/compares/3.md](docs/compares/3.md) (tutorial:
-[docs/compares/3-protocol.md](docs/compares/3-protocol.md)). Both re-derive every
-number below from scratch rather than trusting this section, and both found the same
-two behavioural changes and nothing new — see those documents for the full
-measurement detail, including crash-rate maps, timing, memory, and a tools/ sweep
-this section doesn't cover.
+[docs/compares/3-protocol.md](docs/compares/3-protocol.md)), and
+[docs/compares/4.md](docs/compares/4.md) (tutorial:
+[docs/compares/4-protocol.md](docs/compares/4-protocol.md)) — the last of which also
+independently re-confirmed the `swapChains` mechanism finding above from a
+freshly-rebuilt binary pair, and probed the exact seed-10 step boundary to verify the
+`temp` fix moved nothing there either. All three re-derive every number below from
+scratch rather than trusting this section, and all three found the same two
+behavioural changes and nothing new — see those documents for the full measurement
+detail, including crash-rate maps, timing, memory, and a tools/ sweep this section
+doesn't cover.
 
 1. Nested sampling — `35fb3fb`, deliberate, documented above.
 2. **Docking past 200,000 steps — `5660a33`, unintended. Root-caused and FIXED.**
