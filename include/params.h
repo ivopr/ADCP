@@ -103,6 +103,9 @@ typedef struct {
   double opt_totE_weight; //the target energy type while optimizing, w1*totE + w2*extE + w3*firstlastE
   double opt_extE_weight; //the target energy type while optimizing, w1*totE + w2*extE + w3*firstlastE
   double opt_firstlastE_weight; //the target energy type while optimizing, w1*totE + w2*extE + w3*firstlastE
+  int transopt_hard; //opt-in "hard minimization" budget for transopt() (maxStep 30/maxNoImprovStep 5
+                      //instead of 10/3); default 0 (off) -- see MIGRATION.md, measured to cost
+                      //+20-225% runtime with no quality gain, so it stays off unless asked for
   double rca;   // CA_ vdW Rmin
   double rcb;   // CB_ vdW Rmin
   double rc;    // C__ vdW Rmin

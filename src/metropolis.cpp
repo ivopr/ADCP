@@ -607,6 +607,10 @@ int transopt(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, doubl
 	   is a science decision for the maintainers, not a migration cleanup.
 	   See MIGRATION.md. */
 	(void)mod;
+	if (sim_params->protein_model.transopt_hard) {
+		maxStep = 30;
+		maxNoImprovStep = 5;
+	}
 
 	for (step = 0; step < maxStep; step++) {
 		if (noImprovStep >= maxNoImprovStep) break;

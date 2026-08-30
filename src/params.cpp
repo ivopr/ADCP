@@ -299,6 +299,7 @@ void model_param_initialise(model_params *self) {
   self->opt_totE_weight = 1.0;
   self->opt_firstlastE_weight = 0.0;
   self->opt_extE_weight = 0.0;
+  self->transopt_hard = 0;
 
   /* external potential */
   self->external_potential_type = 0;
@@ -905,6 +906,14 @@ void model_param_read(char *prm, /* input line */
 	if (k>0) {
 		found_param += 1;
 		start = 4;
+	}
+
+	/* opt-in "hard minimization" budget for transopt() -- default off, see
+	   MIGRATION.md: measured to cost +20-225% runtime for no quality gain */
+	k = sscanf(prm, "TransoptHard=%d", &(self->transopt_hard));
+	if (k>0) {
+		found_param += 1;
+		start = 13;
 	}
 
 
