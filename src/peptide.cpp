@@ -823,7 +823,7 @@ void amidorient(triplet x, AA *a, AA *b)
 void aat_init(Chain * chain, Chaint * chaint){
   if(sizeof(chaint)->aat != chain->NAA * sizeof(AA)){
     (chaint)->aat = (AA *) realloc((chaint)->aat, chain->NAA * sizeof(AA));
-    (chaint)->xaat = (triplet *) realloc((chaint)->xaat, chain->NAA * sizeof(triplet));
+    (chaint)->xaat.resize(chain->NAA);
     (chaint)->ergt.resize(5 * (size_t)chain->NAA * chain->NAA);
     int i;	
     for (i = 1; i < chain->NAA; i++) {
@@ -836,9 +836,11 @@ void aat_init(Chain * chain, Chaint * chaint){
 	  (chaint)->aat[i].chi2 = chain->aa[i].chi2;
     }
   }	
-  if(sizeof(chaint)->xaat_prev != (chain->Nchains+1) * sizeof(triplet)){
-    (chaint)->xaat_prev = (triplet *) realloc((chaint)->xaat_prev, (chain->Nchains+1) * sizeof(triplet));
-  }
+  /* resize() is a real no-op when the size already matches, unlike the old
+     guard above it (sizeof(chaint)->xaat_prev parses as
+     sizeof(chaint->xaat_prev) == sizeof(triplet*), a compile-time constant --
+     always true, and always was). No guard needed here any more. */
+  (chaint)->xaat_prev.resize(chain->Nchains + 1);
 }
 
 /* given the Ca coordinates and the amid orientation vectors {xaa(i)} (and xaa_prev for chain starts)
@@ -874,12 +876,13 @@ void allocmem_chain(Chain *chain, int NAA, int Nchains)
 	/* size_t product: the old int one overflowed above NAA ~ 46000. resize is
 	   also a real no-op when the size already matches, where realloc was not. */
 	(chain)->erg.resize((size_t)(chain)->NAA * (chain)->NAA);
-	(chain)->xaa = (triplet*)realloc((chain)->xaa,(chain)->NAA * sizeof(triplet));
-	(chain)->xaa_prev = (triplet*)realloc((chain)->xaa_prev,((chain)->Nchains + 1) * sizeof(triplet));
-	if ((chain)->xaa == NULL || (chain)->aa == NULL || (chain)->xaa_prev == NULL) {
-		if ((chain)->xaa == NULL) stop("allocmem_chain: Insufficient memory (chain->xaa)");
-		if ((chain)->aa == NULL) stop("allocmem_chain: Insufficient memory (chain->aa)");
-		if ((chain)->xaa_prev == NULL) stop("allocmem_chain: Insufficient memory (chain->xaa_prev)");
+	/* std::vector throws bad_alloc on OOM (the one accepted exception to this
+	   project's no-exceptions rule -- fatal-on-OOM either way), so these two
+	   need no NULL check the way the still-raw chain->aa realloc does. */
+	(chain)->xaa.resize((chain)->NAA);
+	(chain)->xaa_prev.resize((chain)->Nchains + 1);
+	if ((chain)->aa == NULL) {
+		stop("allocmem_chain: Insufficient memory (chain->aa)");
 	}
 }
 
@@ -1588,14 +1591,10 @@ void freemem_chain(Chain *chain)
 	    }
 	    chain->erg.clear();
 	    chain->erg.shrink_to_fit();
-	    if (chain->xaa) {
-		free(chain->xaa);
-		chain->xaa = NULL;
-	    }
-	    if (chain->xaa_prev) {
-		free(chain->xaa_prev);
-		chain->xaa_prev = NULL;
-	    }
+	    chain->xaa.clear();
+	    chain->xaa.shrink_to_fit();
+	    chain->xaa_prev.clear();
+	    chain->xaa_prev.shrink_to_fit();
 	}
 }
 
@@ -1608,15 +1607,11 @@ void freemem_chaint(Chaint *chaint)
 	    }
 	    chaint->ergt.clear();
 	    chaint->ergt.shrink_to_fit();
-	    if (chaint->xaat) {
-		free(chaint->xaat);
-		chaint->xaat = NULL;
-	    }
-	    if (chaint->xaat_prev) {
-		free(chaint->xaat_prev);
-		chaint->xaat_prev = NULL;
-	    }
-    } 
+	    chaint->xaat.clear();
+	    chaint->xaat.shrink_to_fit();
+	    chaint->xaat_prev.clear();
+	    chaint->xaat_prev.shrink_to_fit();
+    }
 }
 
 /* minimally adjust coordinates to better equalize Ca-Ca distances */
@@ -1837,24 +1832,13 @@ int pdbin(Chain *chain, simulation_params *sim_params, FILE *infile)
 	retv = getpdb(&(tempchain->aa), &(tempchain->NAA), &(tempchain->Nchains), infile);
 //	fprintf(stderr,"tempchain->NAA=%d\n",tempchain->NAA);
 	
-	tempchain->xaa = (triplet*)realloc(tempchain->xaa, tempchain->NAA * sizeof(triplet));
-	for (int i = 0; i < tempchain->NAA; i++) {
-		for (int j=0; j<3; j++) {
-			for (int k=0; k<3; k++) {
-				tempchain->xaa[i][j][k] = 0.0;
-			}
-		}
-	}
-	tempchain->erg.resize((size_t)tempchain->NAA * tempchain->NAA);	
+	/* resize() value-initializes new elements -- zero-initialization, since
+	   TripletBox's default constructor is implicit and trivial -- so this
+	   needs no explicit zero-fill loop the way the raw realloc'd array did. */
+	tempchain->xaa.resize(tempchain->NAA);
+	tempchain->erg.resize((size_t)tempchain->NAA * tempchain->NAA);
 //	fprintf(stderr,"Allocating memory for xaa_prev (Nchains=%d)\n",tempchain->Nchains);
-	tempchain->xaa_prev = (triplet*)realloc(tempchain->xaa_prev, (tempchain->Nchains+1) * sizeof(triplet));	
-	for (int i = 0; i <= tempchain->Nchains; i++) {
-		for (int j=0; j<3; j++) {
-			for (int k=0; k<3; k++) {
-				tempchain->xaa_prev[i][j][k] = 0.0;
-			}
-		}
-	}
+	tempchain->xaa_prev.resize(tempchain->Nchains + 1);
 
     //chain->NAA = 0; chain->aa = NULL; chain->erg = NULL; chain->xaa= NULL;
 	//retv = getpdb(&(chain->aa), &(chain->NAA), &(chain->Nchains), infile);

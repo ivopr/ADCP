@@ -399,7 +399,7 @@ int read_in_from_checkpoint(simulation_params *sim_params,
     *biasmap = new Biasmap{};
 
     //temporary chain for reading
-    temporary->aa = NULL; temporary->xaa = NULL; temporary->erg.clear(); temporary->xaa_prev = NULL;
+    temporary->aa = NULL; temporary->xaa.clear(); temporary->erg.clear(); temporary->xaa_prev.clear();
 
     // only read on the master processor
     if(rank == 0){
@@ -666,7 +666,7 @@ int read_in_from_pdb(simulation_params *sim_params,
     *biasmap = new Biasmap{};
 
     //temporary chain for reading
-    temporary->aa = NULL; temporary->xaa = NULL; temporary->erg.clear(); temporary->xaa_prev = NULL;
+    temporary->aa = NULL; temporary->xaa.clear(); temporary->erg.clear(); temporary->xaa_prev.clear();
     temporary->ll = 0;
 
     // only read on the master processor

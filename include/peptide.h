@@ -77,8 +77,8 @@ typedef struct _FLEX_data{
 /* amino acid chain type */
 typedef struct _Chain {
 	AA *aa = nullptr;
-	triplet *xaa = nullptr;
-	triplet *xaa_prev = nullptr; //previous xaa for chain start only
+	std::vector<TripletBox> xaa;
+	std::vector<TripletBox> xaa_prev; //previous xaa for chain start only
 	std::vector<double> erg;
 	double ll = 0.0; /*logL only used for Nested sampling */
     int NAA = 0;
@@ -88,8 +88,8 @@ typedef struct _Chain {
 
 /* temporary amino acid chain type */
 typedef struct _Chaint {
-	triplet *xaat = nullptr;
-	triplet *xaat_prev = nullptr; //previous xaa for chain start only
+	std::vector<TripletBox> xaat;
+	std::vector<TripletBox> xaat_prev; //previous xaa for chain start only
 	AA *aat = nullptr;
 	std::vector<double> ergt;
 } Chaint;

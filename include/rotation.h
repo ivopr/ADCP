@@ -19,6 +19,24 @@ extern "C" {
 typedef double matrix[3][3];
 typedef vector triplet[3];
 
+/* A trivially-copyable box holding one triplet/matrix's worth of storage, so
+   it can live in a std::vector while still implicitly decaying into any
+   function taking a triplet or matrix parameter -- the same underlying type
+   (double[3][3]), confirmed identical, so one box covers both. No pointer
+   arithmetic exists on the raw triplet* arrays this replaces (Chain::xaa/
+   xaa_prev, Chaint::xaat/xaat_prev), only [i][j][k] indexing, so a box with
+   just operator[] and a pointer-conversion operator is enough -- no
+   constructors/destructor are declared, so it stays trivially copyable and
+   Chain's implicit bitwise move stays correct. */
+struct TripletBox {
+	double data[3][3];
+	typedef double Row[3];
+	Row& operator[](int i) { return data[i]; }
+	const Row& operator[](int i) const { return data[i]; }
+	operator Row*() { return data; }
+	operator const Row*() const { return data; }
+};
+
 /*
 ** Triplet and matrix manipulations
 */

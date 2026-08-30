@@ -645,7 +645,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr,"Creating PDB library.\n");
 	/* allocate memory for the original PDB library */
 	Chain *temporary = new Chain{};
-	temporary->NAA = 0; temporary->aa = NULL; temporary->xaa = NULL; temporary->xaa_prev = NULL;
+	temporary->NAA = 0; temporary->aa = NULL; temporary->xaa.clear(); temporary->xaa_prev.clear();
 
 	/* PDB library */
 	/* std::vector, not realloc: these three grow one element per loop
