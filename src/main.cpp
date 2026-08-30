@@ -341,7 +341,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 							swapEnergy[ind] = currTargetEnergy;
 							//sprintf(swapname, "swap%d.pdb", ind);
 							//swapFile = fopen(swapname, "w+");
-							//pdbprint(chain->aa, chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
+							//pdbprint(chain->aa.data(), chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
 						}
 						break;
 					}
@@ -355,7 +355,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 					
 					//sprintf(swapname, "swap%d.pdb", swapInd);
 					//swapFile = fopen(swapname, "w+");
-					//pdbprint(chain->aa, chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
+					//pdbprint(chain->aa.data(), chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
 					//fclose(swapname);
 					//copybetween(chain, swapChains[swapInd]);	
 					if (swapEnergy[swapInd] < 0) {
@@ -383,7 +383,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 				swapEnergy[swapLength] = currTargetEnergy;
 				//sprintf(swapname, "swap%d.pdb", swapLength);
 				//swapFile = fopen(swapname, "w+");
-				//pdbprint(chain->aa, chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
+				//pdbprint(chain->aa.data(), chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
 				//fclose(swapname);
 			}
 			else if ((currIndex - bestIndex) > noImprovStopSteps) {
@@ -437,7 +437,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 							//tests(chain, biasmap, sim_params->tmask, sim_params, 0x11, NULL);
 							//sprintf(swapname, "swap%d.pdb", ind);
 							//swapFile = fopen(swapname, "w+");
-							//pdbprint(chain->aa, chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
+							//pdbprint(chain->aa.data(), chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
 							lastGoodIndex = currIndex;
 						}
 						break;
@@ -455,7 +455,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 						fprintf(stderr, "swap in good curr %g swap %g best %g\n", currTargetEnergy, swapEnergy[swapInd], targetBest);
 						//sprintf(swapname, "swap%d.pdb", swapInd);
 						//swapFile = fopen(swapname, "w+");
-						//pdbprint(chain->aa, chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
+						//pdbprint(chain->aa.data(), chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
 						//fclose(swapname);
 						if (swapEnergy[swapInd] < 0) {
 							fprintf(sim_params->outfile, "-+- TEST BLOCK %5d -+-\n", i);
@@ -569,7 +569,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 					tests(chain, biasmap, sim_params->tmask, sim_params, 0x11, NULL);
 					//lastTargetEnergy = currTargetEnergy;
 					targetBest = currTargetEnergy;
-					//pdbprint(chain->aa, chain->NAA, &(sim_params->protein_model), "Gary_Hack.pdb", totenergy(chain));
+					//pdbprint(chain->aa.data(), chain->NAA, &(sim_params->protein_model), "Gary_Hack.pdb", totenergy(chain));
 				}
 			}
 			fprintf(sim_params->outfile, "-+- TEST BLOCK %5d -+-\n", i);
@@ -624,7 +624,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 				fptr_pdb = fopen(filename_pdb.c_str(), "w");
 				fprintf(fptr_pdb, "#T: %f\n", 1000.0 / (1.9858775*sim_params->thermobeta) - 273.15);
 				double tttt = totenergy(chain);
-				pdbprint(chain->aa, chain->NAA, &(sim_params->protein_model), fptr_pdb, &tttt);
+				pdbprint(chain->aa.data(), chain->NAA, &(sim_params->protein_model), fptr_pdb, &tttt);
 			}
 			fprintf(fptr, "%f %f\n", sim_params->thermobeta, totenergy(chain));
 
@@ -827,8 +827,8 @@ void single_point_test(Chain *chain, Chaint *chaint, Biasmap *biasmap, simulatio
 	//fprintf(stderr,"END XAA\n");
 
 	/* correct peptide if needed */
-	if(sim_params->protein_model.fixit) fixpeptide(chain->aa, chain->NAA, &(sim_params->protein_model)); // PEPTIDE MODIFICATION!!
-	chkpeptide(chain->aa, chain->NAA, &(sim_params->protein_model));
+	if(sim_params->protein_model.fixit) fixpeptide(chain->aa.data(), chain->NAA, &(sim_params->protein_model)); // PEPTIDE MODIFICATION!!
+	chkpeptide(chain->aa.data(), chain->NAA, &(sim_params->protein_model));
 	update_sim_params_from_chain(chain,sim_params); // updating NAA and seq
 
 	biasmap_initialise(chain,biasmap,&(sim_params->protein_model));
@@ -987,7 +987,7 @@ int main(int argc, char *argv[])
 		AD_init(chain,&sim_params);
 		mark_fixed_aa_from_file(chain,&sim_params);
 		mark_constrained_aa_from_file(chain,&sim_params);
-		chkpeptide(chain->aa, chain->NAA, &(sim_params.protein_model));
+		chkpeptide(chain->aa.data(), chain->NAA, &(sim_params.protein_model));
 		update_sim_params_from_chain(chain,&sim_params); // updating NAA and seq
 		biasmap_initialise(chain,biasmap,&(sim_params.protein_model));		
 		energy_matrix_calculate(chain,biasmap,&(sim_params.protein_model));
@@ -1041,8 +1041,8 @@ int main(int argc, char *argv[])
 
 			/* project the peptide onto the CRANKITE model and do the initial tests for serial MC */
 			if (readin) {
-				if (sim_params.protein_model.fixit) fixpeptide(chain->aa, chain->NAA, &(sim_params.protein_model));
-				chkpeptide(chain->aa, chain->NAA, &(sim_params.protein_model));
+				if (sim_params.protein_model.fixit) fixpeptide(chain->aa.data(), chain->NAA, &(sim_params.protein_model));
+				chkpeptide(chain->aa.data(), chain->NAA, &(sim_params.protein_model));
 				mark_fixed_aa_from_file(chain, &sim_params);
 				mark_constrained_aa_from_file(chain, &sim_params);
 			}
@@ -1075,7 +1075,7 @@ int main(int argc, char *argv[])
 	FILE* fptr1;
 	std::string filename1 = std::to_string(rank) + "_last.pdb";
 	fptr1 = fopen(filename1.c_str(), "w");
-	pdbprint(chain->aa, chain->NAA, &(sim_params.protein_model), fptr1, NULL);
+	pdbprint(chain->aa.data(), chain->NAA, &(sim_params.protein_model), fptr1, NULL);
 	fclose(fptr1);
 #endif
 

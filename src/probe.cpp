@@ -163,7 +163,7 @@ void initialize_displacement(Chain *chain, Biasmap *biasmap, simulation_params *
 	/* calculate initialized distances */
 	copybetween(&chain_init,chain);
 //	fprintf(sim_params->outfile,"before init chain_init\n");
-	chkpeptide(chain_init.aa, chain_init.NAA, &(sim_params->protein_model));
+	chkpeptide(chain_init.aa.data(), chain_init.NAA, &(sim_params->protein_model));
 //	pdbprint(chain_init.aa, chain_init.NAA, &(sim_params->protein_model), sim_params->outfile, NULL);
 ////	energy_init(&chain_init,biasmap,&(sim_params->protein_model));
 	initialize(&chain_init,&chaint,sim_params); // PEPTIDE MODIFICATION!!
@@ -328,7 +328,7 @@ void initialize_displacement(Chain *chain, Biasmap *biasmap, simulation_params *
 	/* print PDB */
 	fprintf(sim_params->outfile,"--+ PDB without clashing gamma atoms +--\n");
 	fprintf(stderr,"Outputting initialized PDB?\n");
-	pdbprint(chain_init.aa, chain_init.NAA, &(sim_params->protein_model), sim_params->outfile, NULL);
+	pdbprint(chain_init.aa.data(), chain_init.NAA, &(sim_params->protein_model), sim_params->outfile, NULL);
 
 //	/* calculate clashes and print displacements and vdW energy of clashing atoms */
 //	for (int i=1; i<chain_init.NAA; i++) {
@@ -1297,7 +1297,7 @@ void hbtot(Chain *chain, Biasmap *biasmap, simulation_params *sim_params, void *
 
 	for (i = 1; i < chain->NAA; i++)
 		for (j = 1; j < chain->NAA; j++)
-			tot += hdonor((chain->aa) + i, (chain->aa) + j, &(sim_params->protein_model));
+			tot += hdonor(chain->aa.data() + i, chain->aa.data() + j, &(sim_params->protein_model));
 
 	fprintf(sim_params->outfile,"Hbonds = %d\n", tot);
 }
@@ -1323,13 +1323,13 @@ void hpattern(Chain *chain, Biasmap *biasmap, simulation_params *sim_params, voi
 	for (i = 5; i < chain->NAA - 4; i++) {
 
 		donor = accep = 0;
-		a = chain->aa + i;
+		a = chain->aa.data() + i;
 
 		for (j = 1; j < chain->NAA; j++) {
 
 			if (i == j)
 				continue;
-			b = (chain->aa) + j;
+			b = chain->aa.data() + j;
 
 			/* H-pattern within the same chain only */
 			if (a->chainid != b->chainid)
@@ -1435,7 +1435,7 @@ int count_contacts(Chain *chain, Biasmap *biasmap,simulation_params *sim_params,
 			if (j==i-1 && chain->aa[i].chainid == chain->aa[j].chainid)
 				continue;
 
-			if (contact((chain->aa) + i, (chain->aa) + j, &(sim_params->protein_model))) {
+			if (contact(chain->aa.data() + i, chain->aa.data() + j, &(sim_params->protein_model))) {
 				if (native) {
 					if (Distb(i, j) > 0.0)
 						contax++;
@@ -1473,13 +1473,13 @@ void pdbout(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *
 {
 	//fprintf(stderr,"Outputting PDB, %d amino acids.\n", chain->NAA-1);
 	double E_tot = totenergy(chain);
-	pdbprint(chain->aa, chain->NAA, &(sim_params->protein_model), sim_params->outfile, &E_tot);
+	pdbprint(chain->aa.data(), chain->NAA, &(sim_params->protein_model), sim_params->outfile, &E_tot);
 /*  vector mol_com;
   mol_com[0] = mol_com[1] = mol_com[2] = 0.0;
   for (int i = 1; i < chain->NAA; i++){
 	vector com;
-	add(com, ((chain->aa) + i)->ca, ((chain->aa) + i)->n);
-	add(com, com, ((chain->aa) + i)->c);
+	add(com, (chain->aa.data() + i)->ca, (chain->aa.data() + i)->n);
+	add(com, com, (chain->aa.data() + i)->c);
 	scale(com,1.0/3.0, com);
 	add(mol_com, mol_com, com);
   }
@@ -1524,10 +1524,10 @@ void cm_txt(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *
 				ch = chain->aa[j].id;
 				break;
 			case 1:
-				ch = aligned((chain->aa) + i, (chain->aa) + j) ? '+' : '-';
+				ch = aligned(chain->aa.data() + i, chain->aa.data() + j) ? '+' : '-';
 				break;
 			default:
-				ch = contact((chain->aa) + i, (chain->aa) + j, &(sim_params->protein_model)) ? '#' : ' ';
+				ch = contact(chain->aa.data() + i, chain->aa.data() + j, &(sim_params->protein_model)) ? '#' : ' ';
 			}
 			fputc(ch,sim_params->outfile);
 		}
@@ -1545,7 +1545,7 @@ void cm_pbm(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *
 	for (i = 1; i < chain->NAA; i++)
 		for (j = 1; j < chain->NAA;) {
 			for (byte = 0, bit = 0x80; bit; bit >>= 1, j++)
-				if (j < chain->NAA && contact((chain->aa) + i, (chain->aa) + j, &(sim_params->protein_model)))
+				if (j < chain->NAA && contact(chain->aa.data() + i, chain->aa.data() + j, &(sim_params->protein_model)))
 					byte |= bit;
 			fputc(byte,sim_params->outfile);
 		}
@@ -1818,7 +1818,7 @@ void dssp(Chain *chain,Biasmap *biasmap, int secondary_structure, int contact_ma
 	   unlike amino acids themselves */
 	for (i = 1; i < chain->NAA; i++)
 		for (j = 1; j < chain->NAA; j++)
-			if (hdonor((chain->aa) + i, (chain->aa) + j, &(sim_params->protein_model)))
+			if (hdonor(chain->aa.data() + i, chain->aa.data() + j, &(sim_params->protein_model)))
 				Hbm(i - 1, j) = 1;
 
 	/* for (i = 0; i < NAA; fputc('\n',sim_params->outfile), i++)
@@ -1865,7 +1865,7 @@ void ergtot(Chain *chain,Biasmap *biasmap, simulation_params *sim_params, void *
 	double tote = totenergy(chain);
 	fprintf(sim_params->outfile, "Energy = totalE %.6f ( diagnolE %.6f extE %.6f firstlastE %.6f) Rotamers:", tote, locenergy(chain), extenergy(chain), firstlastenergy(chain));
 	for (int i = 1; i <= chain->NAA -1; i++) {
-		fprintf(sim_params->outfile, " %d", (chain->aa + i)->SCRot);
+		fprintf(sim_params->outfile, " %d", (chain->aa.data() + i)->SCRot);
 	}
 	fprintf(sim_params->outfile, "\n");
 	fprintf(stderr, "totalE %.6f extE %.6f \n", tote, extenergy(chain));

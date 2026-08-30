@@ -399,7 +399,7 @@ int read_in_from_checkpoint(simulation_params *sim_params,
     *biasmap = new Biasmap{};
 
     //temporary chain for reading
-    temporary->aa = NULL; temporary->xaa.clear(); temporary->erg.clear(); temporary->xaa_prev.clear();
+    temporary->aa.clear(); temporary->xaa.clear(); temporary->erg.clear(); temporary->xaa_prev.clear();
 
     // only read on the master processor
     if(rank == 0){
@@ -666,7 +666,7 @@ int read_in_from_pdb(simulation_params *sim_params,
     *biasmap = new Biasmap{};
 
     //temporary chain for reading
-    temporary->aa = NULL; temporary->xaa.clear(); temporary->erg.clear(); temporary->xaa_prev.clear();
+    temporary->aa.clear(); temporary->xaa.clear(); temporary->erg.clear(); temporary->xaa_prev.clear();
     temporary->ll = 0;
 
     // only read on the master processor
@@ -818,13 +818,13 @@ void initialize_all_pdb_chains(simulation_params *sim_params,
     for (int i=0; i<current_stored; i++) {
 
 	// fix peptide if needed
-	if(sim_params->protein_model.fixit) fixpeptide(cpoints[i].aa, cpoints[i].NAA, &(sim_params->protein_model));
+	if(sim_params->protein_model.fixit) fixpeptide(cpoints[i].aa.data(), cpoints[i].NAA, &(sim_params->protein_model));
 
 	//mark constrained and fixed amino acids
 	mark_fixed_aa_from_file(&(cpoints[i]),sim_params);
 	mark_constrained_aa_from_file(&(cpoints[i]),sim_params);
 
-	chkpeptide(cpoints[i].aa, cpoints[i].NAA, &(sim_params->protein_model));
+	chkpeptide(cpoints[i].aa.data(), cpoints[i].NAA, &(sim_params->protein_model));
 	//map chain onto the CRANKITE model
 	initialize(&(cpoints[i]),*chaint,sim_params);
 

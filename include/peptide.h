@@ -76,7 +76,7 @@ typedef struct _FLEX_data{
 
 /* amino acid chain type */
 typedef struct _Chain {
-	AA *aa = nullptr;
+	std::vector<AA> aa;
 	std::vector<TripletBox> xaa;
 	std::vector<TripletBox> xaa_prev; //previous xaa for chain start only
 	std::vector<double> erg;

@@ -645,7 +645,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr,"Creating PDB library.\n");
 	/* allocate memory for the original PDB library */
 	Chain *temporary = new Chain{};
-	temporary->NAA = 0; temporary->aa = NULL; temporary->xaa.clear(); temporary->xaa_prev.clear();
+	temporary->NAA = 0; temporary->aa.clear(); temporary->xaa.clear(); temporary->xaa_prev.clear();
 
 	/* PDB library */
 	/* std::vector, not realloc: these three grow one element per loop
@@ -695,8 +695,8 @@ int main(int argc, char *argv[])
 		freemem_chain(temporary);
 
 		/* project the peptide onto the CRANKITE model */
-		if(sim_params.protein_model.fixit) fixpeptide((all_chains)[n_proteins-1].aa, (all_chains)[n_proteins-1].NAA, &(sim_params.protein_model));
-		chkpeptide((all_chains)[n_proteins-1].aa, (all_chains)[n_proteins-1].NAA, &(sim_params.protein_model));
+		if(sim_params.protein_model.fixit) fixpeptide((all_chains)[n_proteins-1].aa.data(), (all_chains)[n_proteins-1].NAA, &(sim_params.protein_model));
+		chkpeptide((all_chains)[n_proteins-1].aa.data(), (all_chains)[n_proteins-1].NAA, &(sim_params.protein_model));
 		initialize(&(all_chains[n_proteins-1]),&(all_chaints[n_proteins-1]),&sim_params); // peptide modification
 
 		/* contact map library */

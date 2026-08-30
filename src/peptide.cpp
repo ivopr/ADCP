@@ -853,9 +853,9 @@ void fulfill(Chain * chain,Chaint* chaint, simulation_params *sim_params)
 	/* calculate all backbone and side chain coordinates */
 	for (i = 1; i < chain->NAA; i++)
 		if (chain->aa[i].chainid != chain->aa[i-1].chainid) {
-			acidate((chain->aa) + i, chain->xaa_prev[chain->aa[i].chainid], chain->xaa[i], sim_params);
+			acidate(&chain->aa[i], chain->xaa_prev[chain->aa[i].chainid], chain->xaa[i], sim_params);
 		} else {
-			acidate((chain->aa) + i, chain->xaa[i - 1], chain->xaa[i], sim_params);
+			acidate(&chain->aa[i], chain->xaa[i - 1], chain->xaa[i], sim_params);
 		}
 
 	chain->aa[0].id = -1;		/* dummy assignment at virtual position */
@@ -871,19 +871,16 @@ void allocmem_chain(Chain *chain, int NAA, int Nchains)
 //	fprintf(stderr,"allocating chain for NAA=%d amino acids\n",NAA);
 	(chain)->NAA = NAA;
 	(chain)->Nchains = Nchains;
-	(chain)->aa =  (AA*)realloc((chain)->aa, (chain)->NAA * sizeof(AA));
 //	fprintf(stderr,"allocating erg: %ld\n",(chain)->NAA * (chain)->NAA * sizeof(double));
 	/* size_t product: the old int one overflowed above NAA ~ 46000. resize is
-	   also a real no-op when the size already matches, where realloc was not. */
+	   also a real no-op when the size already matches, where realloc was not.
+	   std::vector throws bad_alloc on OOM (the one accepted exception to this
+	   project's no-exceptions rule -- fatal-on-OOM either way), so none of
+	   these three need the NULL check the raw realloc'd chain->aa used to. */
 	(chain)->erg.resize((size_t)(chain)->NAA * (chain)->NAA);
-	/* std::vector throws bad_alloc on OOM (the one accepted exception to this
-	   project's no-exceptions rule -- fatal-on-OOM either way), so these two
-	   need no NULL check the way the still-raw chain->aa realloc does. */
 	(chain)->xaa.resize((chain)->NAA);
 	(chain)->xaa_prev.resize((chain)->Nchains + 1);
-	if ((chain)->aa == NULL) {
-		stop("allocmem_chain: Insufficient memory (chain->aa)");
-	}
+	(chain)->aa.resize((chain)->NAA);
 }
 
 
@@ -1031,7 +1028,7 @@ void build_peptide_from_sequence(Chain * chain, Chaint *chaint, char *str, simul
 
 	for (i = 1; i < chain->NAA; i++) {
 		//at the moment, xaa_prev is the same as xaa[i-1], so let's just use that
-		carbonate_f((chain->aa) + i, (chain->aa) + i - 1, chain->xaa[i - 1]);
+		carbonate_f(&chain->aa[i], &chain->aa[i - 1], chain->xaa[i - 1]);
 	}
 
 	/* input diagnostics: sequence and length */
@@ -1042,7 +1039,7 @@ void build_peptide_from_sequence(Chain * chain, Chaint *chaint, char *str, simul
 	   which we have when doing a crankshaft move */
 	if ((sim_params->protein_model).use_gamma_atoms != NO_GAMMA) {
 	    for (i = 1; i < chain->NAA; i++) {
-		initialise_sidechain_dihedral_angles((chain->aa)+i, &(sim_params->protein_model));
+		initialise_sidechain_dihedral_angles(&chain->aa[i], &(sim_params->protein_model));
 	    }
 	}
 
@@ -1585,10 +1582,8 @@ int getpdb(AA **ptraa, int *size, int *Nchains, FILE *infile)
 void freemem_chain(Chain *chain)
 {
 	if(chain){
-	    if (chain->aa ) {
-		free(chain->aa);
-		chain->aa = NULL;
-	    }
+	    chain->aa.clear();
+	    chain->aa.shrink_to_fit();
 	    chain->erg.clear();
 	    chain->erg.shrink_to_fit();
 	    chain->xaa.clear();
@@ -1829,9 +1824,19 @@ int pdbin(Chain *chain, simulation_params *sim_params, FILE *infile)
        it replaces did not. */
     Chain tempchain_storage{};
     Chain *tempchain = &tempchain_storage;
-	retv = getpdb(&(tempchain->aa), &(tempchain->NAA), &(tempchain->Nchains), infile);
+	/* getpdb/dblalloc work on a raw AA** growth buffer (shared with
+	   tools/bfactor.cpp's free-standing AA*, deliberately left alone --
+	   restructuring that parsing code is its own, separately-declined
+	   risk, see MIGRATION.md on getaa's cross-call parser state) --
+	   scratch into a raw buffer here too, then transfer into the vector. */
+	AA *scratch_aa = NULL;
+	int scratch_size = 0;
+	retv = getpdb(&scratch_aa, &scratch_size, &(tempchain->Nchains), infile);
+	tempchain->NAA = scratch_size;
+	tempchain->aa.assign(scratch_aa, scratch_aa + scratch_size);
+	free(scratch_aa);
 //	fprintf(stderr,"tempchain->NAA=%d\n",tempchain->NAA);
-	
+
 	/* resize() value-initializes new elements -- zero-initialization, since
 	   TripletBox's default constructor is implicit and trivial -- so this
 	   needs no explicit zero-fill loop the way the raw realloc'd array did. */
@@ -1911,7 +1916,7 @@ void initialize(Chain *chain, Chaint * chaint, simulation_params *sim_params)
 	   which we have when doing a crankshaft move */
 	if ((sim_params->protein_model).use_gamma_atoms != NO_GAMMA) {
 	    for (i = 1; i < chain->NAA; i++) {
-		initialise_sidechain_dihedral_angles((chain->aa)+i, &(sim_params->protein_model));
+		initialise_sidechain_dihedral_angles(&chain->aa[i], &(sim_params->protein_model));
 	    }
 	}
 	
@@ -1924,32 +1929,32 @@ void initialize(Chain *chain, Chaint * chaint, simulation_params *sim_params)
 
 	/* assign peptide bond orientations and adjust alpha-carbon locations */
 	/* actually, this will rebuild the whole protein, keeping only the repaired Ca locations */
-	amidorient(chain->xaa[0], NULL, (chain->aa) + 1);
-	amidorient(chain->xaa_prev[1], NULL, (chain->aa) + 1);
+	amidorient(chain->xaa[0], NULL, &chain->aa[1]);
+	amidorient(chain->xaa_prev[1], NULL, &chain->aa[1]);
 	for (i = 1; i < chain->NAA - 1 ; i++) {
 		chain->aa[i].SCRot = 0;
 		if (chain->aa[i].chainid == chain->aa[i+1].chainid) { //build the next amino acid
 			castvec(orig, chain->aa[i + 1].ca);
 			//first find the right xaa[i]
-			amidorient(chain->xaa[i], (chain->aa) + i, (chain->aa) + i + 1);
+			amidorient(chain->xaa[i], &chain->aa[i], &chain->aa[i + 1]);
 			//fprintf(stderr,"last chain.xaa %d %g %g %g\n",i,chain->xaa[i][0],chain->xaa[i][1],chain->xaa[i][2]);
 			//then rebuild CA of aa[i+1]
-			carbonate_f((chain->aa) + i + 1, (chain->aa) + i, chain->xaa[i]);
+			carbonate_f(&chain->aa[i + 1], &chain->aa[i], chain->xaa[i]);
 			//fprintf(stderr,"carb_f chain.ca %d %g %g %g\n",i+1,chain->aa[i+1].ca[0],chain->aa[i+1].ca[1],chain->aa[i+1].ca[2]);
 
 			rmse += distance(orig, chain->aa[i + 1].ca);
 			//fprintf(stderr,"rmse %g\n",rmse);
 		} else { //for end of chain
 			fprintf(stderr,"Orienting chain end differently! %d\n", i);
-			amidorient(chain->xaa[i], (chain->aa) + i, NULL);
+			amidorient(chain->xaa[i], &chain->aa[i], NULL);
 			fprintf(stderr,"Orienting chain start differently! %d\n", i+1);
 			//leave the next chain's first CA (aa[i+1]) alone
 			//and set up its xaa_prev orientation vector
-			amidorient(chain->xaa_prev[chain->aa[i+1].chainid], NULL, (chain->aa) + i + 1);
+			amidorient(chain->xaa_prev[chain->aa[i+1].chainid], NULL, &chain->aa[i + 1]);
 		}
 	}
 	//i = chain->NAA - 1
-	amidorient(chain->xaa[i], (chain->aa) + i, NULL);
+	amidorient(chain->xaa[i], &chain->aa[i], NULL);
 
 	//fprintf(stderr,"XAA\n");
 	//for (i = 1; i < chain->NAA; i++) {

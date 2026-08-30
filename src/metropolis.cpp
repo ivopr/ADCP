@@ -90,19 +90,19 @@ static int allowed(Chain *chain, Chaint *chaint, Biasmap* biasmap, int start, in
 					else if (j==1 && indMoved(2,start,reModNum(end,chain->NAA-1)) && linked)
 						q += ramabias(chaint->aat + chain->NAA - 1, chaint->aat + 1, chaint->aat + 2);
 					else if (j==1 && linked)
-						q += ramabias(chaint->aat + chain->NAA - 1, chaint->aat + 1, chain->aa + 2);	
+						q += ramabias(chaint->aat + chain->NAA - 1, chaint->aat + 1, chain->aa.data() + 2);	
 					else if (j==1)
-						q += ramabias(chain->aa + chain->NAA - 1, chaint->aat + 1, chaint->aat + 2);	
+						q += ramabias(chain->aa.data() + chain->NAA - 1, chaint->aat + 1, chaint->aat + 2);	
 					else if (j==chain->NAA-1 && indMoved(chain->NAA-1,start,reModNum(end,chain->NAA-1)) && linked)
 						q += ramabias(chaint->aat + j - 1, chaint->aat + j, chaint->aat +1);
 					else if (j==chain->NAA-1 && linked)
-						q += ramabias(chain->aa + j - 1, chaint->aat + j, chaint->aat +1);
+						q += ramabias(chain->aa.data() + j - 1, chaint->aat + j, chaint->aat +1);
 					else
-						q += ramabias(chaint->aat + j - 1, chaint->aat + j, chain->aa +1);
+						q += ramabias(chaint->aat + j - 1, chaint->aat + j, chain->aa.data() +1);
 				} else if (i == start)
-					q += ramabias(chain->aa + reModNum(i-1, chain->NAA-1), chaint->aat + reModNum(i, chain->NAA-1), chaint->aat + reModNum(i+1, chain->NAA-1));
+					q += ramabias(chain->aa.data() + reModNum(i-1, chain->NAA-1), chaint->aat + reModNum(i, chain->NAA-1), chaint->aat + reModNum(i+1, chain->NAA-1));
 				else if (i == end)
-					q += ramabias(chaint->aat + reModNum(i-1, chain->NAA-1), chaint->aat + reModNum(i, chain->NAA-1), chain->aa + reModNum(i+1, chain->NAA-1));
+					q += ramabias(chaint->aat + reModNum(i-1, chain->NAA-1), chaint->aat + reModNum(i, chain->NAA-1), chain->aa.data() + reModNum(i+1, chain->NAA-1));
 				else
 					q += ramabias(chaint->aat + reModNum(i-1, chain->NAA-1), chaint->aat + reModNum(i, chain->NAA-1), chaint->aat + reModNum(i+1, chain->NAA-1));
 			} 
@@ -127,11 +127,11 @@ static int allowed(Chain *chain, Chaint *chaint, Biasmap* biasmap, int start, in
 				}
 			} else {
 				if (j == 1 && i == chain->NAA-1 && sim_params->protein_model.external_potential_type2 == 4)
-					q = energy2cyclic(biasmap,chain->aa + 1, chaint->aat + chain->NAA - 1, &(sim_params->protein_model));
+					q = energy2cyclic(biasmap,chain->aa.data() + 1, chaint->aat + chain->NAA - 1, &(sim_params->protein_model));
 				else if (i == 1 && j == chain->NAA-1 && sim_params->protein_model.external_potential_type2 == 4)
-					q = energy2cyclic(biasmap,chaint->aat + 1, chain->aa + chain->NAA - 1, &(sim_params->protein_model));
+					q = energy2cyclic(biasmap,chaint->aat + 1, chain->aa.data() + chain->NAA - 1, &(sim_params->protein_model));
 				else
-					q = energy2(biasmap,chaint->aat + reModNum(i, chain->NAA-1), (chain->aa) + j, &(sim_params->protein_model));
+					q = energy2(biasmap,chaint->aat + reModNum(i, chain->NAA-1), chain->aa.data() + j, &(sim_params->protein_model));
 			}
 
 			chaint->Ergt(i, j) = q;
@@ -174,11 +174,11 @@ static int allowed(Chain *chain, Chaint *chaint, Biasmap* biasmap, int start, in
 		if (linked)
 			cyclicBondEnergy = cyclic_energy((chaint->aat) + 1, (chaint->aat) + chain->NAA - 1, 0);
 		else if (start == 1)
-			cyclicBondEnergy = cyclic_energy((chaint->aat) + 1, (chain->aa) + chain->NAA - 1, 0);
+			cyclicBondEnergy = cyclic_energy((chaint->aat) + 1, chain->aa.data() + chain->NAA - 1, 0);
 		else if (end == chain->NAA-1)
-			cyclicBondEnergy = cyclic_energy((chain->aa) + 1, (chaint->aat) + chain->NAA - 1, 0);
+			cyclicBondEnergy = cyclic_energy(chain->aa.data() + 1, (chaint->aat) + chain->NAA - 1, 0);
 		else
-			cyclicBondEnergy = cyclic_energy((chain->aa) + 1, (chain->aa) + chain->NAA - 1, 0);
+			cyclicBondEnergy = cyclic_energy(chain->aa.data() + 1, chain->aa.data() + chain->NAA - 1, 0);
 		externalloss += chain->Erg(1, 0) - cyclicBondEnergy;
 	}
 
@@ -1281,7 +1281,7 @@ int rotate_cyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, 
 			chaint->xaat[j][i][0] = chain->xaa[j+direction][i][0];
 			chaint->xaat[j][i][1] = chain->xaa[j+direction][i][1];
 			chaint->xaat[j][i][2] = chain->xaa[j+direction][i][2];
-			(chaint->aat + j)->ca[i] = (chain->aa + j + direction)->ca[i];
+			(chaint->aat + j)->ca[i] = (chain->aa.data() + j + direction)->ca[i];
 		}
 	}
 
@@ -1298,7 +1298,7 @@ int rotate_cyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, 
 			chaint->xaat[1][i][0] = chain->xaa[2][i][0];
 			chaint->xaat[1][i][1] = chain->xaa[2][i][1];
 			chaint->xaat[1][i][2] = chain->xaa[2][i][2];
-			(chaint->aat + start)->ca[i] = (chain->aa + 2)->ca[i];
+			(chaint->aat + start)->ca[i] = (chain->aa.data() + 2)->ca[i];
 		}
 		for (int i = start; i < end; i++){ //moving residues start+1 to end-1
 			carbonate_f(chaint->aat + i + 1, chaint->aat + i, chaint->xaat[i]);
@@ -1314,7 +1314,7 @@ int rotate_cyclic(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, 
 			chaint->xaat[1][i][0] = chain->xaa[end][i][0];
 			chaint->xaat[1][i][1] = chain->xaa[end][i][1];
 			chaint->xaat[1][i][2] = chain->xaa[end][i][2];
-			(chaint->aat + end)->ca[i] = (chain->aa + end -1)->ca[i];
+			(chaint->aat + end)->ca[i] = (chain->aa.data() + end -1)->ca[i];
 		}
 		for (int i = end - 1; i > start; i--){ //moving residues end-1 to start+1
 			carbonate_b(chaint->aat + i, chaint->aat + i + 1, chaint->xaat[i]);

@@ -408,7 +408,7 @@ void Hyd_pdbout(Chain *chain,model_params *protein_model,char *filename, char *c
     fprintf(stderr,"Note overwriting %s\n",ca_filename);
   }
   fptr2 = fopen(ca_filename,"w");
-  Hyd_pdbprint(chain->aa, chain->NAA, protein_model, fptr,fptr2);
+  Hyd_pdbprint(chain->aa.data(), chain->NAA, protein_model, fptr,fptr2);
   fclose(fptr); fclose(fptr2);
 }
 
@@ -580,8 +580,8 @@ int read_in_after_flex(Chain *chain,Biasmap *biasmap,Chain *input_chains,simulat
       chain->flex_data->read_in_flex++;
 
       int i; for (i = 1; pdbin(ichain,sim_params,fptr) != EOF; i++);
-      fixpeptide(ichain->aa, ichain->NAA, &(sim_params->protein_model));
-      chkpeptide(ichain->aa, ichain->NAA, &(sim_params->protein_model));
+      fixpeptide(ichain->aa.data(), ichain->NAA, &(sim_params->protein_model));
+      chkpeptide(ichain->aa.data(), ichain->NAA, &(sim_params->protein_model));
       update_sim_params_from_chain(ichain,sim_params); // updating NAA and seq
 
       initialize(ichain,ichaint,sim_params);

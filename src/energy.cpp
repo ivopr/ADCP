@@ -111,7 +111,7 @@ void energy_matrix_calculate(Chain *chain, Biasmap *biasmap, model_params *mod_p
 		for (i = 1; i < chain->NAA; i++) {
 			chain->Erg(0, i) = ADenergies[i-1];
 			fprintf(stderr," aaa %d %g \n",i, chain->Erg(0,i));
-			//chain->Erg(0, i) = ADenergy(chain->aa + i, mod_params);
+			//chain->Erg(0, i) = ADenergy(chain->aa.data() + i, mod_params);
 			chain->Erg(0, 0) += chain->Erg(0, i);
 		}
 		//chain->Erg(0, 0) = global_energy(0,0,chain, NULL,biasmap, mod_params);
@@ -120,18 +120,18 @@ void energy_matrix_calculate(Chain *chain, Biasmap *biasmap, model_params *mod_p
 	fprintf(stderr,"SS Energy ");
 	chain->Erg(chain->NAA - 1, 0) = global_energy(0, 0,chain, NULL,biasmap, mod_params);
 
-	if (mod_params->external_potential_type2 == 4)	chain->Erg(1, 0) = cyclic_energy((chain->aa) + 1, (chain->aa) + chain->NAA - 1, 0);
+	if (mod_params->external_potential_type2 == 4)	chain->Erg(1, 0) = cyclic_energy(chain->aa.data() + 1, chain->aa.data() + chain->NAA - 1, 0);
 	/* diagonal */
 	fprintf(stderr,"diag ");
 	//fprintf(stderr,"ENERGY1 START\n");
 	for (i = 1; i < chain->NAA; i++){
-		chain->Erg(i, i) = energy1((chain->aa) + i, mod_params);
+		chain->Erg(i, i) = energy1(chain->aa.data() + i, mod_params);
 	//	fprintf(stderr,"%g ",chain->Erg(i,i));
 	}
 	//fprintf(stderr,"\n");
 	//fprintf(stderr,"ENERGY1 END\n");
 	for (i = 2; i < chain->NAA - 1; i++){
-		chain->Erg(i, i) += ramabias((chain->aa)+i-1, (chain->aa) + i, (chain->aa) +i+1);
+		chain->Erg(i, i) += ramabias(chain->aa.data()+i-1, chain->aa.data() + i, chain->aa.data() +i+1);
 	}
 
 
@@ -139,14 +139,14 @@ void energy_matrix_calculate(Chain *chain, Biasmap *biasmap, model_params *mod_p
 	fprintf(stderr,"offdiag ");
 	for (i = 1; i < chain->NAA; i++){
 		for (j = 1; j < i; j++){
-			chain->Erg(i, j) = chain->Erg(j, i) = energy2(biasmap,(chain->aa) + i, (chain->aa) + j, mod_params);
+			chain->Erg(i, j) = chain->Erg(j, i) = energy2(biasmap,chain->aa.data() + i, chain->aa.data() + j, mod_params);
 	//	fprintf(stderr,"%g ",chain->Erg(i,j));
             
         }
 	//fprintf(stderr,"\n");
     }
 	if (mod_params->external_potential_type2 == 4)
-		chain->Erg(1, chain->NAA-1) = chain->Erg(chain->NAA-1, 1) = energy2cyclic(biasmap,(chain->aa) + 1, (chain->aa) + chain->NAA-1, mod_params);
+		chain->Erg(1, chain->NAA-1) = chain->Erg(chain->NAA-1, 1) = energy2cyclic(biasmap,chain->aa.data() + 1, chain->aa.data() + chain->NAA-1, mod_params);
 }
 
 /* Calculate the total energy by adding up the energy matrix. */
@@ -1237,7 +1237,7 @@ double sbond_energy(int start, int end, Chain *chain,  Chaint *chaint, Biasmap *
 	  a = chaint->aat + cyslist[i];  
 	}
 	else{
-	  a = chain->aa + cyslist[i];  
+	  a = chain->aa.data() + cyslist[i];  
 	}
 	cyspos[i][0] = a->g[0];
 	cyspos[i][1] = a->g[1];
@@ -1263,7 +1263,7 @@ double sbond_energy(int start, int end, Chain *chain,  Chaint *chaint, Biasmap *
 		a = chaint->aat + cyslist[i];  
 	}
 	else{
-	  a = chain->aa + cyslist[i];  
+	  a = chain->aa.data() + cyslist[i];  
 	}
 	int done = 0;
 	while(done == 0){
@@ -1281,7 +1281,7 @@ double sbond_energy(int start, int end, Chain *chain,  Chaint *chaint, Biasmap *
 		  b = chaint->aat + cyslist[nearestj];  
 	    }
 	    else{
-		  b = chain->aa + cyslist[nearestj];  
+		  b = chain->aa.data() + cyslist[nearestj];  
 	    }
 		
 		double temp = lowlevel_sbond(a,b,mod_params); 
@@ -2017,7 +2017,7 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 			a = chaint->aat + i;
 		}
 		else {
-			a = chain->aa + i;
+			a = chain->aa.data() + i;
 		}
 		if (!indMoved(i, start, (end-1)%(chain->NAA-1)+1 )) {
 			if (a->id != 'G'){
@@ -2084,11 +2084,11 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 			if (chaint!=NULL)
 				a = chaint->aat + (1 + (i-1)%(chain->NAA-1));
 			else
-				a = chain->aa + (1 + (i-1)%(chain->NAA-1));
+				a = chain->aa.data() + (1 + (i-1)%(chain->NAA-1));
 			//if (chaint!=NULL)
 			//	a = chaint->aat + i;
 			//else
-			//	a = chain->aa + i;
+			//	a = chain->aa.data() + i;
 
 			/* element types are 0:C, 1:N, 2:O, 3:H, 4:S, 5:CA, 6:NA           */
 			
@@ -2648,8 +2648,8 @@ double global_energy(int start, int end, Chain *chain, Chaint *chaint, Biasmap *
 		add(com, ((chaint->aat) + i)->ca, ((chaint->aat) + i)->n);
 		add(com, com, ((chaint->aat) + i)->c);
 	} else {
-		add(com, ((chain->aa) + i)->ca, ((chain->aa) + i)->n);
-		add(com, com, ((chain->aa) + i)->c);
+		add(com, (chain->aa.data() + i)->ca, (chain->aa.data() + i)->n);
+		add(com, com, (chain->aa.data() + i)->c);
 	}
 	scale(com,1.0/3.0, com);
 	add(mol_com, mol_com, com);
@@ -2659,7 +2659,7 @@ double global_energy(int start, int end, Chain *chain, Chaint *chaint, Biasmap *
   for (int i = 1; i < chain->NAA; i++){
 	double ee;
 	if (!chaint) {
-		ee = external((chain->aa) + i, mod_params, mol_com);
+		ee = external(chain->aa.data() + i, mod_params, mol_com);
 		//chain->Erg(0, i) = ee;
 		//fprintf(stderr,"external energy3 %g\n", ee);
 	}
@@ -2670,14 +2670,14 @@ double global_energy(int start, int end, Chain *chain, Chaint *chaint, Biasmap *
 	} else {
 		//ee = chain->Erg(0, i);
 		//chaint->Ergt(0, i) = ee;
-		ee = external((chain->aa) + i, mod_params, mol_com);
+		ee = external(chain->aa.data() + i, mod_params, mol_com);
 		//fprintf(stderr, "external energy4 %g\n", ee);
 	}
 	
 	//ee = 10.0;
 	ans += ee;
 	test_external += ee;
-	ans += external2(((chain->aa) + i), mod_params, mol_com);
+	ans += external2((chain->aa.data() + i), mod_params, mol_com);
   }
 
   return ans;
@@ -2693,16 +2693,16 @@ double all_vdw(Biasmap *biasmap, Chain *chain, model_params *mod_params) {
 	double d2 = 0.;
 
 	for (i = 1; i < chain->NAA; i++) {
-		val += clash(chain->aa + i, mod_params);
+		val += clash(chain->aa.data() + i, mod_params);
 		for (j = 1; j < i; j++) {
 			switch (i - j) {
 			case 1:
-				val += exclude_neighbor(chain->aa + i, chain->aa + j, mod_params);
+				val += exclude_neighbor(chain->aa.data() + i, chain->aa.data() + j, mod_params);
 				break;
 			default:
-				d2 = distance((chain->aa + i)->ca, (chain->aa + j)->ca);
+				d2 = distance((chain->aa.data() + i)->ca, (chain->aa.data() + j)->ca);
 				if (d2 < mod_params->vdw_extended_cutoff) {
-					val += exclude(chain->aa + i, chain->aa + j, d2, mod_params);
+					val += exclude(chain->aa.data() + i, chain->aa.data() + j, d2, mod_params);
 				}
 				break;
 			}
@@ -2729,7 +2729,7 @@ static double sumf(Chain* chain, Biasmap* biasmap, double (*fx) ( Biasmap * bias
 
 	for (i = 1; i < chain->NAA; i++)
 		for (j = 1; j < i; j++)
-			val += (*fx) (biasmap, chain->aa + i, chain->aa + j, mod_params);
+			val += (*fx) (biasmap, chain->aa.data() + i, chain->aa.data() + j, mod_params);
 
 	return val;
 }
@@ -2741,7 +2741,7 @@ static double sumf_diag(Chain* chain, Biasmap* biasmap, double (*fx) ( AA *, mod
 	double val = 0.;
 
 	for (i = 1; i < chain->NAA; i++)
-		val += (*fx) (chain->aa + i, mod_params);
+		val += (*fx) (chain->aa.data() + i, mod_params);
 
 	return val;
 }
