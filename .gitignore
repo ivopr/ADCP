@@ -27,4 +27,4 @@ rigidReceptor.*.map
 con8
 
 # Local build trees
-build*/
+build*
