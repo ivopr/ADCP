@@ -387,7 +387,7 @@ syntax check, never by running.
 `energy.cpp` splits cleanly into cold setup/diagnostic code and hot per-MC-move
 code. **Only the cold half was touched.** Nothing in this step puts a heap
 container, or any new indirection, on a per-move path — which matters more than it
-used to, because of what step 6-0 turned up (see "MECHANISM RESOLVED" below).
+used to, because of what step 6-0 turned up (see "ROOT CAUSE FOUND" below).
 
 **Real bugs fixed:**
 
@@ -1187,7 +1187,7 @@ unchanged (`-13.6251`) against each commit's own parent's pristine binary.
 ## FIXED REGRESSION — `energy.cpp`, introduced by `5660a33` (Phase 1 step 6)
 
 **Status: symptom gone. Mechanism now IDENTIFIED as indirect, and the underlying bug
-is still latent — read the "MECHANISM RESOLVED" subsection below before trusting the
+is FOUND and already fixed at HEAD — read the "ROOT CAUSE FOUND" subsection below before trusting the
 fix or the hypotheses table.**
 
 The fix: `tc` is a fixed-size stack array sized at the largest rotamer set declared in
@@ -1248,7 +1248,7 @@ Two lessons worth keeping:
   13/13 plus docking and validation at the time, because the failure is intermittent. **A
   green test run is not evidence that a diff is cast-only — read the diff.**
 
-### MECHANISM RESOLVED — `tc` was a red herring; the real bug is still latent
+### MECHANISM RESOLVED — `tc` was a red herring (SUPERSEDED: see "ROOT CAUSE FOUND")
 
 > **The `sqrt` precision defect found later in this same commit is NOT this bug.** That one
 > lives in `scoreSideChain`/`scoreSideChainNoClash`, which — as this section itself proves —
@@ -1303,6 +1303,106 @@ Consequences, and they are not comfortable:
 
 Do not delete the stack-`tc` array — it is measurably suppressing the symptom. Just do
 not believe it fixed anything.
+
+
+### ROOT CAUSE FOUND — uninitialised `opt`; already fixed at HEAD by `9cad378`
+
+> **This supersedes "MECHANISM RESOLVED" above, which is wrong on its central claim.**
+> That section dismissed the `currTargetEnergy` spin loop because it sits inside
+> `if (opt == 1)` and `opt` "defaults to 0". `opt` not staying 0 *is* the bug, so the
+> document's **original** diagnosis was right and was discarded using the defect as the
+> alibi. What still stands from it: `scoreSideChain`/`scoreSideChainNoClash` genuinely
+> never run on the folding path, so `tc` really was a red herring — but the stack-`tc`
+> array was never the thing holding the hang back either.
+
+**The defect.** In `params.cpp`, `model_param_initialise` spans lines **190–331** and
+`model_param_finalise` starts at **332**. The defaults for `opt`, `opt_totE_weight`,
+`opt_firstlastE_weight` and `opt_extE_weight` sat at line **425 — inside `finalise`**,
+which runs at shutdown (`param_finalise`, `main.c:1095`). Those four fields were
+therefore **never initialised at startup** and held whatever was on `main`'s stack
+(`sim_params` is a stack local, `main.c:922`). When the garbage `opt` happened to be
+`1`, `simulate()` took the repeated-annealing branch on a plain fold, and the garbage
+`opt_totE_weight` made `currTargetEnergy` denormal via
+`currTargetEnergy = opt_totE_weight * totenergy(chain) + …` (`main.c:277`), after which
+`while (swapEnergy[swapInd] >= currTargetEnergy) swapInd = rand() % (swapLength + 1);`
+(`main.c:304`) can never exit — every `swapEnergy[i]` is 9999-ish and
+`currTargetEnergy` is ~1e-308.
+
+**Already fixed.** `9cad378` ("feat: add optimizing-strategy weight fields to
+model_params", +6 lines, hours after `5660a33`) added the same four defaults to
+`model_param_initialise` (`params.cpp:298-301` at HEAD). It was committed as a feature
+and never connected to the hang. **HEAD has both copies; the bug is gone at HEAD.**
+
+Every link measured, not inferred:
+
+| link | evidence |
+|---|---|
+| **Where** | Backtrace `__random` ← `rand` ← `simulate` ← `main`, gdb resolving `main.c:304` and printing the source line, `swapInd = 3`, 11 valid `swapChains`. 100% CPU, state `R`. |
+| **A spin, not slowness** | Two samples 45 s apart: identical `rip`. The denormal-**slowdown** hypothesis (x86 FP assists) is **refuted**. |
+| **Which loop** | Confirmed by disassembly before symbols existed: return addr → vaddr `0x4f91`, showing `rand() % 11`, `comisd swapEnergy[swapInd]` vs `currTargetEnergy`, `jae` back to the call, falling through to the 3-double `"swap out stuck"` `fprintf`. |
+| **Which fields** | gdb at the hang: `opt = 1`; `opt_totE_weight = 2.12e-314` (`0x00000000ffffffff`); `opt_extE_weight`/`opt_firstlastE_weight` = `0x00007293a05e8f30` / `0x00007293a0b92270` — **libc addresses**, i.e. memory never written. `external_potential_type` (set in *both* functions) read correctly as 0. |
+| **Never written** | Hardware watchpoint on `&sim_params.protein_model.opt`: already `1` at a breakpoint **immediately after `param_initialise` returned**, and the watchpoint **never fired** for the rest of the run. |
+| **Causation** | Same script, same N, one arm each. Unfixed `5660a33`: **5 / 15**. `5660a33` + **only** those four initialiser lines: **0 / 15**. Fisher exact one-sided **p = 0.021**. Every one of the 5 failures showed the corruption marker *and* the timeout together — no timeout without corruption, no corruption without timeout. |
+
+**Ruled out along the way** (do not re-derive): a C-vs-C++ struct layout mismatch —
+`sizeof(model_params)=1056`, `sizeof(simulation_params)=1560`, `off(opt)=24`,
+`off(protein_model)=376`, **identical** compiled as C99 and as C++17; the two
+`model_params_copy`/`sim_params_copy` sites (`energy.cpp:2874`, `vdw.cpp:1276`), which
+have the live struct as the *source*; and the `swapEnergy`/`swapChains` VLAs, sized
+`[swapLength + 1]` and only ever indexed `0..swapLength` (checked because `7e2192d` was
+an off-by-one in this exact pair).
+
+**Consequence — the 12× hammer can go back to its original scope.** The "MECHANISM
+RESOLVED" section made it mandatory for *every change in any file* solely because the
+real defect was believed latent. It is not latent; it is fixed. Revert to the per-file
+rule (run it after `energy.cpp`/`vdw.cpp`/`metropolis.cpp` changes), and keep
+`--repeat until-fail:12` in CI where it costs nothing.
+
+**Generalised, and the class is now closed.** Any field assigned in
+`model_param_finalise`/`param_finalise` but *not* in the matching `*_initialise` is
+uninitialised for the entire run. That diff has now been run over both pairs:
+
+| tree | `model_param_*` | `param_*` |
+|---|---|---|
+| `5660a33` (control) | **4**: `opt`, `opt_totE_weight`, `opt_extE_weight`, `opt_firstlastE_weight` | 0 |
+| HEAD | **0** | 0 |
+
+The check is not vacuous — it reports exactly the four known-bad fields on the control
+and nothing on HEAD, which is the only reason a clean HEAD result means anything.
+`external_potential_type2` is set in both functions (`:313` and `:440`), which is why it
+read correctly at the hang while its four neighbours did not: the pairing was
+inconsistent, not uniformly wrong. Worth re-running this diff if anyone adds a field to
+`model_params`.
+
+### How to reproduce it — three corrections to this document's protocol
+
+These cost most of a session to rediscover; do not re-derive them.
+
+1. **It reproduces only when runs are SEQUENTIAL.** Three concurrent batches gave
+   **0 hangs in 39 runs** (HEAD, HEAD-with-heap-`tc`, and `5660a33` itself), and the
+   first sequential attempt caught it within 2 iterations. Concurrency reliably
+   suppresses it. Any concurrent hammer is a false-negative generator — and note
+   `run_fold_test.sh` `rm -rf`s a fixed workdir, so parallel `ctest` runs are
+   invalid for a second reason.
+2. **`gdb -p` does not work here; gdb must be an ancestor.** `ptrace_scope` is `1`
+   (`/proc/sys/kernel/yama/ptrace_scope`), so a sibling gdb is refused. The fix that
+   perturbs nothing: from the run's own parent shell, `exec gdb -p $P -batch …` —
+   after `exec`, gdb *is* the parent. This is why this document's "did not reproduce
+   under gdb (0/5)" is not evidence about the bug: *launching* under gdb perturbs
+   layout, *attaching* to an already-hung process does not.
+   An `LD_PRELOAD` shim calling `prctl(PR_SET_PTRACER_ANY)` also works but is the
+   wrong tool here — an extra `.so` shifts address-space layout, the exact thing
+   this bug is sensitive to.
+3. **`-g` is free.** `-O3 -g` vs `-O3` produced a **byte-identical instruction
+   stream** (verified with `objdump -d`), so debug info can be carried while hunting
+   without disturbing the layout.
+
+Tools: **MSan is installed** (clang 18.1.3) — this document's "MSan or valgrind,
+still not installed here" is stale; **valgrind is still absent**. MSan on the fold
+path at HEAD reports only the known glibc `fopen` false positive
+(`energy.cpp:222`, the `fopen` call itself), so it has not yet implicated `opt`.
+`perf`'s `assists.fp` counter — the direct way to test a denormal-slowdown story —
+is unavailable without root (`perf_event_paranoid=4`).
 
 ## CI hardening (done after Phase 1, before starting Phase 2)
 
