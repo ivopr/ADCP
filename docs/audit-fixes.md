@@ -183,6 +183,92 @@ Per fix, using `tests/validation/`:
 - A4 gate: **failed**. Four seed blocks of the 3Q47 redock, top-1 backbone RMSD
   0.70/0.84/0.78/0.74 compressed against 0.85/2.58/9.47/0.90 exempt
 
+## Revisiting A1 and A4: how the refit would actually work
+
+Parked, not abandoned. Recording what was established so it does not have to be
+re-derived.
+
+### The refit does not require re-docking
+
+Both failures are **ranking** failures — the near-native pose is found every
+time and loses. That decouples the fit from the search, and three properties of
+the code make the fit arithmetic over a table rather than a compute campaign:
+
+1. `kauzmann_param` is a **pure linear prefactor** on the hydrophobic term
+   (`energy.cpp:956`, `return -k_h * energy * intensity`). So
+   `E(k_h) = E_rest + k_h * H`, and any `k_h` is a reweighting, not a re-run.
+2. A1 changes the shape of `hydrophobic_low`, but `H` follows from the pose
+   geometry. That is two numbers per pose (`H_rise`, `H_decay`), not two runs.
+3. A4 is which map file was loaded. Also two numbers per pose.
+
+Dump roughly six components per pose **once**
+(`E_rest, H_rise, H_decay, Eelec_compressed, Eelec_raw, totalE, extE`) and the
+parameter sweep is seconds.
+
+### The fitting rig is already in the tree
+
+`energy.cpp:2916` `energy_probe_1()` is CRANKITE's contrastive-divergence
+gradient machinery, intact: 36 parameter slots, `energy_probe_1_last`/`_this`
+holding the CD data and model expectations, and `energy_probe_1_calc[]`
+selecting what to fit. **Slot 9 is already `kauzmann_param`**, slot 10 is
+`hydrophobic_cutoff_range`, slot 11 the dielectric. This is not a from-scratch
+project; it is the rig that produced the 0.122.
+
+`adcp -f pose.pdb -r 1x0` was tried and does load a structure and print
+`totalE`/`extE` in 0 seconds. In that probe the pose was judged out of the box
+(extE 699993, the out-of-box penalty) because the AutoSite translation points
+were not staged alongside it. Wiring those up is setup, not architecture.
+
+### Three things are missing, and only one is code
+
+1. **A training set disjoint from A/B/C.** The 49 targets are the test set;
+   fitting and validating on them is how a benchmark stops meaning anything.
+   Use **peptiDB (set F) minus set E** — the plan already marks it `ref = NA`
+   precisely because no ADCP number is published for it, so it contaminates no
+   comparison.
+2. **An objective.** CD maximises the likelihood of native *conformations* — a
+   generative fit, and the one that produced these values. What broke here is
+   **discrimination**: the right pose exists and loses. Fit against the *rank*
+   of the lowest-RMSD pose, which is literally the metric that failed.
+3. **The component dump.** The only code: a mode that reads a pose and prints
+   the component vector above.
+
+Fit A1 and A4 **jointly** — two continuous knobs (`kauzmann_param`,
+`hydrophobic_cutoff_range`) and two discrete ones (hydrophobic form, `e.map`
+compression), so four grid scans over two parameters. The 0.25/0.75 ranking
+blend is a fifth knob if the four are not enough.
+
+### The trap
+
+The published ADCP numbers were produced **with** A1's inverted form. So
+"recovers the paper's numbers" is not the same as "correct" — some of the
+published performance may depend on the bias.
+
+The honest tiebreaker is crystallographic RMSD, not published fnc. A
+parameterisation that ranks the near-native pose first more often **and** matches
+the paper settles it. One that improves RMSD while worsening published fnc is a
+finding about the paper, not about this fork.
+
+### Cost, and the cheap first move
+
+| step | work | compute |
+|---|---|---|
+| feasibility probe on existing ensembles | ~1 day | minutes |
+| real fit against a training set | +2 days | ~1 night of docking |
+| validation: re-dock A/B/C | — | ~40 min (smoke tier) |
+
+The feasibility probe pays for itself alone: if **no** combination of
+(`k_h`, form, compression) ranks better than the current one even on the test
+set, the recalibration idea dies there. Only if something wins is it worth
+assembling the training set properly.
+
+Note the ensembles it would run against (49 targets x 8 replicas x 30 models,
+across five run sets) lived in a scratch directory and are not preserved.
+Regenerating them is the ~40 min smoke tier, so this is not a blocker.
+
+**First concrete step**: stage the translation points into the rescore probe and
+dump the component vector for the 3Q47 ensemble. Everything else depends on it.
+
 ## What this plan does not solve
 
 **The manifest was assembled to reproduce published tables, not to isolate
