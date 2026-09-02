@@ -19,6 +19,12 @@ __pycache__/
 Testing/
 CTestTestfile.cmake
 output.pdb
+# ...but tests/data/output.pdb is a fixture, not an artifact: it is the
+# multi-model snapshot file func_adcp_ns_smoke and both checkpoint tests
+# read. The bare rule above swallowed it, so those three tests could only
+# ever pass on a machine that already had the file -- a clean clone failed
+# them with 'awk: cannot open .../tests/data/output.pdb'.
+!tests/data/output.pdb
 *.pdb.tmp
 ramaprob.data
 !data/ramaprob.data
