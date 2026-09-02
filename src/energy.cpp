@@ -1632,12 +1632,18 @@ float scoreSideChain(int nbRot, int nbAtoms, double *charges, int *atypes,  doub
 			a->g[2] = tc[a->SCRot][0][2];
 			break;
 		default:
-                        a->g[0] = tc[a->SCRot][0][0];
-                        a->g[1] = tc[a->SCRot][0][1];
-                        a->g[2] = tc[a->SCRot][0][2];
-			//a->g[0] = bestSideChainCenter[0];
-			//a->g[1] = bestSideChainCenter[1];
-			//a->g[2] = bestSideChainCenter[2];
+			/* The gamma pseudo-atom is the side chain's CENTROID, not its
+			 * first rotamer atom. aadict.cpp calibrates every gamma radius
+			 * -- hydrophobic contact, vdW, H-bond -- against a pseudo-atom
+			 * sitting near the charged tip (LYS 4.700 A from CB, ARG 4.900).
+			 * Writing tc[SCRot][0] here put it at CG instead, ~1.5 A from CB,
+			 * so those radii were applied at the wrong place entirely
+			 * (audit finding G). bestSideChainCenter is already computed over
+			 * the heavy atoms of the winning rotamer; upstream's `cyclic`
+			 * branch uses it, and so do we now. */
+			a->g[0] = bestSideChainCenter[0];
+			a->g[1] = bestSideChainCenter[1];
+			a->g[2] = bestSideChainCenter[2];
 			break;
 
 	}
@@ -1819,12 +1825,18 @@ double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atype
 			a->g2[2] = tc[a->SCRot][0][2];
 			break;
 		default:
-                        a->g[0] = tc[a->SCRot][0][0];
-                        a->g[1] = tc[a->SCRot][0][1];
-                        a->g[2] = tc[a->SCRot][0][2];
-			//a->g[0] = bestSideChainCenter[0];
-			//a->g[1] = bestSideChainCenter[1];
-			//a->g[2] = bestSideChainCenter[2];
+			/* The gamma pseudo-atom is the side chain's CENTROID, not its
+			 * first rotamer atom. aadict.cpp calibrates every gamma radius
+			 * -- hydrophobic contact, vdW, H-bond -- against a pseudo-atom
+			 * sitting near the charged tip (LYS 4.700 A from CB, ARG 4.900).
+			 * Writing tc[SCRot][0] here put it at CG instead, ~1.5 A from CB,
+			 * so those radii were applied at the wrong place entirely
+			 * (audit finding G). bestSideChainCenter is already computed over
+			 * the heavy atoms of the winning rotamer; upstream's `cyclic`
+			 * branch uses it, and so do we now. */
+			a->g[0] = bestSideChainCenter[0];
+			a->g[1] = bestSideChainCenter[1];
+			a->g[2] = bestSideChainCenter[2];
 			break;
 
 	}
@@ -1852,6 +1864,45 @@ double gridenergy(double X, double Y, double Z, int i, double charge) {
 	/* elements are 0:C, 1:N, 2:O, 3:H, 4:S, 5:CA, 6:NA ,7:elec 8:desolv      */
 
 
+	/* Out-of-box penalty, measured from the NEAREST FACE.
+	 *
+	 * The original form measured from the box CENTRE --
+	 *     outofBoxPen = (exactGrid - N/2)^2 / 20
+	 * -- which is wrong in three ways: an atom 0.1 A outside a 55-point box
+	 * immediately pays ~38 RT while an atom just inside the same wall pays 0
+	 * (a step discontinuity); the gradient does not point back into the box
+	 * near the wall; and the `> 1e9` escape made an atom flung far away pay
+	 * only 10, i.e. LESS than one that barely left. N/2 was integer division
+	 * too. See the audit's finding A5.
+	 *
+	 * This is upstream's own fix, taken from the `cyclic` branch: distance
+	 * past the nearest face, squared, with the whole thing damped and capped
+	 * on the way out. Monotonic, continuous at the wall, and it points home.
+	 */
+	int outofBox = 0;
+	double outofBoxPen = 0.0;
+	double outD = 0.0;
+	if (exactGridX <= 0 || exactGridX >= NX - 1) {
+		outD = exactGridX <= 0 ? (-exactGridX) : (exactGridX - NX + 1);
+		outofBoxPen = outD * outD;
+		outofBox = 1;
+		erg += outofBoxPen;
+	}
+	if (exactGridY <= 0 || exactGridY >= NY - 1) {
+		outD = exactGridY <= 0 ? (-exactGridY) : (exactGridY - NY + 1);
+		outofBoxPen = outD * outD;
+		outofBox = 1;
+		erg += outofBoxPen;
+	}
+	if (exactGridZ <= 0 || exactGridZ >= NZ - 1) {
+		outD = exactGridZ <= 0 ? (-exactGridZ) : (exactGridZ - NZ + 1);
+		outofBoxPen = outD * outD;
+		outofBox = 1;
+		erg += outofBoxPen;
+	}
+	if (outofBox)
+		return erg > 10000 ? 10000. : (erg / 100);
+
 	double abscharge = (charge >= 0. ? charge : -charge);
     //charge = 0.;
 	int lowGridX = (int)exactGridX,
@@ -1872,8 +1923,17 @@ double gridenergy(double X, double Y, double Z, int i, double charge) {
 		highHighLowFrac = highFracX * highFracY * lowFracZ,
 		highHighHighFrac = highFracX * highFracY * highFracZ;
 
+	/* Indices are computed only AFTER the out-of-box return above, which is a
+	 * deliberate departure from upstream's `cyclic` branch. Upstream drops the
+	 * old `if (lowLowLowIndex < 0 || ...) return 0;` guard but still computes
+	 * the index first -- and getindex() takes ints, so an atom far enough
+	 * outside the box converts an out-of-range double to int, which is UB
+	 * (the audit's finding P). Ordering it this way makes the conversion
+	 * well-defined instead of merely unused: past this point every axis
+	 * satisfies 0 < exactGrid < N-1, so the low corner is in [0, N-2] and all
+	 * eight stencil indices are inside the map. The old guard was wrong twice
+	 * over anyway -- `>` instead of `>=`, and it checked only the low corner. */
 	int lowLowLowIndex = getindex(exactGridX, exactGridY, exactGridZ);
-	if (lowLowLowIndex < 0 || lowLowLowIndex > NX*NY*NZ) return 0;
 	int	lowLowHighIndex = lowLowLowIndex + NX * NY,
 		lowHighLowIndex = lowLowLowIndex + NX,
 		lowHighHighIndex = lowLowHighIndex + NX,
@@ -1882,65 +1942,32 @@ double gridenergy(double X, double Y, double Z, int i, double charge) {
 		highHighLowIndex = lowHighLowIndex + 1,
 		highHighHighIndex = lowHighHighIndex + 1;
 
-	int outofBox = 0;
-	double outofBoxPen = 0.0;
-	if (exactGridX < 0 || exactGridX > NX - 1) {
-		outofBoxPen = ((exactGridX - NX / 2)*(exactGridX - NX / 2)) / 20.;
-		outofBox = 1;
-		if (outofBoxPen > 1000000000) {
-			fprintf(stderr, "xX %g Y %g Z %g Erg %g \n", exactGridX, exactGridY, exactGridZ, outofBoxPen);
-			return erg + 10;
-		}
-		erg += outofBoxPen;
-	}
-	if (exactGridY < 0 || exactGridY > NY - 1) {
-		outofBoxPen = ((exactGridY - NY / 2)*(exactGridY - NY / 2)) / 20.;
-		outofBox = 1;
-		if (outofBoxPen > 1000000000) {
-			fprintf(stderr, "X %g yY %g Z %g Erg %g \n", exactGridX, exactGridY, exactGridZ, outofBoxPen);
-			return erg + 10;
-		}
-		erg += outofBoxPen;
-	}
-	if (exactGridZ < 0 || exactGridZ > NZ - 1) {
-		outofBoxPen = ((exactGridZ - NZ / 2)*(exactGridZ - NZ / 2)) / 20.;
-		outofBox = 1;
-		if (outofBoxPen > 1000000000) {
-			fprintf(stderr, "X %g Y %g zZ %g Erg %g \n", exactGridX, exactGridY, exactGridZ, outofBoxPen);
-			return erg + 10;
-		}
-		erg += outofBoxPen;
-	}
-	//if (outofBox) 
-		//fprintf(stderr, "X %g Y %g Z %g Erg %g \n", exactGridX, exactGridY, exactGridZ, outofBoxPen);
-	if (!outofBox)	{
-		perAtomtype = lowLowLowFrac * mapvalue[lowLowLowIndex] +
-			lowLowHighFrac * mapvalue[lowLowHighIndex] +
-			lowHighLowFrac * mapvalue[lowHighLowIndex] +
-			lowHighHighFrac * mapvalue[lowHighHighIndex] +
-			highLowLowFrac * mapvalue[highLowLowIndex] +
-			highLowHighFrac * mapvalue[highLowHighIndex] +
-			highHighLowFrac * mapvalue[highHighLowIndex] +
-			highHighHighFrac * mapvalue[highHighHighIndex];
-		eStatic = charge * (lowLowLowFrac * emapvalue[lowLowLowIndex] +
-			lowLowHighFrac * emapvalue[lowLowHighIndex] +
-			lowHighLowFrac * emapvalue[lowHighLowIndex] +
-			lowHighHighFrac * emapvalue[lowHighHighIndex] +
-			highLowLowFrac * emapvalue[highLowLowIndex] +
-			highLowHighFrac * emapvalue[highLowHighIndex] +
-			highHighLowFrac * emapvalue[highHighLowIndex] +
-			highHighHighFrac * emapvalue[highHighHighIndex]);
-		deSolv = abscharge * (lowLowLowFrac * dmapvalue[lowLowLowIndex] +
-			lowLowHighFrac * dmapvalue[lowLowHighIndex] +
-			lowHighLowFrac * dmapvalue[lowHighLowIndex] +
-			lowHighHighFrac * dmapvalue[lowHighHighIndex] +
-			highLowLowFrac * dmapvalue[highLowLowIndex] +
-			highLowHighFrac * dmapvalue[highLowHighIndex] +
-			highHighLowFrac * dmapvalue[highHighLowIndex] +
-			highHighHighFrac * dmapvalue[highHighHighIndex]);
-	
-		erg = perAtomtype + deSolv + eStatic;
-	}
+	perAtomtype = lowLowLowFrac * mapvalue[lowLowLowIndex] +
+		lowLowHighFrac * mapvalue[lowLowHighIndex] +
+		lowHighLowFrac * mapvalue[lowHighLowIndex] +
+		lowHighHighFrac * mapvalue[lowHighHighIndex] +
+		highLowLowFrac * mapvalue[highLowLowIndex] +
+		highLowHighFrac * mapvalue[highLowHighIndex] +
+		highHighLowFrac * mapvalue[highHighLowIndex] +
+		highHighHighFrac * mapvalue[highHighHighIndex];
+	eStatic = charge * (lowLowLowFrac * emapvalue[lowLowLowIndex] +
+		lowLowHighFrac * emapvalue[lowLowHighIndex] +
+		lowHighLowFrac * emapvalue[lowHighLowIndex] +
+		lowHighHighFrac * emapvalue[lowHighHighIndex] +
+		highLowLowFrac * emapvalue[highLowLowIndex] +
+		highLowHighFrac * emapvalue[highLowHighIndex] +
+		highHighLowFrac * emapvalue[highHighLowIndex] +
+		highHighHighFrac * emapvalue[highHighHighIndex]);
+	deSolv = abscharge * (lowLowLowFrac * dmapvalue[lowLowLowIndex] +
+		lowLowHighFrac * dmapvalue[lowLowHighIndex] +
+		lowHighLowFrac * dmapvalue[lowHighLowIndex] +
+		lowHighHighFrac * dmapvalue[lowHighHighIndex] +
+		highLowLowFrac * dmapvalue[highLowLowIndex] +
+		highLowHighFrac * dmapvalue[highLowHighIndex] +
+		highHighLowFrac * dmapvalue[highHighLowIndex] +
+		highHighHighFrac * dmapvalue[highHighHighIndex]);
+
+	erg = perAtomtype + deSolv + eStatic;
 
 	//fprintf(stderr, "index %i exenergy %g atom %g estatic %g des %g \n", highHighHighIndex, erg, perAtomtype, deSolv, eStatic);
 	if (erg>1000000|| erg<-1000000){
@@ -2205,8 +2232,12 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 					//sideChainEnergy = gridenergy(a->g2[0], a->g2[1], a->g2[2], 2, -0.393) +  gridenergy(a->g[0], a->g[1], a->g[2], 0, 0.042);
 					break;
 				case 'C':
-					//sideChainEnergy = scoreSideChainNoClash(CYS.nbRot, CYS.nbAtoms, CYS.charges, CYS.atypes, (double*)CYS.coords, a, coordsSet, ind, numRand);
-					sideChainEnergy = gridenergy(a->g[0], a->g[1], a->g[2], 4, -0.095);
+					/* Cysteine used to bypass the rotamer library entirely and
+					 * score a single SG at the pseudo-gamma position, with no
+					 * clash check and no SH hydrogen -- the only residue in the
+					 * switch treated that way (audit finding B7). Upstream's
+					 * `cyclic` branch scores it like every other side chain. */
+					sideChainEnergy = scoreSideChainNoClash(CYS.nbRot, CYS.nbAtoms, CYS.charges, CYS.atypes, (double*)CYS.coords, a, coordsSet, ind, numRand);
 					break;
 				case 'M':
 					sideChainEnergy = scoreSideChainNoClash(MET.nbRot, MET.nbAtoms, MET.charges, MET.atypes, (double*)MET.coords, a, coordsSet, ind, numRand);
