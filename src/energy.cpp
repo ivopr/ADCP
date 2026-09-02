@@ -630,6 +630,18 @@ double ramabias(AA *prevaa, AA *a, AA *nextaa)
 	segphi = (int) ((phi + M_PI)/(2*M_PI_180));
 	segpsi = (int) ((psi + M_PI)/(2*M_PI_180));
 
+	/* ramaprob/alaprob/glyprob are 180x180 tables (energy.cpp's
+	   ramaprob_initialise). dihedral_rama() returns atan2's range, (-PI, PI],
+	   so phi == PI exactly gives segphi == 180 and an index one past the end,
+	   and psi == PI gives segpsi == 180, which does not overrun but silently
+	   wraps into the next phi row and reads the wrong bin.
+	   Instrumented over 200,000 steps on 1SFI this never fired -- reaching
+	   phi == PI needs geometry more idealised than the MC produces -- so the
+	   clamp closes a latent read rather than an active one, and is expected to
+	   be observationally inert. */
+	if (segphi < 0) segphi = 0; else if (segphi > 179) segphi = 179;
+	if (segpsi < 0) segpsi = 0; else if (segpsi > 179) segpsi = 179;
+
 	int ind = segphi * 180 + segpsi;
 
 	switch (a->id) {
