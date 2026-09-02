@@ -906,12 +906,22 @@ void set_random_seed(simulation_params *sim_params) {
 
 void AD_init(Chain *chain, simulation_params *sim_params) {
 	if (sim_params->protein_model.external_potential_type == 5) {
-		int hasCYS = 0;
+		/* Slot 4 is the AutoDock sulfur map. It is needed by every residue
+		   whose rotamer library uses atom type 4, which is CYS *and* MET
+		   (canonicalAA.cpp: CYS {4,3}, MET {4,0,0}) -- testing only for 'C'
+		   silently scored methionine's SD against rigidReceptor.C.map.
+		   Proven by deleting SA.map: a MET peptide ran and produced a
+		   bit-identical trajectory, so the map was never read, while the CYS
+		   control died with "Missing gridmap_file.map file". Measured over the
+		   3Q47 pocket outside the steric wall, SA - C has a p95 of
+		   +3.04 kcal/mol per atom, and the best pocket point is -1.075 against
+		   -0.838, so a methionine sulfur was losing 28% of its best affinity. */
+		int hasS = 0;
 		int hasAroC = 0;
 		int hasNA = 0;
 		for(int i = 1; i < chain->NAA; i++){
-          		if(chain->aa[i].id == 'C')
-                		hasCYS = 1;
+          		if(chain->aa[i].id == 'C' || chain->aa[i].id == 'M')
+                		hasS = 1;
 			if(chain->aa[i].id == 'F' || chain->aa[i].id == 'Y' || chain->aa[i].id == 'H')
                 		hasAroC = 1;
 			if(chain->aa[i].id == 'H')
@@ -925,7 +935,7 @@ void AD_init(Chain *chain, simulation_params *sim_params) {
 		gridmap_initialise("rigidReceptor.N.map", 1);
 		gridmap_initialise("rigidReceptor.OA.map", 2);
 		gridmap_initialise("rigidReceptor.HD.map", 3);
-		if (hasCYS)
+		if (hasS)
 			gridmap_initialise("rigidReceptor.SA.map", 4);
 		else
 			gridmap_initialise("rigidReceptor.C.map", 4);
