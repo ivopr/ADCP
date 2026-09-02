@@ -1,0 +1,74 @@
+# ADCP validation manifest — one row per docking job.
+#
+# Columns
+#   set     A .. G, see README.md
+#   pdb     RCSB entry of the holo complex (lower case)
+#   apo     RCSB entry of the apo receptor for cross-docking, or "-"
+#   length  peptide length in residues, AS PUBLISHED. prepare_target.sh resolves
+#           the peptide chain from the structure and asserts this number — a
+#           mismatch means the wrong chain was picked, and it fails loudly.
+#   cyc     none | backbone | ss | backbone+ss   (drives -cyc / -cys)
+#   metric  fnc | bbrmsd | irmsd
+#   ref     published ADCP result, as rank=value pairs. "-" where the ADCP
+#           authors never published a per-target number.
+#   source  paper and table the ref came from
+#
+# Sets A, B and C were transcribed from the published tables and carry a
+# reference value FOR EVERY TARGET AND EVERY RANK. Sets D-G are appended by
+# acquire_sets.py, which validates the published counts before writing.
+#
+set	pdb	apo	length	cyc	metric	ref	source
+# --- A. long peptides, 16-20 aa (11) — Bioinformatics 2019, Table 4 ----------
+A	2ivz	-	16	none	fnc	top1=0.73;top3=0.73;top5=0.73;top20=0.73;all=0.80	ADCP2019-T4
+A	2obh	-	16	none	fnc	top1=0.89;top3=0.89;top5=0.89;top20=0.89;all=0.89	ADCP2019-T4
+A	2xap	-	16	none	fnc	top1=0.03;top3=0.52;top5=0.52;top20=0.53;all=0.58	ADCP2019-T4
+A	4ak4	-	16	none	fnc	top1=0.59;top3=0.63;top5=0.80;top20=0.83;all=0.89	ADCP2019-T4
+A	5uwi	-	16	none	fnc	top1=0.76;top3=0.80;top5=0.80;top20=0.80;all=0.80	ADCP2019-T4
+A	5n4b	-	17	none	fnc	top1=0.24;top3=0.24;top5=0.46;top20=0.46;all=0.51	ADCP2019-T4
+A	6cit	-	17	none	fnc	top1=0.32;top3=0.71;top5=0.71;top20=0.71;all=0.71	ADCP2019-T4
+A	1cm1	-	18	none	fnc	top1=0.94;top3=0.94;top5=0.94;top20=0.94;all=0.94	ADCP2019-T4
+A	4yz6	-	18	none	fnc	top1=0.81;top3=0.81;top5=0.85;top20=0.90;all=0.90	ADCP2019-T4
+A	4rs9	-	19	none	fnc	top1=0.05;top3=0.49;top5=0.54;top20=0.78;all=0.78	ADCP2019-T4
+A	2f31	-	20	none	fnc	top1=0.66;top3=0.66;top5=0.66;top20=0.66;all=0.66	ADCP2019-T4
+# --- B. backbone-cyclised peptides (18) — JCTC 2019, Table 1 -----------------
+# group I: HIV integrase binders; II: SFTI-1 (backbone AND disulfide);
+# III: SPSB2-iNOS2 and KEAP1-NEH2 inhibitors.
+B	3av9	-	6	backbone	fnc	top1=0.41;top5=0.41;top10=0.41;top100=1.00	ADCPcyc2019-T1
+B	3ava	-	6	backbone	fnc	top1=0.37;top5=0.48;top10=0.48;top100=0.82	ADCPcyc2019-T1
+B	3avb	-	6	backbone	fnc	top1=0.46;top5=0.46;top10=0.57;top100=0.82	ADCPcyc2019-T1
+B	3avf	-	6	backbone	fnc	top1=0.32;top5=0.43;top10=0.82;top100=0.89	ADCPcyc2019-T1
+B	3avg	-	6	backbone	fnc	top1=0.19;top5=0.52;top10=0.52;top100=0.85	ADCPcyc2019-T1
+B	3avh	-	6	backbone	fnc	top1=0.44;top5=0.44;top10=0.44;top100=0.85	ADCPcyc2019-T1
+B	3avi	-	6	backbone	fnc	top1=0.34;top5=0.38;top10=0.84;top100=0.84	ADCPcyc2019-T1
+B	3avj	-	6	backbone	fnc	top1=0.27;top5=0.47;top10=0.85;top100=0.85	ADCPcyc2019-T1
+B	3avk	-	6	backbone	fnc	top1=0.37;top5=0.43;top10=0.50;top100=0.87	ADCPcyc2019-T1
+B	3avm	-	6	backbone	fnc	top1=0.25;top5=0.39;top10=0.39;top100=0.89	ADCPcyc2019-T1
+B	3avn	-	6	backbone	fnc	top1=0.37;top5=0.48;top10=0.48;top100=0.85	ADCPcyc2019-T1
+B	3wne	-	8	backbone	fnc	top1=0.64;top5=0.73;top10=0.73;top100=0.86	ADCPcyc2019-T1
+B	1sfi	-	14	backbone+ss	fnc	top1=0.90;top5=0.90;top10=0.90;top100=0.90	ADCPcyc2019-T1
+B	3p8f	-	14	backbone+ss	fnc	top1=0.79;top5=0.85;top10=0.85;top100=0.85	ADCPcyc2019-T1
+B	4k1e	-	14	backbone+ss	fnc	top1=0.18;top5=0.62;top10=0.70;top100=0.75	ADCPcyc2019-T1
+B	4kel	-	14	backbone+ss	fnc	top1=0.11;top5=0.47;top10=0.47;top100=0.72	ADCPcyc2019-T1
+B	3zgc	1u6d	7	backbone	fnc	top1=0.65;top5=0.85;top10=0.85;top100=0.88	ADCPcyc2019-T1
+B	5xn3	-	8	backbone	fnc	top1=0.93;top5=0.93;top10=0.93;top100=0.93	ADCPcyc2019-T1
+# --- C. disulfide-cyclised peptides (20) — JCTC 2019, Table 2 ----------------
+C	3wnf	-	6	ss	fnc	top1=0.31;top5=0.53;top10=0.63;top100=0.72	ADCPcyc2019-T2
+C	4ou3	-	6	ss	fnc	top1=0.77;top5=0.77;top10=0.77;top100=0.77	ADCPcyc2019-T2
+C	1smf	-	9	ss	fnc	top1=0.87;top5=0.87;top10=0.89;top100=0.89	ADCPcyc2019-T2
+C	5grd	-	10	ss	fnc	top1=0.78;top5=0.90;top10=0.90;top100=0.90	ADCPcyc2019-T2
+C	3p72	-	11	ss	fnc	top1=0.27;top5=0.27;top10=0.66;top100=0.66	ADCPcyc2019-T2
+C	2ck0	-	11	ss	fnc	top1=0.92;top5=0.92;top10=0.95;top100=0.95	ADCPcyc2019-T2
+C	6bae	-	12	ss	fnc	top1=0.34;top5=0.34;top10=0.34;top100=0.36	ADCPcyc2019-T2
+C	1hqq	-	13	ss	fnc	top1=0.17;top5=0.33;top10=0.57;top100=0.67	ADCPcyc2019-T2
+C	5djc	-	13	ss	fnc	top1=0.09;top5=0.62;top10=0.62;top100=0.67	ADCPcyc2019-T2
+C	4ib5	-	13	ss	fnc	top1=0.36;top5=0.36;top10=0.52;top100=0.70	ADCPcyc2019-T2
+C	5h5q	-	13	ss	fnc	top1=0.29;top5=0.42;top10=0.42;top100=0.59	ADCPcyc2019-T2
+C	5eoc	-	13	ss	fnc	top1=0.23;top5=0.43;top10=0.57;top100=0.71	ADCPcyc2019-T2
+C	5wxr	-	14	ss	fnc	top1=0.35;top5=0.35;top10=0.35;top100=0.73	ADCPcyc2019-T2
+C	4m1d	-	14	ss	fnc	top1=0.69;top5=0.72;top10=0.74;top100=0.92	ADCPcyc2019-T2
+C	5vb9	-	15	ss	fnc	top1=0.19;top5=0.50;top10=0.50;top100=0.50	ADCPcyc2019-T2
+C	1jbu	-	15	ss	fnc	top1=0.72;top5=0.72;top10=0.74;top100=0.77	ADCPcyc2019-T2
+C	5co5	-	16	ss	fnc	top1=0.15;top5=0.27;top10=0.40;top100=0.50	ADCPcyc2019-T2
+C	3g5v	-	16	ss	fnc	top1=0.18;top5=0.64;top10=0.64;top100=0.64	ADCPcyc2019-T2
+C	5xco	-	19	ss	fnc	top1=0.56;top5=0.71;top10=0.71;top100=0.81	ADCPcyc2019-T2
+C	1vpp	-	20	ss	fnc	top1=0.06;top5=0.18;top10=0.18;top100=0.46	ADCPcyc2019-T2
