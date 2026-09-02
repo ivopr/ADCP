@@ -299,6 +299,7 @@ void model_param_initialise(model_params *self) {
   self->opt_totE_weight = 1.0;
   self->opt_firstlastE_weight = 0.0;
   self->opt_extE_weight = 0.0;
+  self->max_rotamers = 0;   /* 0 = no cap, try every rotamer */
   self->transopt_hard = 0;
 
   /* external potential */
@@ -914,6 +915,21 @@ void model_param_read(char *prm, /* input line */
 	if (k>0) {
 		found_param += 1;
 		start = 13;
+	}
+
+	/* opt-in cap on rotamers tried per side chain -- 0 (default) tries them all.
+	   MaxRotamers=20 reproduces upstream's `cyclic` branch, which buys ~3-4x on
+	   cyclic peptides by sampling 20 rotamers at random instead of scanning all
+	   81 of LYS/ARG. That is a deliberate accuracy trade; see params.h. */
+	k = sscanf(prm, "MaxRotamers=%d", &(self->max_rotamers));
+	if (k>0) {
+		if (self->max_rotamers < 0) {
+			fprintf(stderr, "WARNING! MaxRotamers must be >= 0, ignoring %d\n",
+			        self->max_rotamers);
+			self->max_rotamers = 0;
+		}
+		found_param += 1;
+		start = 12;
 	}
 
 

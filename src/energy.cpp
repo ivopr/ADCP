@@ -1504,7 +1504,7 @@ struct View3 {
 	Row operator[](int i) const { return Row{ p + i * d2 * d3, d3 }; }
 };
 
-float scoreSideChain(int nbRot, int nbAtoms, double *charges, int *atypes,  double *coords_flat, AA *a,  int numRand)
+float scoreSideChain(int nbRot, int nbAtoms, double *charges, int *atypes,  double *coords_flat, AA *a,  int numRand, int maxRot)
 {
 	View3<double> coords{ coords_flat, nbAtoms, 3 };
 	int i, j;
@@ -1580,7 +1580,20 @@ float scoreSideChain(int nbRot, int nbAtoms, double *charges, int *atypes,  doub
 		/* apply transformation to canonical all rot side chains coordinates */
 		score = 0.0;
 
+		/* Optional cap on rotamers tried (-p MaxRotamers=N; 0 = try all).
+		   Written to match upstream's `cyclic` branch exactly, oddities and
+		   all: it overwrites the loop counter with a fresh draw, so the walk
+		   is sampling WITH replacement rather than a subset scan, and the
+		   counter test runs after the draw. Reproducing that ordering is the
+		   point -- MaxRotamers=20 must consume rand() the same way upstream
+		   does, or the flag would not reproduce upstream at all. */
+		int rotCount = 0;
 		for (i = 0; i < nbRot; i++) {
+			if (maxRot > 0 && nbRot > maxRot) {
+				i = rand() % nbRot;
+				rotCount++;
+				if (rotCount > maxRot) break;
+			}
 			score = 0.0;
 			sideChainCenter[0] = 0.0;
 			sideChainCenter[1] = 0.0;
@@ -1675,7 +1688,7 @@ int checkClash(double x, double y, double z, double *setCoords, int ind){
 }
 
 
-double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atypes,  double *coords_flat, AA *a, double* setCoords, int ind, int numRand)
+double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atypes,  double *coords_flat, AA *a, double* setCoords, int ind, int numRand, int maxRot)
 {
 	View3<double> coords{ coords_flat, nbAtoms, 3 };
 	int i, j;
@@ -1751,7 +1764,20 @@ double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atype
 		/* apply transformation to canonical all rot side chains coordinates */
 
 
+		/* Optional cap on rotamers tried (-p MaxRotamers=N; 0 = try all).
+		   Written to match upstream's `cyclic` branch exactly, oddities and
+		   all: it overwrites the loop counter with a fresh draw, so the walk
+		   is sampling WITH replacement rather than a subset scan, and the
+		   counter test runs after the draw. Reproducing that ordering is the
+		   point -- MaxRotamers=20 must consume rand() the same way upstream
+		   does, or the flag would not reproduce upstream at all. */
+		int rotCount = 0;
 		for (i = 0; i < nbRot; i++) {
+			if (maxRot > 0 && nbRot > maxRot) {
+				i = rand() % nbRot;
+				rotCount++;
+				if (rotCount > maxRot) break;
+			}
 			score = 0.0;
 			clash = 0;
 			sideChainCenter[0] = 0.0;
@@ -2187,48 +2213,48 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 				{
 				case 'I':
 					//sideChainEnergy = gridenergy(a->g2[0], a->g2[1], a->g2[2], 0, 0.012) + gridenergy(a->g[0], a->g[1], a->g[2], 0, 0.012);
-					sideChainEnergy = scoreSideChainNoClash(ILE.nbRot, ILE.nbAtoms, ILE.charges, ILE.atypes, (double*)ILE.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(ILE.nbRot, ILE.nbAtoms, ILE.charges, ILE.atypes, (double*)ILE.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'L':
-					sideChainEnergy = scoreSideChainNoClash(LEU.nbRot, LEU.nbAtoms, LEU.charges, LEU.atypes, (double*)LEU.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(LEU.nbRot, LEU.nbAtoms, LEU.charges, LEU.atypes, (double*)LEU.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'P':
-					sideChainEnergy = scoreSideChain(PRO.nbRot, PRO.nbAtoms, PRO.charges, PRO.atypes, (double*)PRO.coords, a, 1);
+					sideChainEnergy = scoreSideChain(PRO.nbRot, PRO.nbAtoms, PRO.charges, PRO.atypes, (double*)PRO.coords, a, 1, mod_params->max_rotamers);
 					break;
 				case 'V':
-					sideChainEnergy = scoreSideChainNoClash(VAL.nbRot, VAL.nbAtoms, VAL.charges, VAL.atypes, (double*)VAL.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(VAL.nbRot, VAL.nbAtoms, VAL.charges, VAL.atypes, (double*)VAL.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					//sideChainEnergy = gridenergy(a->g2[0], a->g2[1], a->g2[2], 0, 0.012) + gridenergy(a->g[0], a->g[1], a->g[2], 0, 0.012);
 					break;
 				case 'F':
-					sideChainEnergy = scoreSideChainNoClash(PHE.nbRot, PHE.nbAtoms, PHE.charges, PHE.atypes, (double*)PHE.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(PHE.nbRot, PHE.nbAtoms, PHE.charges, PHE.atypes, (double*)PHE.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'W':
-					sideChainEnergy = scoreSideChainNoClash(TRP.nbRot, TRP.nbAtoms, TRP.charges, TRP.atypes, (double*)TRP.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(TRP.nbRot, TRP.nbAtoms, TRP.charges, TRP.atypes, (double*)TRP.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'Y':
-					sideChainEnergy = scoreSideChainNoClash(TYR.nbRot, TYR.nbAtoms, TYR.charges, TYR.atypes, (double*)TYR.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(TYR.nbRot, TYR.nbAtoms, TYR.charges, TYR.atypes, (double*)TYR.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'D':
-					sideChainEnergy = scoreSideChainNoClash(ASP.nbRot, ASP.nbAtoms, ASP.charges, ASP.atypes, (double*)ASP.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(ASP.nbRot, ASP.nbAtoms, ASP.charges, ASP.atypes, (double*)ASP.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'E':
-					sideChainEnergy = scoreSideChainNoClash(GLU.nbRot, GLU.nbAtoms, GLU.charges, GLU.atypes, (double*)GLU.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(GLU.nbRot, GLU.nbAtoms, GLU.charges, GLU.atypes, (double*)GLU.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'R':
-					sideChainEnergy = scoreSideChainNoClash(ARG.nbRot, ARG.nbAtoms, ARG.charges, ARG.atypes, (double*)ARG.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(ARG.nbRot, ARG.nbAtoms, ARG.charges, ARG.atypes, (double*)ARG.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'H':
-					sideChainEnergy = scoreSideChainNoClash(HIS.nbRot, HIS.nbAtoms, HIS.charges, HIS.atypes, (double*)HIS.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(HIS.nbRot, HIS.nbAtoms, HIS.charges, HIS.atypes, (double*)HIS.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'K':
-					sideChainEnergy = scoreSideChainNoClash(LYS.nbRot, LYS.nbAtoms, LYS.charges, LYS.atypes, (double*)LYS.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(LYS.nbRot, LYS.nbAtoms, LYS.charges, LYS.atypes, (double*)LYS.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'S':
-					sideChainEnergy = scoreSideChainNoClash(SER.nbRot, SER.nbAtoms, SER.charges, SER.atypes, (double*)SER.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(SER.nbRot, SER.nbAtoms, SER.charges, SER.atypes, (double*)SER.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					//sideChainEnergy = gridenergy(a->g[0], a->g[1], a->g[2], 2, -0.398);
 					break;
 				case 'T':
-					sideChainEnergy = scoreSideChainNoClash(THR.nbRot, THR.nbAtoms, THR.charges, THR.atypes, (double*)THR.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(THR.nbRot, THR.nbAtoms, THR.charges, THR.atypes, (double*)THR.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					//sideChainEnergy = gridenergy(a->g2[0], a->g2[1], a->g2[2], 2, -0.393) +  gridenergy(a->g[0], a->g[1], a->g[2], 0, 0.042);
 					break;
 				case 'C':
@@ -2237,16 +2263,16 @@ void ADenergyNoClash(double* ADEnergies, int start, int end, Chain *chain, Chain
 					 * clash check and no SH hydrogen -- the only residue in the
 					 * switch treated that way (audit finding B7). Upstream's
 					 * `cyclic` branch scores it like every other side chain. */
-					sideChainEnergy = scoreSideChainNoClash(CYS.nbRot, CYS.nbAtoms, CYS.charges, CYS.atypes, (double*)CYS.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(CYS.nbRot, CYS.nbAtoms, CYS.charges, CYS.atypes, (double*)CYS.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'M':
-					sideChainEnergy = scoreSideChainNoClash(MET.nbRot, MET.nbAtoms, MET.charges, MET.atypes, (double*)MET.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(MET.nbRot, MET.nbAtoms, MET.charges, MET.atypes, (double*)MET.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'N':
-					sideChainEnergy = scoreSideChainNoClash(ASN.nbRot, ASN.nbAtoms, ASN.charges, ASN.atypes, (double*)ASN.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(ASN.nbRot, ASN.nbAtoms, ASN.charges, ASN.atypes, (double*)ASN.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				case 'Q':
-					sideChainEnergy = scoreSideChainNoClash(GLN.nbRot, GLN.nbAtoms, GLN.charges, GLN.atypes, (double*)GLN.coords, a, coordsSet, ind, numRand);
+					sideChainEnergy = scoreSideChainNoClash(GLN.nbRot, GLN.nbAtoms, GLN.charges, GLN.atypes, (double*)GLN.coords, a, coordsSet, ind, numRand, mod_params->max_rotamers);
 					break;
 				default:
 					break;

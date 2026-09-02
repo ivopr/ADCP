@@ -103,6 +103,15 @@ typedef struct {
   double opt_totE_weight; //the target energy type while optimizing, w1*totE + w2*extE + w3*firstlastE
   double opt_extE_weight; //the target energy type while optimizing, w1*totE + w2*extE + w3*firstlastE
   double opt_firstlastE_weight; //the target energy type while optimizing, w1*totE + w2*extE + w3*firstlastE
+  int max_rotamers;  //opt-in cap on how many rotamers scoreSideChain*() tries per residue.
+                     //0 (default) = try them all, which is what this code has always done.
+                     //Upstream's `cyclic` branch hardcodes 20 for residues with more than 20
+                     //rotamers (LYS/ARG 81, GLN 36, MET/GLU 27) and draws them at RANDOM --
+                     //that is where its 3-4x speedup on cyclic peptides comes from. It is a
+                     //speed-for-accuracy trade, not a free optimisation: it makes the energy
+                     //an even noisier function of the coordinates than it already is (see the
+                     //audit's finding B2), so it stays opt-in. -p MaxRotamers=20 reproduces
+                     //upstream's behaviour.
   int transopt_hard; //opt-in "hard minimization" budget for transopt() (maxStep 30/maxNoImprovStep 5
                       //instead of 10/3); default 0 (off) -- see MIGRATION.md, measured to cost
                       //+20-225% runtime with no quality gain, so it stays off unless asked for

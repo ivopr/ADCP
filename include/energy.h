@@ -64,8 +64,8 @@ int checkClash(double x, double y, double z, double *setCoords, int ind);
    gone with the last .c file. Neither function is called outside
    energy.cpp -- see the MECHANISM RESOLVED note in MIGRATION.md before
    changing anything about them, including their linkage. */
-float scoreSideChain(int nbRot, int nbAtoms, double *acharges, int *aTypes, double *coords, AA *a, int numRand);
-double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atypes, double *coords, AA *a, double* setCoords, int ind, int numRand);
+float scoreSideChain(int nbRot, int nbAtoms, double *acharges, int *aTypes, double *coords, AA *a, int numRand, int maxRot);
+double scoreSideChainNoClash(int nbRot, int nbAtoms, double *charges, int *atypes, double *coords, AA *a, double* setCoords, int ind, int numRand, int maxRot);
 
 double ramabias(AA *, AA *, AA *);
 
