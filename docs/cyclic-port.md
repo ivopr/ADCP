@@ -93,6 +93,71 @@ byte-identical in both branches. `cyclic` did not hang in 48 replicas
 (16 seeds × 3 targets) only because its different energy code takes different
 trajectories. **The fix in this repo is not redundant with upstream.**
 
+## Why the port stops here: the shipped binary collapses the macrocycle
+
+Measured across all 18 backbone-cyclised targets in set B, comparing the CA1-CAn
+distance the model restrains to 3.819 A:
+
+| source | median CA1-CAn | n |
+|---|---|---|
+| crystallographic ligand | **3.83 A** | 18 |
+| **ADFRsuite 1.0 `adcp_Linux-x86_64`** | **2.52 A** | 432 poses |
+| this repo at HEAD | 3.99 A | 432 poses |
+
+The shipped binary closes the ring **1.3 A too tight on every one of the 18
+targets**, with no exception and no overlap with the crystallographic range.
+Two alpha carbons at 2.5 A is not a conformation -- the carbon-carbon van der
+Waals contact distance is about 3.4 A. HEAD lands within 0.16 A of the
+experimental median.
+
+The cause is in `cyclic_energy()` on the `cyclic` branch:
+
+```c
+double NCDistance = 0.0;
+//NCDistance = distance(a->n, b->c);   // assignment commented out
+...
+if (CaDistance < 5) {
+        ans += (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
+        ans += (sqrt(NCDistance) - 1.345)*(sqrt(NCDistance) - 1.345);
+} else ans += CaDistance;
+```
+
+Two defects compound:
+
+1. `NCDistance` is never assigned -- the line is commented out -- so the second
+   term is the constant `(0 - 1.345)^2 = 1.809`, independent of geometry.
+2. `distance()` returns the SQUARE of the distance (see `vector.cpp`), but
+   `CaDistance < 5` compares it against a linear threshold. The test therefore
+   means d < 2.24 A, so the harmonic branch centred on 3.819 A almost never
+   runs.
+
+What executes is `else ans += CaDistance`, i.e. `d^2` -- a harmonic centred on
+ZERO, with no equilibrium distance. It pulls the termini together until van der
+Waals repulsion stops them, which is exactly where 2.5 A comes from.
+
+`master`'s version, which this repo has, keeps the harmonic centred on 3.819 A
+and reproduces the crystallographic distance.
+
+### Consequences
+
+**The remaining Group S hunks are not ported, and should not be.** The two
+largest -- `cyclic_energy` and `energy2`'s new CA-CA harmonic on every
+sequence-adjacent pair -- are the likely source of the 4.5x speed gap that
+remains on backbone-cyclic targets. Buying that speed by collapsing the
+macrocycle is not a trade worth making.
+
+**It also puts the benchmark's own reference values in question.** The cyclic
+numbers in JCTC 2019 Tables 1 and 2 -- the 38 per-target references transcribed
+into `tests/validation/manifest.tsv` for sets B and C -- were produced by a
+binary that compresses the macrocycle by 1.3 A. The weak agreement measured here
+(r = 0.19 between HEAD and the shipped binary; r = -0.07 between the shipped
+binary and the authors' own published values) may not be sampling noise alone.
+
+That is a hypothesis, not a conclusion: confirming it means checking whether the
+poses the authors deposited carry the same compression. But it is the first
+concrete, testable explanation for the low correlation, and it is more specific
+than "not enough compute".
+
 ## Approach
 
 A patch cannot be applied: our tree is `.cpp`, uses `std::vector`, `View3<>`,
