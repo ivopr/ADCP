@@ -3,8 +3,14 @@
 ## Context
 
 The audit found six class-A findings — defects that change scientific results.
-Two are now closed: A5 (out-of-box penalty measured from the box centre) and A3
-(swap-pool draws that never terminate), in `7ea27e1` and `c6dcf24`.
+Four are now closed: A5 (out-of-box penalty measured from the box centre), A3
+(swap-pool draws that never terminate), A6 (unchecked `ramaprob[]` index) and A2
+(methionine's sulfur scored on the carbon map), in `7ea27e1`, `c6dcf24`,
+`797eb72` and `7e38b98`.
+
+The two that remain — A1 and A4 — are both **force-field recalibrations, not
+patches**, and both were written, measured and reverted rather than argued
+about. Neither is closed and neither should be patched in isolation.
 
 The remaining four are **not** fixed in either upstream branch. `master` and
 `cyclic` are byte-identical in all four regions; the hunks near them are
@@ -22,7 +28,7 @@ the parameters were fitted against the current behaviour.
 |---|---|---|---|
 | **A6** | `ramabias` indexes `ramaprob[]` with no range check | measured: **0 out-of-range in 200k steps** | n/a — latent |
 | **A2** | `hasCYS` tests only `'C'`, so methionine's Sδ scores against `C.map` | **6 of 49** (M without C) | barely |
-| **A4** | `lower_gridenergy`'s log compression is applied to `e.map` and `d.map` too | every target with a charged residue | no — see below |
+| **A4** | `lower_gridenergy`'s log compression is applied to `e.map` and `d.map` too | measured: **32 of 50**, 0.0097% of map points | yes, and it did — the fix loses |
 | **A1** | `hydrophobic_low` returns a ramp that **rises** with distance | **48 of 50** | no — see below |
 
 ### A6 — latent, guard it and move on
@@ -63,34 +69,61 @@ sulfur. The fix is right on inspection, but the benchmark cannot demonstrate it
 is an improvement. Either accept it on the argument (a sulfur scored on a carbon
 map is wrong regardless of outcome) or add Met-rich targets first.
 
-### A4 — needs a decision about what "correct" means
+### A4 — implemented, measured, and reverted. Not a patch either.
 
 `lower_gridenergy()` compresses map values above +2.718 to `ln(E) + 1.718`. It
 is applied inside `gridmap_initialise()`, so it hits all nine maps — including
 `e.map` (electrostatic potential) and `d.map` (desolvation), loaded at
-`main.cpp:916-917`.
+`main.cpp:950-951`.
 
 Because it only fires above +2.718, the **positive** lobe of the Coulomb field
 is squashed while the **negative** lobe is untouched. The field is no longer
 antisymmetric in the sign of the charge: a positive ligand atom near a positive
 receptor patch is penalised far less than a negative atom near a negative patch
-is. That is a physics error, not a tuning choice.
+is. That reasoning is unchanged and still correct.
 
-But "don't compress e/d" is not obviously the whole answer:
+**The fix was written and it does not survive measurement.** A `soften` flag on
+`gridmap_initialise()`, passed false for slots 7 and 8, builds clean and passes
+all 22 tests. Then the 3Q47 redock, four independent blocks of 16 seeds each:
 
-- the compression exists to soften the receptor's steric wall, which is a real
-  need for a Monte Carlo search that must be able to climb out of clashes
-- `e.map` has no steric wall — its large values are genuine electrostatics
-- `d.map` is desolvation, always ≥ 0 in AutoDock4, so compression there is a
-  different question again
+| seeds | 1-16 | 101-116 | 201-216 | 301-316 |
+|---|---|---|---|---|
+| compressed (HEAD) | 0.70 | 0.84 | 0.78 | 0.74 |
+| `e.map` exempt | 0.85 | **2.58** | **9.47** | 0.90 |
 
-**Fix**: give `gridmap_initialise()` a flag, and pass it false for slots 7 and 8.
-Small. The decision is whether the desolvation map should also be exempt, and
-that wants a measurement, not an opinion.
+The search is not what breaks. Ranking every pose in each ensemble shows the
+near-native pose is still **found** every time — it just stops **winning**:
 
-**Validation gap**: no target in the manifest was chosen to stress electrostatics.
-Adjudicating this needs targets with charged binding sites, which is a manifest
-question before it is a code question.
+| | top-1 | best in ensemble | its rank |
+|---|---|---|---|
+| compressed, seeds 201-216 | 0.78 | 0.78 | 1 of 16 |
+| exempt, seeds 201-216 | 9.47 | 0.94 | 2 of 16 |
+| exempt, seeds 101-116 | 2.58 | 1.30 | 3 of 16 |
+
+A 0.94 A pose loses to a 9.47 A pose under the uncompressed map. Two of four
+seed blocks fail, against zero of four before.
+
+**Why a 0.01% change in the map does this.** Measured over all 50 prepared
+targets: 1,467 of 15,192,578 `e.map` points are above the threshold (0.0097%),
+in 32 of the 50 targets, largest delta 1.043 kcal/mol/e — about 0.36 kcal/mol
+once multiplied by ADCP's backbone charges. That is small in absolute terms and
+comparable to the gaps that separate adjacent poses in the ranking, which is a
+0.25/0.75 blend of total and external energy. The compression was in place when
+those weights and `kauzmann_param` were fitted.
+
+So A4 lands in exactly the same category as A1: **the physics argument is right
+and the recalibration it implies has not been done.** Removing the compression
+without refitting the ranking weights trades a known bias for an unknown one,
+and on the only system with a crystallographic answer it measurably loses.
+
+`d.map` is a separate and simpler story: **0 of 15,192,578 points across all 50
+targets exceed the threshold.** The compression provably never fires on the
+desolvation map, so exempting it is a literal no-op and there is nothing to
+decide.
+
+**Status**: not patched. Reopened as a recalibration item alongside A1. If the
+ranking weights are ever refitted, both move together — they are the same
+experiment, not two.
 
 ### A1 — the one that is not a bug fix
 
@@ -130,8 +163,8 @@ change.
 1. **A6** — clamp. Inert by construction, provable, no decision needed.
 2. **A2** — one condition. Right on the argument; benchmark coverage is thin and
    the commit message should say so rather than claim a measured improvement.
-3. **A4** — exempt `e.map`; decide separately about `d.map`. Land the flag, and
-   record that the manifest cannot yet adjudicate it.
+3. **A4** — **do not patch.** Implemented and reverted: the exemption breaks the
+   3Q47 ranking in 2 of 4 seed blocks. Recalibration item, paired with A1.
 4. **A1** — **do not patch.** Open it as a recalibration item with the measured
    evidence attached. If it is ever changed, `kauzmann_param` moves with it.
 
@@ -147,15 +180,23 @@ Per fix, using `tests/validation/`:
   else means the clamp is firing where it should not
 - A2 gate: the 43 targets without Met-without-Cys must be byte-identical; the 6
   affected targets are reported as a delta, not as an improvement
-- A4 gate: results will move; record the per-target diff in `docs/compares/` style
+- A4 gate: **failed**. Four seed blocks of the 3Q47 redock, top-1 backbone RMSD
+  0.70/0.84/0.78/0.74 compressed against 0.85/2.58/9.47/0.90 exempt
 
 ## What this plan does not solve
 
-The recurring problem is the same for A2 and A4: **the manifest was assembled to
-reproduce published tables, not to isolate individual force-field terms.** Six
-Met targets and no charged-site selection cannot adjudicate a sulfur-typing bug
-or an electrostatic-map bug.
+**The manifest was assembled to reproduce published tables, not to isolate
+individual force-field terms.** Six Met targets and no charged-site selection
+cannot adjudicate a sulfur-typing bug, so A2 landed on the argument rather than
+on a measurement, and the commit says so.
 
-Closing A2 and A4 with confidence needs targets chosen for those terms — a
-different kind of set from A/B/C, and one no paper publishes. That is a
-prerequisite worth naming before promising these can be "validated".
+A4 is the sharper lesson. The benchmark *did* adjudicate it — but only
+negatively: it showed the fix loses on the one target with a crystallographic
+answer. It cannot show what a refitted `kauzmann_param` and ranking blend would
+do, because refitting needs a training set, and the 49 targets here are the
+test set. Using them for both is how a benchmark stops meaning anything.
+
+So A1 and A4 are blocked on the same missing thing, and it is not more code:
+**a separate fitting set, disjoint from A/B/C, with charged binding sites.**
+Naming that is more useful than promising these can be "validated" as they
+stand.
