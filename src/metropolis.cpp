@@ -259,19 +259,25 @@ static int allowed(Chain *chain, Chaint *chaint, Biasmap* biasmap, int start, in
     return 1;
 }
 /* Make a transmutate move. A translational move to a featured point*/
-void transmutate(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, double logLstar, double * currE, simulation_params *sim_params)
+/* Returns int, not void, as upstream `cyclic` does: the body already had a
+ * bare `return` where the sibling moves return 0, and some compilers reject
+ * the mismatch outright. The FIXED-residue guard upstream deleted along with
+ * this change is kept -- this tree has fixed-residue paths (fixed-end loop
+ * sampling) that upstream does not exercise, and dropping the guard would let
+ * the move displace residues the caller pinned. */
+int transmutate(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, double logLstar, double * currE, simulation_params *sim_params)
 {
 
         for (int i = 1; i < sim_params->NAA; i++) {
-		if (chain->aa[i].etc & FIXED) return;
+		if (chain->aa[i].etc & FIXED) return 0;
         }
 
 	if (sim_params->protein_model.external_potential_type != 5) {
-		return;
+		return 0;
 	}
 
 	//no transPts identified. transPtsCount == 1 means only the center of box is found.
-	if (transPtsCount == 1) return;
+	if (transPtsCount == 1) return 0;
 	double transvec[3];
 	//copy chain to chaint
 	for (int j = 1; j < chain->NAA; j++){
@@ -370,6 +376,7 @@ void transmutate(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, d
 	fprintf(stderr, "transmutate!!! %g %g %g\n", chain->aa[centerAAID].c[0], chain->aa[centerAAID].c[1], chain->aa[centerAAID].c[2]);
 	fprintf(stderr, "transmutate!!! %g %g %g\n", Xpts[transPtsID], Ypts[transPtsID], Zpts[transPtsID]);
 	//copybetween(chain, chaint);
+	return 1;
 }
 
 
