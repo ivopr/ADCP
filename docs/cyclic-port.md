@@ -1,5 +1,50 @@
 # Porting upstream's `cyclic` branch into this codebase
 
+## Status — the port is complete
+
+All five groups have landed. Summary of where each ended up:
+
+| group | outcome | commit |
+|---|---|---|
+| N — noise | skipped, as planned; our LGPL headers stay | — |
+| S / A5 — out-of-box penalty | ported | `7ea27e1` |
+| P — rotamer scoring, cysteine, gamma centroid | ported | `7ea27e1` |
+| S / disulfide — `sbond_energy`, `lowlevel_sbond`, `0.25*SSloss` | ported | `dff5df3` |
+| S / remainder — `cyclic_energy`, `energy2`, `transmutate`, `main` | ported, **two upstream defects repaired** | `240afae`, `0b1fce1`, `74185b4` |
+
+Two hunks were deliberately not reproduced verbatim, and one was dropped:
+
+- **`cyclic_energy`** — ported with `NCDistance` assigned and the cutoff
+  squared to match `distance()`'s units, so the ring is restrained to 3.819 A
+  instead of collapsing (see "the shipped binary collapses the macrocycle"
+  below, which is why). `tests/cyclic_closure_test.cpp` fails if that repair
+  is undone.
+- **the FIXED-residue guards** in `transmutate`/`transmove`/`transopt` — kept.
+  Only the `void` -> `int` signature change was taken.
+- **`main.c`'s bare `continue;`** — dropped; the if/else-if chain it sits in
+  is the last statement in the loop body, so it is a no-op.
+
+Measured after the port:
+
+| path | before (`414835e`) | after (`f26a28f`) | upstream `cyclic` | ADFRsuite 1.0 |
+|---|---|---|---|---|
+| fold ATOM md5 | `6a438d0a…` | **`abf915bc…`** | `abf915bc…` | `abf915bc…` |
+| fold final energy | 5.936278 | **9.274271** | 9.274271 | 9.274271 |
+| 3Q47 redock, top pose | run 4, -30.3416 | **run 1, -29.1304** | run 1, -29.1304 | run 6, -28.2783 |
+| 3Q47 redock RMSD | 0.70 A | **0.88 A** | 0.88 A | 0.77 A |
+| ctest | 22/22 | **23/23** | — | — |
+
+The fold path is now bit-identical to both reference arms, and the 3Q47 redock
+reproduces `cyclic`'s pose and energy exactly. The redock RMSD moved from
+0.70 A to 0.88 A -- worse on this one target, still far inside the published
+2.5 A threshold.
+
+**Not yet measured: the macrocycle geometry gate.** The CA1-CAn median over
+sets B and C is what justified repairing `cyclic_energy` rather than porting
+it verbatim, and it has not been re-run since. Until it is, the claim that the
+repair holds rests on `tests/cyclic_closure_test.cpp` -- which tests the energy
+function, not the poses it produces.
+
 ## Context
 
 This repository is a C++17 port of `ccsb-scripps/ADCP` **`master`** (`1c1a330`).
@@ -140,11 +185,18 @@ and reproduces the crystallographic distance.
 
 ### Consequences
 
-**The remaining Group S hunks are not ported, and should not be.** The two
-largest -- `cyclic_energy` and `energy2`'s new CA-CA harmonic on every
-sequence-adjacent pair -- are the likely source of the 4.5x speed gap that
-remains on backbone-cyclic targets. Buying that speed by collapsing the
-macrocycle is not a trade worth making.
+This is why `cyclic_energy` is **not** ported verbatim. Buying `cyclic`'s speed
+by collapsing the macrocycle is not a trade worth making, so `240afae` takes
+its structure -- the CA-CA harmonic at weight 1, the new N-C harmonic, the
+far-field `d^2` pull, and `energy2`'s per-adjacent-pair harmonic -- while
+assigning `NCDistance` and squaring the 5 A cutoff to match `distance()`'s
+units. The harmonic branch then actually runs, and the far-field term has its
+boundary value subtracted so the total does not step by ~23 RT at d = 5 A.
+
+Whether that keeps `cyclic`'s speed is untested: if the 4.5x came from the
+broken branch short-circuiting the restraint, the repaired version will not be
+as fast. That is the measurement the geometry gate above has to produce
+alongside the CA1-CAn medians.
 
 **It also puts the benchmark's own reference values in question.** The cyclic
 numbers in JCTC 2019 Tables 1 and 2 -- the 38 per-target references transcribed
@@ -158,7 +210,7 @@ poses the authors deposited carry the same compression. But it is the first
 concrete, testable explanation for the low correlation, and it is more specific
 than "not enough compute".
 
-## Approach
+## Approach (as executed)
 
 A patch cannot be applied: our tree is `.cpp`, uses `std::vector`, `View3<>`,
 `Chain::aa` as a container, and has ~15 memory/UB fixes upstream lacks. Every
@@ -166,7 +218,7 @@ hunk is ported **semantically**, by hand, against our current code.
 
 Order, chosen so each step is separately validatable:
 
-1. **Group N** — skip entirely except confirming our license headers stay.
+1. ~~**Group N**~~ — skipped; license headers confirmed. **Done.**
 2. **Group S / A5 only** — the out-of-box rewrite. Small, self-contained, and
    independently justified by the audit. Land it first as its own commit.
 3. **Group P** — the performance hunks, one function at a time. Gate: the

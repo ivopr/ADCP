@@ -29,6 +29,10 @@ and what was deliberately left alone), [docs/cyclic-port.md](cyclic-port.md)
 | 12 | `cdlearn` never set per-protein sequence | `ae0bfc6` | tool science | yes — CD learning ran at all |
 | 13 | `cdlearn` missing `ramaprob_initialise()` | `3bf4003` | tool science | yes |
 | 14 | three bugs across `probe.cpp`'s 32 diagnostic bits | `6db4341` | diagnostics | no |
+| 15 | disulfide model: soft chi3, two-pair cap, `0.25*SSloss` | `dff5df3` | force field | yes — any peptide with 2+ cysteines |
+| 16 | CA-CA harmonic on adjacent pairs + repaired ring closure | `240afae` | force field | yes — every peptide; fold path now matches `cyclic` bit for bit |
+| 17 | `transmutate` returns `int`, FIXED guards kept | `0b1fce1` | signature | no |
+| 18 | no-improvement stop raised 10M → 30M steps | `74185b4` | search budget | only on runs that would have stopped early |
 
 Two further class-A findings — **A1** (inverted hydrophobic ramp) and **A4**
 (log compression on `e.map`) — were implemented, measured, and **reverted**.
