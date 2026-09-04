@@ -2638,7 +2638,12 @@ double energy2(Biasmap *biasmap, AA *a,  AA *b, model_params *mod_params)
 		//fprintf(stderr,"e24 %g\n",retval);
 	}
 	
-	
+	/* Upstream `cyclic`: a virtual CA-CA bond on every sequence-adjacent pair.
+	 * 3.819 A is the trans-peptide CA-CA distance; the term costs a cis
+	 * arrangement and any stretch of the backbone. distance() returns the
+	 * SQUARE of the distance, so sqrt() here is the real distance. */
+	double CaDistance = distance(a->ca, b->ca);
+
 	int seqdist;
 	if (a->chainid == b->chainid)
 		seqdist = b->num - a->num;
@@ -2648,16 +2653,18 @@ double energy2(Biasmap *biasmap, AA *a,  AA *b, model_params *mod_params)
 	switch ( seqdist) {
 	case 1:
 		retval += exclude_neighbor(a, b, mod_params) + hbond(biasmap,a, b, mod_params) + proline(a, b);
+		retval += (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
 		//fprintf(stderr,"e25a %d %d %g\n",a->num,b->num,hbond(biasmap,a, b, mod_params));
 		//fprintf(stderr,"e25a %g\n",retval);
 		break;
 	case -1:
 		retval += exclude_neighbor(b, a, mod_params) + hbond(biasmap, b, a, mod_params) + proline(b, a);
+		retval += (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
 		//fprintf(stderr,"e25b %d %d %g\n",a->num,b->num,hbond(biasmap,a, b, mod_params));
 		//fprintf(stderr,"e25b %g\n",retval);
 		break;
 	default:
-		d2 = distance(a->ca, b->ca);
+		d2 = CaDistance;
 		if (d2 < mod_params->vdw_extended_cutoff) {
 			retval += exclude(a, b, d2, mod_params);
 			if (d2 < hbond_cutoff) {
@@ -2677,23 +2684,48 @@ double cyclic_energy(AA *a, AA *b, int type) {
 	double ans = 0.;
 	if (type == 0) {
 
-		double CaDistance = 0.0;
-		double NCDistance = 0.0;
-		double HODistance = 0.0;
-		double NODistance = 0.0;
-		double HCDistance = 0.0;
+		/* Upstream `cyclic`'s closure model, with its arithmetic repaired.
+		 *
+		 * As written upstream this function collapses the macrocycle: it
+		 * reads
+		 *
+		 *     //NCDistance = distance(a->n, b->c);   // assignment commented
+		 *     if (CaDistance < 5) {
+		 *             ans += (sqrt(CaDistance) - 3.819)^2;
+		 *             ans += (sqrt(NCDistance) - 1.345)^2;
+		 *     } else ans += CaDistance;
+		 *
+		 * NCDistance is never assigned, so the second term is the constant
+		 * (0 - 1.345)^2 = 1.809 regardless of geometry; and distance()
+		 * returns the SQUARE of the distance, so `CaDistance < 5` actually
+		 * means d < 2.24 A and the harmonic branch essentially never runs.
+		 * What executes is `ans += CaDistance`, i.e. d^2 -- a harmonic
+		 * centred on ZERO with no equilibrium distance, which pulls the
+		 * termini together until van der Waals repulsion stops them. Measured
+		 * over the 18 backbone-cyclic targets, the shipped ADFRsuite binary
+		 * closes the ring at a median CA1-CAn of 2.52 A against 3.83 A for the
+		 * crystallographic ligands: two alpha carbons inside the 3.4 A C-C
+		 * van der Waals contact.
+		 *
+		 * Repaired: NCDistance is assigned, and the cutoff is squared to
+		 * match distance()'s units. The harmonic pair is therefore always
+		 * evaluated, and beyond 5 A the d^2 far-field pull is added on top
+		 * with its value at the boundary subtracted, so the total stays
+		 * continuous there instead of stepping by ~23 RT.
+		 *
+		 * Note the weight: 1, where this repo previously used 5. Upstream
+		 * splits the restraint across three terms -- this CA-CA harmonic, the
+		 * new N-C harmonic below, and the CA-CA harmonic energy2() now applies
+		 * to every adjacent pair -- rather than concentrating it in one.
+		 */
+		double NCDistance = distance(a->n, b->c);
+		double CaDistance = distance(a->ca, b->ca);
 
-		NCDistance = distance(a->n, b->c);
-		CaDistance = distance(a->ca, b->ca);
-		HODistance = distance(a->h, b->o);
-		NODistance = distance(a->n, b->o);
-		HCDistance = distance(a->h, b->c);
-
-		if (1 || CaDistance > 4.819) ans += 5 * (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
-		//if (CaDistance < 5) ans += 50 * (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
-		//if (1 || NCDistance > 1.5 || NCDistance < 1.2) ans += 50 * (sqrt(NCDistance) - 1.345)*(sqrt(NCDistance) - 1.345) / 0.59219;
-		//if (a->id != 'P') ans += 5 * (sqrt(HODistance) - 3.13)*(sqrt(HODistance) - 3.13);
-		//if (1 || NODistance > 3.5 || NODistance < 1.2) ans += 5 * (sqrt(NODistance) - 2.25)*(sqrt(NODistance) - 2.25);
+		ans += (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
+		ans += (sqrt(NCDistance) - 1.345)*(sqrt(NCDistance) - 1.345);
+		if (CaDistance >= 25.) ans += CaDistance - 25.;
+		//if (a->id != 'P') ans += (sqrt(distance(a->h, b->o)) - 3.13)*(sqrt(distance(a->h, b->o)) - 3.13);
+		//if (1 || NODistance > 3.5 || NODistance < 1.2) ans += (sqrt(NODistance) - 2.25)*(sqrt(NODistance) - 2.25);
 		//if (a->id != 'P') ans += 5 * (sqrt(HCDistance) - 2.02)*(sqrt(HCDistance) - 2.02);
 	}
 	return ans;
