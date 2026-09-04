@@ -225,7 +225,9 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 
 		/*optimizing parameters*/
 		int noImprovHeatSteps = 1000000;
-		int noImprovStopSteps = 10000000;
+		/* upstream `cyclic`, commit "increase noImproveStep": 10M was cutting
+		 * long docking runs off while they were still finding better poses. */
+		int noImprovStopSteps = 30000000;
 		int swapBadSteps = 50000;
 		int swapMutateSteps = 200000;
 		int swapGoodSteps = 100000;
