@@ -198,6 +198,11 @@ set_tests_properties(func_adcp_fold_short PROPERTIES
 # drives the real find_worst()/update_NS_parameters() bookkeeping on a problem
 # with an analytic Z. Uses its own RNG, not rand(), so it is libc-independent.
 
+add_executable(cyclic_closure_test cyclic_closure_test.cpp)
+target_link_libraries(cyclic_closure_test PRIVATE adcp_core)
+add_test(NAME num_cyclic_closure COMMAND cyclic_closure_test)
+set_tests_properties(num_cyclic_closure PROPERTIES LABELS "smoke")
+
 add_executable(ns_evidence_test ns_evidence_test.cpp)
 target_link_libraries(ns_evidence_test PRIVATE adcp_core)
 
