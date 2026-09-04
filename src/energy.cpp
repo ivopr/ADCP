@@ -1202,14 +1202,18 @@ double lowlevel_sbond(AA *a, AA *b, model_params *mod_params){
   subtract(y, b->g, a->g);
   subtract(z, b->cb, b->g);
   
-  double ang1 = cosine(x,y);
-  if(ang1 > 0.5|| ang1 < 0) return 0.0001;
-  ang1 = cosine(y,z); 
-  if(ang1 > 0.5 || ang1 < 0 ) return 0.0001;
-  
-  double chi3 = -cosdihedral(x, y, z);	
-  if(fabs(chi3) > mod_params->Sbond_dihedral_cutoff) return 0.0001;
-	//specific_strength = specific_strength - 2 * (fabs(chi3) - mod_params->Sbond_dihedral_cutoff);
+  /* Upstream `cyclic`: the two hard angular gates and the hard dihedral
+   * rejection are gone. They returned a flat 0.0001 the moment CB-SG-SG or
+   * the chi3 dihedral left its window, which makes the S-S term a step
+   * function of geometry -- no gradient for the search to follow back into
+   * a bonded arrangement. chi3 is now a linear penalty on the strength, and
+   * only inside 3.2 A, where the two sulfurs are close enough for the
+   * dihedral to mean anything. */
+  double chi3 = -cosdihedral(x, y, z);
+  if (fabs(chi3) > mod_params->Sbond_dihedral_cutoff && dis < 3.2) {
+    specific_strength = specific_strength - (fabs(chi3) - mod_params->Sbond_dihedral_cutoff);
+  }
+  if (dis < 3.2) specific_strength *= 1.2;
   // we have an S-S bond
   // compensate for CB(a)-CG(b) interactions
   //double energy_comp = vdw(a->g, b->cb, mod_params->rs + mod_params->rcb) +
@@ -1257,67 +1261,80 @@ double sbond_energy(int start, int end, Chain *chain,  Chaint *chaint, Biasmap *
   }	  
   
 
-  
+
+  /* Upstream `cyclic`'s scheme: score the single shortest non-adjacent Cys-Cys
+   * pair, then -- only with four or more cysteines -- the shortest pair left
+   * once both partners of the first are struck out. At most two disulfides,
+   * where the greedy nearest-neighbour walk this replaces would keep bonding
+   * every cysteine it could reach.
+   *
+   * Two arithmetic defects in upstream's own version are NOT reproduced:
+   *   - `temp` was hoisted out of the pair loop and only reassigned when the
+   *     pair was non-adjacent, so an adjacent pair silently inherited the
+   *     PREVIOUS pair's distance and could win the shortest-pair contest with
+   *     a number that belongs to two other residues. Adjacent pairs now take
+   *     the sentinel outright.
+   *   - the strike-out wrote `cysdist[i*n+j]` twice instead of mirroring into
+   *     `cysdist[j*n+i]`. Harmless (only the upper triangle is read) but it
+   *     leaves the matrix asymmetric; mirrored here. */
+  const double SBOND_NOPAIR = 1e7;
+
+  auto residue = [&](int k) {
+    return (cyslist[k] <= end && cyslist[k] >= start)
+             ? chaint->aat.data() + cyslist[k]
+             : chain->aa.data() + cyslist[k];
+  };
+
   double *cysdist = (double*)malloc(number_of_cys*number_of_cys*sizeof(double));
+  double shortestdist = SBOND_NOPAIR;
+  int shorti = -1, shortj = -1;
   for(i = 0; i < number_of_cys; i++){
 	  for(j = i+1; j < number_of_cys; j++){
-		double temp = distance(cyspos[i],cyspos[j]); 
+		/* sequence-adjacent cysteines cannot form a disulfide */
+		double temp = (cyslist[j] - cyslist[i] != 1)
+			        ? distance(cyspos[i],cyspos[j])
+			        : SBOND_NOPAIR;
 		cysdist[i*number_of_cys+j] = cysdist[j*number_of_cys+i] = temp;
-	  }
-  }
-  
-
-  
-  for(int i = 0; i < number_of_cys-1; i++){
-	
-	
-	if(cyslist[i] <= end && cyslist[i] >= start){
-		a = chaint->aat.data() + cyslist[i];  
-	}
-	else{
-	  a = chain->aa.data() + cyslist[i];  
-	}
-	int done = 0;
-	while(done == 0){
-	  int nearestj = -1;	
-	  double nearest = (mod_params->Sbond_distance+mod_params->Sbond_cutoff)*(mod_params->Sbond_distance+mod_params->Sbond_cutoff); 
-	  for(int j = i+1; j < number_of_cys; j++){
-		if(cysdist[i*number_of_cys+j] < nearest){
-		  nearest = cysdist[i*number_of_cys+j];
-		  nearestj = j; 	
-		}	
-	  }
-	  if(nearestj == -1) done = 1;
-	  else{
-		if(cyslist[nearestj] <= end && cyslist[nearestj] >= start){
-		  b = chaint->aat.data() + cyslist[nearestj];  
-	    }
-	    else{
-		  b = chain->aa.data() + cyslist[nearestj];  
-	    }
-		
-		double temp = lowlevel_sbond(a,b,mod_params); 
-		
-		if(temp != 0){
-		  done = 1;
-		  ans += temp;	
-		  int k;
-		  for(k = i+1; k < number_of_cys; k++){
-			cysdist[k*number_of_cys+nearestj] = cysdist[nearestj*number_of_cys+k] = 1000;  
-		  }	   
-		
+		if (temp < shortestdist) {
+			shortestdist = temp;
+			shorti = i;
+			shortj = j;
 		}
-		else{
-	      cysdist[i*number_of_cys+nearestj] = cysdist[nearestj*number_of_cys+i] = 1000; 
-	    }
-		
-		 
-	  }	  
-	}//end while  	
-	
- 
+	  }
   }
-  
+
+  if (shortj < 0) {
+	free(cyspos);
+	free(cysdist);
+	free(cyslist);
+	return 0.0;
+  }
+
+  a = residue(shorti);
+  b = residue(shortj);
+  ans += lowlevel_sbond(a,b,mod_params);
+
+  if (number_of_cys >= 4) {
+	shortestdist = SBOND_NOPAIR;
+	int shortii = -1, shortjj = -1;
+	for(int i = 0; i < number_of_cys - 1; i++){
+	  for(int j = i+1; j < number_of_cys; j++) {
+		if (i == shorti || j == shortj || i == shortj || j == shorti)
+			cysdist[i*number_of_cys+j] = cysdist[j*number_of_cys+i] = SBOND_NOPAIR;
+		else if (cysdist[i*number_of_cys+j] < shortestdist && cyslist[j]-cyslist[i] != 1){
+			shortestdist = cysdist[i*number_of_cys+j];
+			shortii = i;
+			shortjj = j;
+		}
+	  }
+	}
+	if (shortjj >= 0) {
+	  a = residue(shortii);
+	  b = residue(shortjj);
+	  ans += lowlevel_sbond(a,b,mod_params);
+	}
+  }
+
   free(cyspos);
   free(cysdist);
   free(cyslist);

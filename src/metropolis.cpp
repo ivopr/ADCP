@@ -182,10 +182,16 @@ static int allowed(Chain *chain, Chaint *chaint, Biasmap* biasmap, int start, in
 		externalloss += chain->Erg(1, 0) - cyclicBondEnergy;
 	}
 
-	loss = loss + SSloss + externalloss;
+	/* Upstream `cyclic` (commit "0.25 for -S-S-"): the disulfide term enters
+	 * the Metropolis test at quarter weight. lowlevel_sbond() now returns a
+	 * continuous strength instead of the old flat 0.0001 rejection, so a
+	 * forming S-S bond swings SSloss far harder than it used to; at full
+	 * weight it dominates the acceptance decision and the search chases
+	 * disulfides at the expense of the pose. The energy REPORTED is
+	 * unchanged -- this is a move-acceptance weight, not a force field term. */
+	loss = (loss + 0.25 * SSloss) + externalloss;
 	if (loss < -10) external_k = 0.15 * external_k;
 
-	//loss = 0.25 * (loss + SSloss) + externalloss;
 	//if (externalloss > 0.) loss = loss + externalloss;
 
 
