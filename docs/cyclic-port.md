@@ -18,7 +18,8 @@ Two hunks were deliberately not reproduced verbatim, and one was dropped:
   squared to match `distance()`'s units, so the ring is restrained to 3.819 A
   instead of collapsing (see "the shipped binary collapses the macrocycle"
   below, which is why). `tests/cyclic_closure_test.cpp` fails if that repair
-  is undone.
+  is undone. The CA-CA weight also stays at this repo's 5 rather than
+  upstream's 1 — measured, see below.
 - **the FIXED-residue guards** in `transmutate`/`transmove`/`transopt` — kept.
   Only the `void` -> `int` signature change was taken.
 - **`main.c`'s bare `continue;`** — dropped; the if/else-if chain it sits in
@@ -50,10 +51,13 @@ Two findings from the same run qualify the port:
 - **Speed: 1.47x, not the 3-4x upstream shows.** Most of upstream's cyclic
   throughput was the broken branch short-circuiting the restraint. What
   survives comes from the disulfide rework and the grid/rotamer changes.
-- **Set B loses mid-rank docking quality**: avg fnc top5 0.438 -> 0.382, top10
-  0.490 -> 0.406, with top1 and top100 unchanged and set C flat. The suspect is
-  the CA-CA closure weight dropping from 5 to 1; it is the one change
-  consistent with both this and the widened geometry spread. Untested.
+- **Upstream's weight-1 closure split cost set B its mid-rank quality, and was
+  reverted.** Taking upstream's three weight-1 terms dropped avg fnc top5 from
+  0.438 to 0.382 and top10 from 0.490 to 0.406. Restoring the CA-CA closure
+  harmonic to this repo's weight of 5 (`6643614`), everything else from the
+  port intact, recovers 87% and 76% of that and beats the pre-port tree at top1
+  (+0.015) and top100 (+0.043). Set C runs identical code in both arms and
+  agrees to three decimals, so the change is isolated to what it touches.
 
 ## Context
 
