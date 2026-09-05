@@ -418,6 +418,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 				//swapFile = fopen(swapname, "w+");
 				//pdbprint(chain->aa.data(), chain->NAA, &(sim_params->protein_model), swapFile, &currTargetEnergy);
 				//fclose(swapname);
+				continue;
 			}
 			else if ((currIndex - bestIndex) > noImprovStopSteps) {
 				fprintf(stderr, "No improvement after %d runs last best %d, stops here.\n", i, bestIndex);

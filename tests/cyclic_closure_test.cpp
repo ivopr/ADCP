@@ -1,19 +1,29 @@
 /* =============================================================================
- * cyclic_energy() must restrain the macrocycle to the peptide-bond geometry.
+ * cyclic_energy() must reproduce upstream `cyclic`'s closure model EXACTLY --
+ * defects included.
  *
- * This is the check behind the decision recorded in docs/cyclic-port.md: the
- * closure model was taken from upstream's `cyclic` branch, but with two
- * arithmetic defects repaired. Ported verbatim, upstream's version reduces to
+ * This is not the physically correct model, and the assertions below are not
+ * describing a peptide. This repo tracks the behaviour of the reference
+ * implementation rather than a corrected version of it, and upstream's
+ * cyclic_energy() reads:
  *
- *     ans += CaDistance;        // CaDistance is d^2
+ *     //NCDistance = distance(a->n, b->c);   // assignment commented out
+ *     if (CaDistance < 5) {
+ *             ans += (sqrt(CaDistance) - 3.819)^2;
+ *             ans += (sqrt(NCDistance) - 1.345)^2;
+ *     } else ans += CaDistance;
  *
- * for every geometry a peptide actually visits -- a harmonic centred on ZERO,
- * which drags the two termini together until van der Waals repulsion stops
- * them. Measured over the 18 backbone-cyclic targets, the shipped ADFRsuite
- * binary closes the ring at a median CA1-CAn of 2.52 A against 3.83 A for the
- * crystallographic ligands.
+ * NCDistance is never assigned, so the second term is the constant 1.809
+ * whatever the geometry; and distance() returns the SQUARE of the distance, so
+ * `CaDistance < 5` means d < 2.24 A and the harmonic branch essentially never
+ * runs. What executes is `ans += CaDistance`, i.e. d^2 -- a harmonic centred on
+ * ZERO. Measured over the 18 backbone-cyclic targets it closes the ring at a
+ * median CA1-CAn of ~2.5 A against 3.83 A for the crystallographic ligands.
  *
- * The assertions below fail on that behaviour and pass on the repaired one.
+ * The point of this test is that the behaviour cannot drift silently: it fails
+ * if someone repairs the arithmetic, and it fails if someone changes the
+ * weights. See docs/cyclic-port.md for the decision and docs/compares/7.md for
+ * what it costs.
  * =============================================================================
  */
 #include <cmath>
@@ -40,74 +50,76 @@ static int failures = 0;
 		}                                                             \
 	} while (0)
 
-/* CA1-CAn distance the model restrains to, and the N-C peptide bond length. */
-static const double CA_EQUILIBRIUM = 3.819;
-static const double NC_EQUILIBRIUM = 1.345;
+/* Where upstream's `CaDistance < 5` test actually switches, in real angstroms:
+ * distance() returns d^2, so the branch flips at d = sqrt(5). */
+static const double UPSTREAM_SWITCH = 2.2360679;
 
-/* Two residues whose CA-CA separation is `d`, with the N-C pair parked at its
- * own ideal length far away, so only the CA term varies across the scan. */
-static double closure_energy(double d)
+/* Two residues whose CA-CA separation is `d`. `nc` is the N-to-C distance,
+ * which upstream never reads -- the third argument exists so a test can prove
+ * that. */
+static double closure_energy(double d, double nc)
 {
 	AA a{}, b{};
 
-	b.ca[0] = 0.0;      b.ca[1] = 0.0; b.ca[2] = 0.0;
-	a.ca[0] = d;        a.ca[1] = 0.0; a.ca[2] = 0.0;
+	b.ca[0] = 0.0; b.ca[1] = 0.0; b.ca[2] = 0.0;
+	a.ca[0] = d;   a.ca[1] = 0.0; a.ca[2] = 0.0;
 
-	b.c[0]  = 0.0;            b.c[1] = 0.0; b.c[2] = 100.0;
-	a.n[0]  = NC_EQUILIBRIUM; a.n[1] = 0.0; a.n[2] = 100.0;
+	b.c[0]  = 0.0; b.c[1]  = 0.0; b.c[2]  = 100.0;
+	a.n[0]  = nc;  a.n[1]  = 0.0; a.n[2]  = 100.0;
 
 	return cyclic_energy(&a, &b, 0);
 }
 
 int main(void)
 {
-	/* 1. The minimum sits on the peptide-bond CA-CA distance, not on zero.
-	 *    Upstream's verbatim version is monotone increasing from d = 0, so its
-	 *    minimum over this scan lands at the first sample. */
+	/* 1. The N-C term is geometry-independent -- upstream's commented-out
+	 *    assignment. Moving the nitrogen must change nothing at all. */
+	double nc_near = closure_energy(3.819, 1.345);
+	double nc_far  = closure_energy(3.819, 40.0);
+	printf("E(d=3.819, nc=1.345) = %.6g   E(d=3.819, nc=40) = %.6g\n",
+	       nc_near, nc_far);
+	CHECK(nc_near == nc_far,
+	      "the N-C term responds to geometry; upstream's is a constant");
+
+	/* 2. The minimum sits at upstream's branch switch, not at the
+	 *    peptide-bond CA-CA distance. A repaired model puts it at 3.819. */
 	double best_d = 0.0, best_E = 1e300;
 	for (int i = 0; i <= 11000; i++) {
 		double d = 1.0 + i * 0.001;          /* 1.0 .. 12.0 A */
-		double E = closure_energy(d);
+		double E = closure_energy(d, 1.345);
 		if (E < best_E) { best_E = E; best_d = d; }
 	}
 	printf("minimum at CA1-CAn = %.3f A, E = %.6g\n", best_d, best_E);
-	CHECK(fabs(best_d - CA_EQUILIBRIUM) < 0.005,
-	      "cyclic_energy() is not minimised at the peptide-bond CA-CA distance");
-	CHECK(fabs(best_E) < 1e-9,
-	      "the restraint does not vanish at its own equilibrium");
+	CHECK(fabs(best_d - UPSTREAM_SWITCH) < 0.005,
+	      "cyclic_energy() is not minimised at upstream's sqrt(5) switch");
 
-	/* 2. The collapsed ring the shipped binary produces must cost more than
-	 *    the crystallographic one. */
-	double E_collapsed = closure_energy(2.52);   /* ADFRsuite 1.0 median */
-	double E_crystal   = closure_energy(3.83);   /* crystallographic median */
+	/* 3. The collapse itself: the ring the shipped binary produces must cost
+	 *    LESS than the crystallographic one. This is the assertion that
+	 *    inverts if the model is repaired. */
+	double E_collapsed = closure_energy(2.52, 1.345);   /* ADFRsuite median */
+	double E_crystal   = closure_energy(3.83, 1.345);   /* crystal median   */
 	printf("E(2.52 A) = %.6g   E(3.83 A) = %.6g\n", E_collapsed, E_crystal);
-	CHECK(E_collapsed > E_crystal,
-	      "a 2.52 A ring is not penalised against a 3.83 A one");
+	CHECK(E_collapsed < E_crystal,
+	      "a 2.52 A ring is not preferred over a 3.83 A one");
 
-	/* 3. Continuous where the far-field d^2 pull switches on. Upstream's own
-	 *    cutoff steps by ~23 there; ours subtracts the boundary value. */
-	double below = closure_energy(5.0 - 1e-6);
-	double above = closure_energy(5.0 + 1e-6);
-	printf("E(5-) = %.6g   E(5+) = %.6g   step = %.3g\n",
-	       below, above, fabs(above - below));
-	CHECK(fabs(above - below) < 1e-3,
-	      "the closure restraint steps at the 5 A boundary");
+	/* 4. Above the switch the restraint is d^2 about zero, so it rises
+	 *    monotonically all the way out with no equilibrium anywhere. */
+	int mono = 1;
+	for (double d = UPSTREAM_SWITCH + 0.01; d < 11.99; d += 0.01)
+		if (closure_energy(d + 0.01, 1.345) <= closure_energy(d, 1.345))
+			mono = 0;
+	CHECK(mono, "restraint is not monotone above the switch");
 
-	/* 4. Strictly increasing on both sides of the equilibrium, so the search
-	 *    always has a gradient pointing back to it. */
-	int up_ok = 1, down_ok = 1;
-	for (double d = CA_EQUILIBRIUM; d < 11.99; d += 0.01)
-		if (closure_energy(d + 0.01) <= closure_energy(d)) up_ok = 0;
-	for (double d = CA_EQUILIBRIUM; d > 1.01; d -= 0.01)
-		if (closure_energy(d - 0.01) <= closure_energy(d)) down_ok = 0;
-	CHECK(up_ok, "restraint is not monotone above the equilibrium");
-	CHECK(down_ok, "restraint is not monotone below the equilibrium");
+	/* 5. And it is exactly d^2 there -- no equilibrium offset survived. */
+	double e6 = closure_energy(6.0, 1.345);
+	printf("E(6.0 A) = %.6g   (d^2 = 36)\n", e6);
+	CHECK(fabs(e6 - 36.0) < 1e-9,
+	      "the far branch is not the bare d^2 upstream computes");
 
 	if (failures) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return 1;
 	}
-	printf("PASS: ring closure restrained to %.3f A, continuous, monotone\n",
-	       CA_EQUILIBRIUM);
+	printf("PASS: upstream `cyclic` closure model reproduced, collapse included\n");
 	return 0;
 }

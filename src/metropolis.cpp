@@ -259,19 +259,15 @@ static int allowed(Chain *chain, Chaint *chaint, Biasmap* biasmap, int start, in
     return 1;
 }
 /* Make a transmutate move. A translational move to a featured point*/
-/* Returns int, not void, as upstream `cyclic` does: the body already had a
- * bare `return` where the sibling moves return 0, and some compilers reject
- * the mismatch outright. The FIXED-residue guard upstream deleted along with
- * this change is kept -- this tree has fixed-residue paths (fixed-end loop
- * sampling) that upstream does not exercise, and dropping the guard would let
- * the move displace residues the caller pinned. */
+/* Returns int, not void, as upstream `cyclic` does.
+ *
+ * The same upstream commit deleted the FIXED-residue guard from this function,
+ * from transmove() and from transopt(), and that deletion is reproduced here
+ * too: this repo tracks the reference implementation's behaviour, so all three
+ * moves will displace residues the caller pinned, exactly as upstream's do.
+ * See docs/cyclic-port.md. */
 int transmutate(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, double logLstar, double * currE, simulation_params *sim_params)
 {
-
-        for (int i = 1; i < sim_params->NAA; i++) {
-		if (chain->aa[i].etc & FIXED) return 0;
-        }
-
 	if (sim_params->protein_model.external_potential_type != 5) {
 		return 0;
 	}
@@ -386,10 +382,6 @@ static int transmove(Chain * chain, Chaint *chaint, Biasmap *biasmap, double amp
 	/*translational move*/
 	//
 	//double transvec[3][chain->NAA - 1];
-        for (int i = 1; i < sim_params->NAA; i++) {
-                if (chain->aa[i].etc & FIXED) return 0;
-        }
-
 
 	if (sim_params->protein_model.external_potential_type != 5) {
 		return 0;
@@ -551,11 +543,6 @@ static int transmove(Chain * chain, Chaint *chaint, Biasmap *biasmap, double amp
 /* Do a translational optimization in a Solis-Wets fashion. */
 int transopt(Chain * chain, Chaint *chaint, Biasmap *biasmap, double ampl, double logLstar, double * currE, simulation_params *sim_params, int mod)
 {
-        for (int i = 1; i < sim_params->NAA; i++) {
-                if (chain->aa[i].etc & FIXED) return 0;
-        }
-
-
 	if (sim_params->protein_model.external_potential_type != 5) {
 		return 0;
 	}

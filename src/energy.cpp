@@ -1262,78 +1262,114 @@ double sbond_energy(int start, int end, Chain *chain,  Chaint *chaint, Biasmap *
   
 
 
-  /* Upstream `cyclic`'s scheme: score the single shortest non-adjacent Cys-Cys
-   * pair, then -- only with four or more cysteines -- the shortest pair left
-   * once both partners of the first are struck out. At most two disulfides,
-   * where the greedy nearest-neighbour walk this replaces would keep bonding
-   * every cysteine it could reach.
+  /* Upstream `cyclic`'s scheme, VERBATIM -- defects included. Score the
+   * single shortest non-adjacent Cys-Cys pair, then, only with four or more
+   * cysteines, the shortest pair left once both partners of the first are
+   * struck out. At most two disulfides, where the greedy nearest-neighbour
+   * walk this replaces would bond every cysteine it could reach.
    *
-   * Two arithmetic defects in upstream's own version are NOT reproduced:
-   *   - `temp` was hoisted out of the pair loop and only reassigned when the
-   *     pair was non-adjacent, so an adjacent pair silently inherited the
-   *     PREVIOUS pair's distance and could win the shortest-pair contest with
-   *     a number that belongs to two other residues. Adjacent pairs now take
-   *     the sentinel outright.
-   *   - the strike-out wrote `cysdist[i*n+j]` twice instead of mirroring into
-   *     `cysdist[j*n+i]`. Harmless (only the upper triangle is read) but it
-   *     leaves the matrix asymmetric; mirrored here. */
-  const double SBOND_NOPAIR = 1e7;
-
-  auto residue = [&](int k) {
-    return (cyslist[k] <= end && cyslist[k] >= start)
-             ? chaint->aat.data() + cyslist[k]
-             : chain->aa.data() + cyslist[k];
-  };
-
+   * Two arithmetic defects are reproduced deliberately, because this repo
+   * tracks the reference implementation's behaviour rather than correcting it:
+   *
+   *   1. `temp` is hoisted out of the pair loop and reassigned only for
+   *      non-adjacent pairs, so an adjacent pair inherits the PREVIOUS pair's
+   *      distance and can win the shortest-pair contest with a number that
+   *      belongs to two other residues;
+   *   2. the second-pass strike-out writes `cysdist[i*n+j]` twice instead of
+   *      mirroring into `cysdist[j*n+i]`, leaving the matrix asymmetric.
+   *      Inert as written, since only the upper triangle is read.
+   *
+   * The `shorti+shortj == 0` sentinels are upstream's too: they read as "no
+   * pair found", which holds only because a valid pair always has j > i >= 0.
+   */
+  double shortestdist = 10000000;
+  int shorti = 0;
+  int shortj = 0;
+  double temp = 10000000;
   double *cysdist = (double*)malloc(number_of_cys*number_of_cys*sizeof(double));
-  double shortestdist = SBOND_NOPAIR;
-  int shorti = -1, shortj = -1;
   for(i = 0; i < number_of_cys; i++){
 	  for(j = i+1; j < number_of_cys; j++){
-		/* sequence-adjacent cysteines cannot form a disulfide */
-		double temp = (cyslist[j] - cyslist[i] != 1)
-			        ? distance(cyspos[i],cyspos[j])
-			        : SBOND_NOPAIR;
+	  	if (cyslist[j]-cyslist[i]!=1) {
+			temp = distance(cyspos[i],cyspos[j]);
+		}
 		cysdist[i*number_of_cys+j] = cysdist[j*number_of_cys+i] = temp;
 		if (temp < shortestdist) {
-			shortestdist = temp;
+			shortestdist=temp;
 			shorti = i;
 			shortj = j;
 		}
 	  }
   }
 
-  if (shortj < 0) {
+  if (shorti+shortj == 0) {
 	free(cyspos);
 	free(cysdist);
-	free(cyslist);
-	return 0.0;
+    free(cyslist);
+    return 0.0;
   }
 
-  a = residue(shorti);
-  b = residue(shortj);
-  ans += lowlevel_sbond(a,b,mod_params);
+  if(cyslist[shorti] <= end && cyslist[shorti] >= start){
+	a = chaint->aat.data() + cyslist[shorti];
+  }
+  else{
+    a = chain->aa.data() + cyslist[shorti];
+  }
 
-  if (number_of_cys >= 4) {
-	shortestdist = SBOND_NOPAIR;
-	int shortii = -1, shortjj = -1;
-	for(int i = 0; i < number_of_cys - 1; i++){
-	  for(int j = i+1; j < number_of_cys; j++) {
-		if (i == shorti || j == shortj || i == shortj || j == shorti)
-			cysdist[i*number_of_cys+j] = cysdist[j*number_of_cys+i] = SBOND_NOPAIR;
-		else if (cysdist[i*number_of_cys+j] < shortestdist && cyslist[j]-cyslist[i] != 1){
-			shortestdist = cysdist[i*number_of_cys+j];
+  if(cyslist[shortj] <= end && cyslist[shortj] >= start){
+	b = chaint->aat.data() + cyslist[shortj];
+  }
+  else{
+    b = chain->aa.data() + cyslist[shortj];
+  }
+
+  temp = lowlevel_sbond(a,b,mod_params);
+  ans += temp;
+
+  if (number_of_cys<4) {
+  	free(cyspos);
+	free(cysdist);
+    free(cyslist);
+    return ans;
+  }
+  temp = 0;
+  shortestdist = 100000;
+  int shortii=0;
+  int shortjj=0;
+  for(int i = 0; i < number_of_cys - 1; i++){
+	for(int j = i+1; j < number_of_cys; j++) {
+		if (i==shorti || j==shortj || i==shortj || j==shorti)
+			cysdist[i*number_of_cys+j] = cysdist[i*number_of_cys+j] = 10000000;
+		else if (cysdist[i*number_of_cys+j]<shortestdist && cyslist[j]-cyslist[i]!=1){
+			shortestdist=cysdist[i*number_of_cys+j];
 			shortii = i;
 			shortjj = j;
 		}
-	  }
-	}
-	if (shortjj >= 0) {
-	  a = residue(shortii);
-	  b = residue(shortjj);
-	  ans += lowlevel_sbond(a,b,mod_params);
 	}
   }
+
+  if (shortii+shortjj == 0) {
+	free(cyspos);
+	free(cysdist);
+    free(cyslist);
+    return ans;
+  }
+
+  if(cyslist[shortii] <= end && cyslist[shortii] >= start){
+	a = chaint->aat.data() + cyslist[shortii];
+  }
+  else{
+    a = chain->aa.data() + cyslist[shortii];
+  }
+
+  if(cyslist[shortjj] <= end && cyslist[shortjj] >= start){
+	b = chaint->aat.data() + cyslist[shortjj];
+  }
+  else{
+    b = chain->aa.data() + cyslist[shortjj];
+  }
+
+  temp = lowlevel_sbond(a,b,mod_params);
+  ans += temp;
 
   free(cyspos);
   free(cysdist);
@@ -2684,52 +2720,47 @@ double cyclic_energy(AA *a, AA *b, int type) {
 	double ans = 0.;
 	if (type == 0) {
 
-		/* Upstream `cyclic`'s closure model, with its arithmetic repaired.
+		/* Upstream `cyclic`'s closure model, VERBATIM -- defects included.
+		 * This repo tracks the behaviour of the reference implementation, not a
+		 * corrected version of it, so the two arithmetic errors below are
+		 * reproduced deliberately rather than fixed:
 		 *
-		 * As written upstream this function collapses the macrocycle: it
-		 * reads
+		 *   1. the `NCDistance` assignment is commented out, so the second term
+		 *      is the constant (0 - 1.345)^2 = 1.809 whatever the geometry;
+		 *   2. distance() returns the SQUARE of the distance, so `CaDistance < 5`
+		 *      means d < 2.24 A and the harmonic branch essentially never runs.
 		 *
-		 *     //NCDistance = distance(a->n, b->c);   // assignment commented
-		 *     if (CaDistance < 5) {
-		 *             ans += (sqrt(CaDistance) - 3.819)^2;
-		 *             ans += (sqrt(NCDistance) - 1.345)^2;
-		 *     } else ans += CaDistance;
+		 * What executes is `ans += CaDistance`, i.e. d^2 -- a harmonic centred on
+		 * ZERO with no equilibrium distance, which pulls the termini together
+		 * until van der Waals repulsion stops them. Measured over the 18
+		 * backbone-cyclic targets, that closes the ring at a median CA1-CAn of
+		 * ~2.5 A against 3.83 A for the crystallographic ligands: two alpha
+		 * carbons inside the 3.4 A carbon-carbon van der Waals contact.
 		 *
-		 * NCDistance is never assigned, so the second term is the constant
-		 * (0 - 1.345)^2 = 1.809 regardless of geometry; and distance()
-		 * returns the SQUARE of the distance, so `CaDistance < 5` actually
-		 * means d < 2.24 A and the harmonic branch essentially never runs.
-		 * What executes is `ans += CaDistance`, i.e. d^2 -- a harmonic
-		 * centred on ZERO with no equilibrium distance, which pulls the
-		 * termini together until van der Waals repulsion stops them. Measured
-		 * over the 18 backbone-cyclic targets, the shipped ADFRsuite binary
-		 * closes the ring at a median CA1-CAn of 2.52 A against 3.83 A for the
-		 * crystallographic ligands: two alpha carbons inside the 3.4 A C-C
-		 * van der Waals contact.
-		 *
-		 * Repaired: NCDistance is assigned, and the cutoff is squared to
-		 * match distance()'s units. The harmonic pair is therefore always
-		 * evaluated, and beyond 5 A the d^2 far-field pull is added on top
-		 * with its value at the boundary subtracted, so the total stays
-		 * continuous there instead of stepping by ~23 RT.
-		 *
-		 * The CA-CA weight is 5, this repo's own value, not upstream's 1.
-		 * Upstream spreads the closure restraint over three terms -- this
-		 * harmonic, the N-C harmonic below, and the one energy2() now applies
-		 * to every adjacent pair -- each at weight 1. Measured over set B
-		 * (docs/compares/6.md) that spread keeps the median CA1-CAn right but
-		 * widens the per-target spread from 3.82 A flat to 3.62-4.04, and set
-		 * B's avg fnc drops 0.056 at top5 and 0.084 at top10 while top1 and
-		 * top100 hold. Concentrating the ring closure back at weight 5 is the
-		 * one change consistent with both observations.
+		 * tests/cyclic_closure_test.cpp pins this behaviour, and will fail if
+		 * someone "fixes" it. docs/cyclic-port.md records the decision and
+		 * docs/compares/7.md what it costs.
 		 */
-		double NCDistance = distance(a->n, b->c);
-		double CaDistance = distance(a->ca, b->ca);
+		double CaDistance = 0.0;
+		double NCDistance = 0.0;
+		double HODistance = 0.0;
+		double NODistance = 0.0;
+		double HCDistance = 0.0;
 
-		ans += 5 * (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
-		ans += (sqrt(NCDistance) - 1.345)*(sqrt(NCDistance) - 1.345);
-		if (CaDistance >= 25.) ans += CaDistance - 25.;
-		//if (a->id != 'P') ans += (sqrt(distance(a->h, b->o)) - 3.13)*(sqrt(distance(a->h, b->o)) - 3.13);
+		//NCDistance = distance(a->n, b->c);
+		CaDistance = distance(a->ca, b->ca);
+		//HODistance = distance(a->h, b->o);
+		//NODistance = distance(a->n, b->o);
+		//HCDistance = distance(a->h, b->c);
+
+		//if (1 || CaDistance < 5) ans += 10 * (sqrt(CaDistance) - 3.819);
+		if (CaDistance < 5) {
+			ans += (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
+			ans += (sqrt(NCDistance) - 1.345)*(sqrt(NCDistance) - 1.345);
+		} else ans += CaDistance;
+		//if (NCDistance > 2) ans += (sqrt(NCDistance) - 1.345)*(sqrt(NCDistance) - 1.345);
+		//else ans += NCDistance;
+		//if (a->id != 'P') ans += (sqrt(HODistance) - 3.13)*(sqrt(HODistance) - 3.13);
 		//if (1 || NODistance > 3.5 || NODistance < 1.2) ans += (sqrt(NODistance) - 2.25)*(sqrt(NODistance) - 2.25);
 		//if (a->id != 'P') ans += 5 * (sqrt(HCDistance) - 2.02)*(sqrt(HCDistance) - 2.02);
 	}
