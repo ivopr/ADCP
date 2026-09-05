@@ -103,15 +103,15 @@ typedef struct {
   double opt_totE_weight; //the target energy type while optimizing, w1*totE + w2*extE + w3*firstlastE
   double opt_extE_weight; //the target energy type while optimizing, w1*totE + w2*extE + w3*firstlastE
   double opt_firstlastE_weight; //the target energy type while optimizing, w1*totE + w2*extE + w3*firstlastE
-  int max_rotamers;  //opt-in cap on how many rotamers scoreSideChain*() tries per residue.
-                     //0 (default) = try them all, which is what this code has always done.
-                     //Upstream's `cyclic` branch hardcodes 20 for residues with more than 20
-                     //rotamers (LYS/ARG 81, GLN 36, MET/GLU 27) and draws them at RANDOM --
-                     //that is where its 3-4x speedup on cyclic peptides comes from. It is a
-                     //speed-for-accuracy trade, not a free optimisation: it makes the energy
-                     //an even noisier function of the coordinates than it already is (see the
-                     //audit's finding B2), so it stays opt-in. -p MaxRotamers=20 reproduces
-                     //upstream's behaviour.
+  int max_rotamers;  //cap on how many rotamers scoreSideChain*() tries per residue.
+                     //20 (default) is upstream's value: `cyclic` HARDCODES `if (nbRot > 20)`
+                     //for residues with more than 20 rotamers (LYS/ARG 81, GLN 36, MET/GLU 27)
+                     //and draws them at RANDOM. Most of its speedup on cyclic peptides comes
+                     //from here, not from the closure term. It is a speed-for-accuracy trade
+                     //that makes the energy a noisier function of the coordinates (audit
+                     //finding B2), but reproducing upstream's behaviour is what this tree is
+                     //for. -p MaxRotamers=0 tries them all and DIVERGES from upstream on any
+                     //peptide containing a residue with more than 20 rotamers.
   int transopt_hard; //opt-in "hard minimization" budget for transopt() (maxStep 30/maxNoImprovStep 5
                       //instead of 10/3); default 0 (off) -- see MIGRATION.md, measured to cost
                       //+20-225% runtime with no quality gain, so it stays off unless asked for

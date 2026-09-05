@@ -299,7 +299,7 @@ void model_param_initialise(model_params *self) {
   self->opt_totE_weight = 1.0;
   self->opt_firstlastE_weight = 0.0;
   self->opt_extE_weight = 0.0;
-  self->max_rotamers = 0;   /* 0 = no cap, try every rotamer */
+  self->max_rotamers = 20;  /* upstream `cyclic` hardcodes this; 0 = no cap, and diverges */
   self->transopt_hard = 0;
 
   /* external potential */

@@ -1965,18 +1965,30 @@ double gridenergy(double X, double Y, double Z, int i, double charge) {
 		outD = exactGridX <= 0 ? (-exactGridX) : (exactGridX - NX + 1);
 		outofBoxPen = outD * outD;
 		outofBox = 1;
+		if (outofBoxPen > 1000000000) {
+			fprintf(stderr, "xX %g Y %g Z %g Erg %g \n", exactGridX, exactGridY, exactGridZ, outofBoxPen);
+			return erg + 10;
+		}
 		erg += outofBoxPen;
 	}
 	if (exactGridY <= 0 || exactGridY >= NY - 1) {
 		outD = exactGridY <= 0 ? (-exactGridY) : (exactGridY - NY + 1);
 		outofBoxPen = outD * outD;
 		outofBox = 1;
+		if (outofBoxPen > 1000000000) {
+			fprintf(stderr, "X %g yY %g Z %g Erg %g \n", exactGridX, exactGridY, exactGridZ, outofBoxPen);
+			return erg + 10;
+		}
 		erg += outofBoxPen;
 	}
 	if (exactGridZ <= 0 || exactGridZ >= NZ - 1) {
 		outD = exactGridZ <= 0 ? (-exactGridZ) : (exactGridZ - NZ + 1);
 		outofBoxPen = outD * outD;
 		outofBox = 1;
+		if (outofBoxPen > 1000000000) {
+			fprintf(stderr, "X %g Y %g zZ %g Erg %g \n", exactGridX, exactGridY, exactGridZ, outofBoxPen);
+			return erg + 10;
+		}
 		erg += outofBoxPen;
 	}
 	if (outofBox)
