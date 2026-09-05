@@ -39,11 +39,21 @@ reproduces `cyclic`'s pose and energy exactly. The redock RMSD moved from
 0.70 A to 0.88 A -- worse on this one target, still far inside the published
 2.5 A threshold.
 
-**Not yet measured: the macrocycle geometry gate.** The CA1-CAn median over
-sets B and C is what justified repairing `cyclic_energy` rather than porting
-it verbatim, and it has not been re-run since. Until it is, the claim that the
-repair holds rests on `tests/cyclic_closure_test.cpp` -- which tests the energy
-function, not the poses it produces.
+**The macrocycle geometry gate passes.** Measured over set B, 8 replicas per
+target: median CA1-CAn of **3.81 A** against the crystallographic 3.83 A and
+the pre-port tree's 3.82 A. Repairing `cyclic_energy` instead of porting it
+verbatim keeps the ring where the crystal puts it. Full write-up in
+[compares/6.md](compares/6.md).
+
+Two findings from the same run qualify the port:
+
+- **Speed: 1.47x, not the 3-4x upstream shows.** Most of upstream's cyclic
+  throughput was the broken branch short-circuiting the restraint. What
+  survives comes from the disulfide rework and the grid/rotamer changes.
+- **Set B loses mid-rank docking quality**: avg fnc top5 0.438 -> 0.382, top10
+  0.490 -> 0.406, with top1 and top100 unchanged and set C flat. The suspect is
+  the CA-CA closure weight dropping from 5 to 1; it is the one change
+  consistent with both this and the widened geometry spread. Untested.
 
 ## Context
 
