@@ -2713,15 +2713,20 @@ double cyclic_energy(AA *a, AA *b, int type) {
 		 * with its value at the boundary subtracted, so the total stays
 		 * continuous there instead of stepping by ~23 RT.
 		 *
-		 * Note the weight: 1, where this repo previously used 5. Upstream
-		 * splits the restraint across three terms -- this CA-CA harmonic, the
-		 * new N-C harmonic below, and the CA-CA harmonic energy2() now applies
-		 * to every adjacent pair -- rather than concentrating it in one.
+		 * The CA-CA weight is 5, this repo's own value, not upstream's 1.
+		 * Upstream spreads the closure restraint over three terms -- this
+		 * harmonic, the N-C harmonic below, and the one energy2() now applies
+		 * to every adjacent pair -- each at weight 1. Measured over set B
+		 * (docs/compares/6.md) that spread keeps the median CA1-CAn right but
+		 * widens the per-target spread from 3.82 A flat to 3.62-4.04, and set
+		 * B's avg fnc drops 0.056 at top5 and 0.084 at top10 while top1 and
+		 * top100 hold. Concentrating the ring closure back at weight 5 is the
+		 * one change consistent with both observations.
 		 */
 		double NCDistance = distance(a->n, b->c);
 		double CaDistance = distance(a->ca, b->ca);
 
-		ans += (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
+		ans += 5 * (sqrt(CaDistance) - 3.819)*(sqrt(CaDistance) - 3.819);
 		ans += (sqrt(NCDistance) - 1.345)*(sqrt(NCDistance) - 1.345);
 		if (CaDistance >= 25.) ans += CaDistance - 25.;
 		//if (a->id != 'P') ans += (sqrt(distance(a->h, b->o)) - 3.13)*(sqrt(distance(a->h, b->o)) - 3.13);
