@@ -33,6 +33,21 @@ and what was deliberately left alone), [docs/cyclic-port.md](cyclic-port.md)
 | 16 | CA-CA harmonic on adjacent pairs + repaired ring closure | `240afae` | force field | yes — every peptide; fold path now matches `cyclic` bit for bit |
 | 17 | `transmutate` returns `int`, FIXED guards kept | `0b1fce1` | signature | no |
 | 18 | no-improvement stop raised 10M → 30M steps | `74185b4` | search budget | only on runs that would have stopped early |
+| 19 | `MaxRotamers` defaults to 20, upstream's hardcoded value | `e31cca8` | force field | yes — any peptide with a LYS/ARG/GLN/MET/GLU |
+
+## Reverted for behavioural parity with `cyclic`
+
+The goal changed after #18: this tree reproduces the reference implementation
+rather than correcting it. See [cyclic-port.md](cyclic-port.md) and
+[compares/7.md](compares/7.md).
+
+| # | reverted | commit | what comes back |
+|---|---|---|---|
+| 6 | nested sampling seeded from the discarded point | `7f30f75` | a 1/N chance of seeding from the point being discarded |
+| 8 | A6 Ramachandran index clamp | `0820a3f` | a latent out-of-range table read; observationally inert |
+| 9 | A2 sulfur map for methionine | `b6d7375` | methionine's SD scored on the carbon map |
+| 5 | A3 swap-pool bound | `ed404fe` | three draws that can fail to terminate — a real hang |
+| 7 (part) | repaired ring closure, weight 5, disulfide fixes | `5208f1d` | the macrocycle collapses to ~2.5 A |
 
 Two further class-A findings — **A1** (inverted hydrophobic ramp) and **A4**
 (log compression on `e.map`) — were implemented, measured, and **reverted**.

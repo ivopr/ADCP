@@ -1,63 +1,60 @@
 # Porting upstream's `cyclic` branch into this codebase
 
-## Status — the port is complete
+## Status — behavioural parity with `cyclic`, achieved and measured
 
-All five groups have landed. Summary of where each ended up:
+This repo no longer treats upstream's defects as bugs to fix. It is a faithful
+transliteration: same behaviour, only the language differs. Every group of the
+original port landed, and everything this tree had done differently was then
+reverted to match.
 
-| group | outcome | commit |
-|---|---|---|
-| N — noise | skipped, as planned; our LGPL headers stay | — |
-| S / A5 — out-of-box penalty | ported | `7ea27e1` |
-| P — rotamer scoring, cysteine, gamma centroid | ported | `7ea27e1` |
-| S / disulfide — `sbond_energy`, `lowlevel_sbond`, `0.25*SSloss` | ported | `dff5df3` |
-| S / remainder — `cyclic_energy`, `energy2`, `transmutate`, `main` | ported, **two upstream defects repaired** | `240afae`, `0b1fce1`, `74185b4` |
+| group | outcome |
+|---|---|
+| N — noise | skipped; our LGPL headers and banner stay (identity, not behaviour) |
+| S / A5, P — grid, cysteine, gamma centroid | ported (`7ea27e1`) |
+| S / disulfide | ported (`dff5df3`), then the two defensive fixes reverted (`5208f1d`) |
+| S / remainder — `cyclic_energy`, `energy2`, `transmutate`, `main` | ported, then reverted to verbatim (`5208f1d`) |
+| this repo's own audit fixes A2, A3, A6 and the NS seeding fix | **reverted** (`7f30f75`, `0820a3f`, `b6d7375`, `ed404fe`) |
+| `MaxRotamers` default, `gridenergy`'s 1e9 escape | **fixed to match upstream** (`e31cca8`) |
 
-Two hunks were deliberately not reproduced verbatim, and one was dropped:
+### The gate
 
-- **`cyclic_energy`** — ported with `NCDistance` assigned and the cutoff
-  squared to match `distance()`'s units, so the ring is restrained to 3.819 A
-  instead of collapsing (see "the shipped binary collapses the macrocycle"
-  below, which is why). `tests/cyclic_closure_test.cpp` fails if that repair
-  is undone. The CA-CA weight also stays at this repo's 5 rather than
-  upstream's 1 — measured, see below.
-- **the FIXED-residue guards** in `transmutate`/`transmove`/`transopt` — kept.
-  Only the `void` -> `int` signature change was taken.
-- **`main.c`'s bare `continue;`** — dropped; the if/else-if chain it sits in
-  is the last statement in the loop body, so it is a no-op.
+Measured pose by pose against a build of the public branch tip
+(`gcc -std=c99 -O3 -DNDEBUG -fcommon`), 18 backbone-cyclic targets, 8 replicas
+each — see [compares/7.md](compares/7.md):
 
-Measured after the port:
+| check | result |
+|---|---|
+| set B, ATOM md5 per replica | **144/144 identical** |
+| fold fixture, md5 + energy | `abf915bc…` / 9.274271 |
+| 3Q47, 16 seeds × 10k | 16/16 identical |
+| CA1-CAn median | 2.46 A, = `cyclic` (crystal 3.83 A) |
+| set B wall time | 666 s vs `cyclic` 578 s — 1.15x, C++ codegen |
 
-| path | before (`414835e`) | after (`f26a28f`) | upstream `cyclic` | ADFRsuite 1.0 |
-|---|---|---|---|---|
-| fold ATOM md5 | `6a438d0a…` | **`abf915bc…`** | `abf915bc…` | `abf915bc…` |
-| fold final energy | 5.936278 | **9.274271** | 9.274271 | 9.274271 |
-| 3Q47 redock, top pose | run 4, -30.3416 | **run 1, -29.1304** | run 1, -29.1304 | run 6, -28.2783 |
-| 3Q47 redock RMSD | 0.70 A | **0.88 A** | 0.88 A | 0.77 A |
-| ctest | 22/22 | **23/23** | — | — |
+Two divergences survived five comparison documents and were found only by this
+gate, not by reading diffs: `MaxRotamers` defaulted OFF where upstream hardcodes
+20, and `gridenergy()` had lost upstream's `> 1e9` escape. Both are corrected in
+`e31cca8`.
 
-The fold path is now bit-identical to both reference arms, and the 3Q47 redock
-reproduces `cyclic`'s pose and energy exactly. The redock RMSD moved from
-0.70 A to 0.88 A -- worse on this one target, still far inside the published
-2.5 A threshold.
+### What is kept
 
-**The macrocycle geometry gate passes.** Measured over set B, 8 replicas per
-target: median CA1-CAn of **3.81 A** against the crystallographic 3.83 A and
-the pre-port tree's 3.82 A. Repairing `cyclic_energy` instead of porting it
-verbatim keeps the ring where the crystal puts it. Full write-up in
-[compares/6.md](compares/6.md).
+The ~15 memory/UB fixes, and the fixes for regressions the C→C++ port itself
+introduced (`sqrt` in double precision, `chi1`/`chi2`, the denormal hang,
+`swapChains[+1]` which `cyclic` also has). All of them **restore** parity rather
+than break it.
 
-Two findings from the same run qualify the port:
+### What parity costs
 
-- **Speed: 1.47x, not the 3-4x upstream shows.** Most of upstream's cyclic
-  throughput was the broken branch short-circuiting the restraint. What
-  survives comes from the disulfide rework and the grid/rotamer changes.
-- **Upstream's weight-1 closure split cost set B its mid-rank quality, and was
-  reverted.** Taking upstream's three weight-1 terms dropped avg fnc top5 from
-  0.438 to 0.382 and top10 from 0.490 to 0.406. Restoring the CA-CA closure
-  harmonic to this repo's weight of 5 (`6643614`), everything else from the
-  port intact, recovers 87% and 76% of that and beats the pre-port tree at top1
-  (+0.015) and top100 (+0.043). Set C runs identical code in both arms and
-  agrees to three decimals, so the change is isolated to what it touches.
+Average fnc on set B drops from 0.353 to 0.200 at top1 against our previous
+state, and lands below the shipped ADFRsuite binary at every rank — while being
+bit-identical to `cyclic`. That is evidence about upstream, not a porting
+defect: the shipped binary is a few internal commits past the public tip and
+differs from `cyclic` in 16/16 seeds too. **Parity with the shipped binary is
+not reachable from public source.**
+
+Reverting A3 restored three swap-pool draws that can fail to terminate,
+reproduced on this machine on 1SFI, 3P8F and 4KEL. Not observed in the parity
+run — 0 hung of 288 replicas across both arms — but the code that produces it
+is back, and `ADCP_REPLICA_BUDGET` is the only mitigation.
 
 ## Context
 
