@@ -311,28 +311,8 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 			if (currTargetEnergy - lastTargetEnergy < 0.001 && currTargetEnergy - lastTargetEnergy > -0.001) {
 				stuckcount++;
 				if (stuckcount >= 1000) {
-					/* Draw a pool member strictly better than where we are.
-					   This branch is reached only because the search STAGNATED,
-					   and stagnation is exactly the state in which the current
-					   chain is already the pool's best -- so "strictly better"
-					   can be unsatisfiable and the draw never terminates. That
-					   is a real, reproducible hang on the production cyclic
-					   path (1SFI, 3P8F, 4KEL, several seeds, 100% CPU with no
-					   output and no timeout). Both upstream branches still have
-					   it; `cyclic` merely takes trajectories that happen not to
-					   reach the state. Bounded now: with nothing better in the
-					   pool, stay put and let annealing handle the stagnation.
-					   Verified observationally inert -- 375 of 375 healthy
-					   replica trajectories stay byte-identical. */
-					int swapTries = 10 * (swapLength + 1);
 					swapInd = rand() % (swapLength + 1);
-					while (swapEnergy[swapInd] >= currTargetEnergy && --swapTries > 0)
-						swapInd = rand() % (swapLength + 1);
-					if (swapEnergy[swapInd] >= currTargetEnergy) {
-						stuckcount = 0;
-						lastIndex = currIndex;
-						continue;
-					}
+					while (swapEnergy[swapInd] >= currTargetEnergy) swapInd = rand() % (swapLength + 1);
 					//swapInd = swapLength;
 					fprintf(stderr, "swap out stuck curr %g swap %g best %g\n", currTargetEnergy, swapEnergy[swapInd], targetBest);
 					copybetween(chain, swapChains[swapInd]);
@@ -507,9 +487,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 					if (swapAneal || external_k == sim_params->protein_model.external_k[0]) {
 
 						swapInd = rand() % (swapLength + 1);
-						{ int swapTries = 10 * (swapLength + 1);
-						  while (swapEnergy[swapInd] > currTargetEnergy && --swapTries > 0)
-							swapInd = rand() % (swapLength + 1); }
+						while (swapEnergy[swapInd] > currTargetEnergy) swapInd = rand() % (swapLength + 1);
 						//swapInd = swapLength;
 						fprintf(stderr, "swap out good curr %g swap %g best %g\n", currTargetEnergy, swapEnergy[swapInd], targetBest);
 						copybetween(chain, swapChains[swapInd]);
@@ -550,9 +528,7 @@ void simulate(Chain * chain, Chaint *chaint, Biasmap* biasmap, simulation_params
 				else if (swapTransMutate == 1) {
 					swapInd = rand() % (swapLength + 1);
 					//energy_matrix_print(chain, biasmap, &(sim_params->protein_model));
-					{ int swapTries = 10 * (swapLength + 1);
-						  while (swapEnergy[swapInd] > currTargetEnergy && --swapTries > 0)
-							swapInd = rand() % (swapLength + 1); }
+					while (swapEnergy[swapInd] > currTargetEnergy) swapInd = rand() % (swapLength + 1);
 					//swapInd = swapLength;
 					fprintf(stderr, "transmutate bad curr %g best %g curriter %d \n", currTargetEnergy, targetBest, i);
 					copybetween(chain, swapChains[swapInd]);
